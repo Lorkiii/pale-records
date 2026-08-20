@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Space Grotesk', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --color-paper: #F4F4F0;
+  --color-paper-light: #FCFCFA;
+  --color-paper-muted: #EAEAE4;
+  --color-paper-border: #D8D8CF;
+  --color-paper-dark: #CECEC2;
+
+  --color-ink: #0A0A0A;
+  --color-ink-secondary: #3D3D38;
+  --color-ink-muted: #66665E;
+  --color-ink-faint: #96968C;
+
+  --color-signal-red: #D92D20;
+  --color-signal-amber: #D97706;
+  --color-signal-emerald: #059669;
+  --color-signal-blue: #1D4ED8;
+}
+
+:root {
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: #F4F4F0;
+  color: #0A0A0A;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #F4F4F0;
+  color: #0A0A0A;
+}
+
+/* Archival grid background utility */
+.archival-grid {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(10, 10, 10, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(10, 10, 10, 0.035) 1px, transparent 1px);
+}
+
+/* High-contrast brutalist focus ring */
+:focus-visible {
+  outline: 2px solid #0A0A0A;
+  outline-offset: 1px;
+}
+
+/* Precision scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #EAEAE4;
+}
+::-webkit-scrollbar-thumb {
+  background: #0A0A0A;
+}
+
