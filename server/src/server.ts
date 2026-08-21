@@ -12,9 +12,9 @@ app.use(express.json());
 
 // test route
 app.get("/test", (req, res) => {
-    res.send("Hello World");
+  res.send("Hello World");
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on port http://localhost:${PORT}`);
-})
+  console.log(`Server is running on port http://localhost:${PORT}`);
+});

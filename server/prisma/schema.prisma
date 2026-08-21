@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Student {
+  id      String @id @default(uuid())
+  classId String
+
+  studentNo String?
+  firstName String
+  lastName  String
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  attendanceRecords AttendanceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([classId, lastName, firstName])
+}
+
+model Class {
+  id          String    @id @default(uuid())
+  subjectName String
+  subjectCode String?
+  section     String?
+  schoolYear  String?
+  semester    String?
+  teacher     String?
+  room        String?
+  startDate   DateTime?
+  endDate     DateTime?
+
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  classSchedules     ClassSchedule[]
+  attendanceSessions AttendanceSession[]
+  students           Student[]
+}
+
+model ClassSchedule {
+  id        String @id @default(uuid())
+  classId   String
+  dayOfWeek Int
+  startTime String
+  endTime   String
+
+  class              Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attendanceSessions AttendanceSession[]
+
+  @@index([classId, dayOfWeek])
+}
+
+model AttendanceSession {
+  id              String   @id @default(uuid())
+  classId         String
+  classScheduleId String?
+  sessionDate     DateTime
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  classSchedule ClassSchedule? @relation(fields: [classScheduleId], references: [id], onDelete: SetNull)
+
+  attendanceRecords AttendanceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([classId, sessionDate])
+  @@index([classScheduleId])
+}
+
+model AttendanceRecord {
+  id        String            @id @default(uuid())
+  sessionId String
+  studentId String
+  status    AttendanceStatus?
+
+  attendanceSession AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([studentId])
+
+  @@unique([sessionId, studentId])
+}
