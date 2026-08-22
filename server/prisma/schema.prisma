@@ -23,6 +23,8 @@ model User {
   id           String   @id @default(uuid())
   firstName    String
   lastName     String
+  /// Optional unique login name for accounts created before username support.
+  username     String?   @unique
   email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())

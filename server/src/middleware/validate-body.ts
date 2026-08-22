@@ -1,3 +1,4 @@
+// Validates request bodies and replaces them with normalized Zod output.
 import type { RequestHandler } from "express";
 import { z } from "zod";
 

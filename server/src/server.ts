@@ -1,20 +1,7 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
+// Starts the configured Express application on the validated server port.
+import { app } from "./app.js";
+import { env } from "./config/env.js";
 
-dotenv.config();
-
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-app.use(cors());
-app.use(express.json());
-
-// test route
-app.get("/test", (req, res) => {
-  res.send("Hello World");
-});
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port http://localhost:${PORT}`);
+app.listen(env.PORT, () => {
+  console.log(`Server is running on port http://localhost:${env.PORT}`);
 });

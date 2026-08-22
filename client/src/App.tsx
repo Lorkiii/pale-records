@@ -1,5 +1,5 @@
-import { LoginPage } from './pages/LoginPage';
+import { DashboardPage } from './pages/DashboardPage';
 
 export default function App() {
-  return <LoginPage />;
+  return <DashboardPage />;
 }

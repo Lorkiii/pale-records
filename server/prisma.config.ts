@@ -7,6 +7,8 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // Runs the explicit private-admin seed when `prisma db seed` is invoked.
+    seed: "tsx prisma/seed.ts",
   },
   datasource: {
     url:

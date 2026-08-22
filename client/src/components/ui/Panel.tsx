@@ -23,10 +23,10 @@ export const Panel: React.FC<PanelProps> = ({
   ...props
 }) => {
   const variantStyles = {
-    default: 'bg-white border border-neutral-400',
-    bordered: 'bg-white/90 border border-black shadow-none',
-    'solid-black': 'bg-black text-[#F4F4F0] border border-black',
-    ghost: 'bg-transparent border border-dashed border-neutral-400',
+    default: 'bg-paper-light border border-paper-dark',
+    bordered: 'bg-paper-light/90 border border-ink shadow-none',
+    'solid-black': 'bg-ink text-paper-light border border-ink',
+    ghost: 'bg-transparent border border-dashed border-paper-dark',
   }[variant];
 
   return (
@@ -49,14 +49,14 @@ export const Panel: React.FC<PanelProps> = ({
       )}
 
       {header && (
-        <div className="flex items-center justify-between border-b border-black px-4 py-2.5 bg-neutral-100/90">
+        <div className="flex items-center justify-between border-b border-ink bg-paper-muted px-4 py-2.5">
           <div className="flex items-center gap-2.5">
             {sectionNumber && (
-              <span className="font-mono text-xs font-bold bg-black text-[#F4F4F0] px-1.5 py-0.5">
+              <span className="bg-ink px-1.5 py-0.5 font-mono text-xs font-bold text-paper-light">
                 {sectionNumber}
               </span>
             )}
-            <div className="font-mono text-xs uppercase tracking-widest font-bold text-black">
+            <div className="font-mono text-xs font-bold uppercase tracking-widest text-ink">
               {header}
             </div>
           </div>
@@ -67,7 +67,7 @@ export const Panel: React.FC<PanelProps> = ({
       <div className={noPadding ? '' : 'p-4 md:p-6'}>{children}</div>
 
       {footer && (
-        <div className="border-t border-black px-4 py-2.5 bg-neutral-50 font-mono text-xs text-neutral-600">
+        <div className="border-t border-ink bg-paper-light px-4 py-2.5 font-mono text-xs text-ink-muted">
           {footer}
         </div>
       )}
