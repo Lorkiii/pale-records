@@ -1,4 +1,4 @@
-// Converts validated login requests into safe responses and session cookies.
+// Converts login and session requests into safe auth responses and cookies.
 import type {
   NextFunction,
   Request,
@@ -10,11 +10,15 @@ import {
   getSessionCookieOptions,
   SESSION_COOKIE_NAME,
 } from "../lib/auth-session.js";
-import { authenticateUser } from "../services/auth.service.js";
+import type { AuthenticatedResponseLocals } from "../middleware/require-authenticated-user.js";
+import {
+  authenticateUser,
+} from "../services/auth.service.js";
 import type { LoginInput } from "../validations/auth.schema.js";
 import {
   invalidCredentialsResponseSchema,
   loginSuccessResponseSchema,
+  sessionSuccessResponseSchema,
 } from "../validations/auth.response.js";
 
 export async function loginController(
@@ -56,4 +60,16 @@ export async function loginController(
   } catch (error) {
     next(error);
   }
+}
+
+export function sessionController(
+  _req: Request,
+  res: Response<unknown, AuthenticatedResponseLocals>,
+) {
+  const response = sessionSuccessResponseSchema.parse({
+    success: true,
+    data: { user: res.locals.authenticatedUser },
+  });
+
+  return res.status(200).json(response);
 }

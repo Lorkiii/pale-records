@@ -4,7 +4,9 @@ import test from "node:test";
 
 import {
   createSessionToken,
+  getSessionCookieClearOptions,
   getSessionCookieOptions,
+  getSessionTokenFromCookieHeader,
   verifySessionToken,
 } from "./auth-session.js";
 
@@ -25,4 +27,22 @@ test("remember me creates a persistent HTTP-only cookie", () => {
   assert.equal(rememberedCookie.httpOnly, true);
   assert.equal(typeof rememberedCookie.maxAge, "number");
   assert.equal((rememberedCookie.maxAge ?? 0) > 0, true);
+});
+
+test("session cookies are parsed by exact name from a Cookie header", () => {
+  const token = getSessionTokenFromCookieHeader(
+    "theme=paper; pale.auth=signed%2Etoken; pale.auth.backup=ignored",
+  );
+
+  assert.equal(token, "signed.token");
+  assert.equal(getSessionTokenFromCookieHeader("theme=paper"), undefined);
+});
+
+test("session cookie clearing preserves the security attributes", () => {
+  const options = getSessionCookieClearOptions();
+
+  assert.equal(options.httpOnly, true);
+  assert.equal(options.sameSite, "lax");
+  assert.equal(options.path, "/");
+  assert.equal(options.maxAge, undefined);
 });

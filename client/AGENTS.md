@@ -50,6 +50,28 @@ Account, dashboard, management, and other signed-in screens must use the same pa
 - Preserve the current React, TypeScript, Vite, and Tailwind architecture. Do not add a styling library or UI dependency solely to reproduce an existing pattern.
 - A visual request does not authorize changes to authentication, permissions, API behavior, routing protection, or backend logic.
 
+## YAGNI, scalability, and maintainability
+
+- Follow YAGNI: implement only the screens, interactions, states, and data flows
+  required by the current request.
+- Do not create placeholder pages, routes, stores, contexts, hooks, services,
+  types, component variants, or permissions for possible future features.
+- Keep pages focused on composition, feature-specific behavior inside the
+  relevant `src/features/` area, generic UI primitives in `src/components/ui/`,
+  and shared application layouts in `src/components/layout/`.
+- Keep state as local as practical. Add shared context or another global state
+  mechanism only when multiple current consumers require coordinated state.
+- Extract a component, hook, or helper when it owns a clear responsibility,
+  removes real duplication, or makes current behavior easier to test. Do not
+  generalize a one-off implementation without a demonstrated need.
+- Prefer small, explicit component APIs and composition over prop-heavy generic
+  components or configuration-driven rendering.
+- Keep real endpoint and payload handling out of presentation components. When
+  an actual integration exists, place that behavior in the owning feature's API
+  module instead of creating unused service layers.
+- Treat responsive behavior, accessibility, honest loading and error states,
+  and centralized theme variants as part of scalability and maintainability.
+
 ## Content integrity
 
 - Use real product language and data supplied by the application.

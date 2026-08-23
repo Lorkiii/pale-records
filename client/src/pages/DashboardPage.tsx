@@ -1,12 +1,6 @@
-import type { ReactNode } from 'react';
-import { DashboardShell } from '../components/layout/DashboardShell';
+// Composes the authenticated PALE overview from shared record panels and empty states.
+import { EmptyState } from '../components/ui/EmptyState';
 import { Panel } from '../components/ui/Panel';
-
-interface OverviewEmptyStateProps {
-  icon: ReactNode;
-  title: string;
-  description: string;
-}
 
 interface WorkspaceArea {
   code: string;
@@ -37,20 +31,7 @@ const WORKSPACE_AREAS: WorkspaceArea[] = [
   },
 ];
 
-function OverviewEmptyState({ icon, title, description }: OverviewEmptyStateProps) {
-  return (
-    <div className="flex min-h-52 flex-col items-start justify-between gap-8">
-      <div className="flex h-11 w-11 items-center justify-center border border-paper-dark bg-paper-muted text-ink-secondary">
-        {icon}
-      </div>
-      <div>
-        <h3 className="font-sans text-base font-semibold text-ink">{title}</h3>
-        <p className="mt-1 max-w-sm text-sm leading-6 text-ink-muted">{description}</p>
-      </div>
-    </div>
-  );
-}
-
+// Provides the record symbol used by the class overview empty state.
 function RecordsIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -59,6 +40,7 @@ function RecordsIcon() {
   );
 }
 
+// Provides the calendar symbol used by the agenda overview empty state.
 function AgendaIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -67,6 +49,7 @@ function AgendaIcon() {
   );
 }
 
+// Provides the change symbol used by the activity overview empty state.
 function ActivityIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -75,10 +58,10 @@ function ActivityIcon() {
   );
 }
 
+// Composes the authenticated overview without inventing unavailable record data.
 export function DashboardPage() {
   return (
-    <DashboardShell>
-      <div id="overview" className="min-h-screen">
+      <div className="min-h-screen">
         <header className="border-b border-paper-border bg-paper-light">
           <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12">
             <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
@@ -120,7 +103,7 @@ export function DashboardPage() {
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <Panel header="Class records" sectionNumber="A" showCrosshairs={false} className="bg-paper-light">
-                  <OverviewEmptyState
+                  <EmptyState
                     icon={<RecordsIcon />}
                     title="No class data available"
                     description="Class and section summaries will appear here when records are available."
@@ -128,7 +111,7 @@ export function DashboardPage() {
                 </Panel>
 
                 <Panel header="Agenda" sectionNumber="B" showCrosshairs={false} className="bg-paper-light">
-                  <OverviewEmptyState
+                  <EmptyState
                     icon={<AgendaIcon />}
                     title="No agenda items to display"
                     description="Upcoming academic work will appear here when agenda items are available."
@@ -136,7 +119,7 @@ export function DashboardPage() {
                 </Panel>
 
                 <Panel header="Recent activity" sectionNumber="C" showCrosshairs={false} className="bg-paper-light md:col-span-2 xl:col-span-1">
-                  <OverviewEmptyState
+                  <EmptyState
                     icon={<ActivityIcon />}
                     title="No recent activity to display"
                     description="Record changes will appear here when activity data is available."
@@ -177,7 +160,6 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
-    </DashboardShell>
   );
 }
 

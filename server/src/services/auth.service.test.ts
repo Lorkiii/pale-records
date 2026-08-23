@@ -1,10 +1,12 @@
-// Verifies safe user output and timing-safe handling of missing accounts.
+// Verifies safe login/session output and timing-safe missing-account handling.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
   authenticateUser,
   type AuthServiceDependencies,
+  getAuthenticatedUser,
+  type SessionServiceDependencies,
 } from "./auth.service.js";
 
 const loginInput = {
@@ -63,4 +65,27 @@ test("authenticateUser still compares a password when the account is missing", a
 
   assert.equal(result, null);
   assert.match(comparedHash, /^\$2[aby]\$12\$/);
+});
+
+test("getAuthenticatedUser returns the safe session user selected by ID", async () => {
+  const user = {
+    id: "7d51b6b3-8f2c-4db6-b9eb-f933cd085da3",
+    firstName: "PALE",
+    lastName: "Administrator",
+    username: "admin",
+    email: "admin@pale.local",
+  };
+  let receivedUserId = "";
+  const dependencies: SessionServiceDependencies = {
+    findUserById: async (userId) => {
+      receivedUserId = userId;
+      return user;
+    },
+  };
+
+  const result = await getAuthenticatedUser(user.id, dependencies);
+
+  assert.equal(receivedUserId, user.id);
+  assert.deepEqual(result, user);
+  assert.equal("passwordHash" in (result ?? {}), false);
 });

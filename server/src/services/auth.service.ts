@@ -1,4 +1,4 @@
-// Looks up login identities, compares password hashes, and returns safe user data.
+// Looks up login and session identities while returning only safe user data.
 import { compare } from "bcryptjs";
 
 import prisma from "../lib/db-client.js";
@@ -9,11 +9,17 @@ type LoginUserRecord = AuthenticatedUser & {
   passwordHash: string;
 };
 
+// Type for the dependencies of the auth service
 export type AuthServiceDependencies = {
+  // Function to find a user by their identifier
   findUserByIdentifier: (
     identifier: string,
   ) => Promise<LoginUserRecord | null>;
   comparePassword: (password: string, passwordHash: string) => Promise<boolean>;
+};
+
+export type SessionServiceDependencies = {
+  findUserById: (userId: string) => Promise<AuthenticatedUser | null>;
 };
 
 const DUMMY_PASSWORD_HASH =
@@ -35,6 +41,20 @@ const defaultDependencies: AuthServiceDependencies = {
       },
     }),
   comparePassword: compare,
+};
+
+const defaultSessionDependencies: SessionServiceDependencies = {
+  findUserById: (userId) =>
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        username: true,
+        email: true,
+      },
+    }),
 };
 
 /** Authenticates an email or username without exposing the password hash. */
@@ -59,4 +79,12 @@ export async function authenticateUser(
     username: user.username,
     email: user.email,
   };
+}
+
+/** Resolves a session identity without selecting credential data. */
+export function getAuthenticatedUser(
+  userId: string,
+  dependencies: SessionServiceDependencies = defaultSessionDependencies,
+) {
+  return dependencies.findUserById(userId);
 }

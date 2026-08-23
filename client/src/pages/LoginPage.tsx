@@ -1,8 +1,14 @@
+// Composes the PALE account-access page around the reusable login form.
 import { Metadata } from "../components/ui/Metadata";
 import { Status } from "../components/ui/Status";
+import type { AuthenticatedUser } from "../features/auth/auth-api";
 import { LoginForm } from "../features/auth/components/LoginForm";
 
-export function LoginPage() {
+interface LoginPageProps {
+  onAuthenticated: (user: AuthenticatedUser) => void;
+}
+
+export function LoginPage({ onAuthenticated }: LoginPageProps) {
   return (
     <div className="min-h-screen bg-[#F4F4F0] text-[#0A0A0A] font-sans selection:bg-black selection:text-[#F4F4F0] archival-grid relative flex flex-col justify-between">
       <header className="w-full border-b border-black bg-[#F4F4F0] relative z-20">
@@ -125,7 +131,7 @@ export function LoginPage() {
           </div>
 
           <div className="lg:col-span-5 flex flex-col space-y-6">
-            <LoginForm />
+            <LoginForm onAuthenticated={onAuthenticated} />
 
             <div className="bg-[#EAEAE4] border border-black p-4 font-mono text-xs text-neutral-700 space-y-2">
               <div className="flex items-center justify-between border-b border-neutral-400 pb-1.5 font-bold text-black">

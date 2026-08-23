@@ -1,8 +1,12 @@
-// Defines the public login endpoint and its abuse/validation controls.
+// Defines the public login and session endpoints with their boundary controls.
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 
-import { loginController } from "../controllers/auth.controller.js";
+import {
+  loginController,
+  sessionController,
+} from "../controllers/auth.controller.js";
+import { requireAuthenticatedUser } from "../middleware/require-authenticated-user.js";
 import { validateBody } from "../middleware/validate-body.js";
 import { loginSchema } from "../validations/auth.schema.js";
 import { loginRateLimitResponseSchema } from "../validations/auth.response.js";
@@ -34,5 +38,7 @@ authRouter.post(
   validateBody(loginSchema),
   loginController,
 );
+
+authRouter.get("/session", requireAuthenticatedUser, sessionController);
 
 export default authRouter;

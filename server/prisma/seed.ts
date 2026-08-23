@@ -21,7 +21,7 @@ const adminSeedSchema = z.object({
     .max(254)
     .email()
     .transform((email) => email.toLowerCase()),
-  ADMIN_PASSWORD: z.string().min(16).max(128),
+  ADMIN_PASSWORD: z.string().min(8).max(128),
   ADMIN_FIRST_NAME: z.string().trim().min(1).max(100),
   ADMIN_LAST_NAME: z.string().trim().min(1).max(100),
 });

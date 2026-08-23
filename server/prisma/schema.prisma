@@ -60,6 +60,7 @@ model Class {
   room        String?
   startDate   DateTime?
   endDate     DateTime?
+  archivedAt  DateTime?
 
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -111,6 +112,7 @@ model AttendanceRecord {
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@index([studentId])
 
   @@unique([sessionId, studentId])

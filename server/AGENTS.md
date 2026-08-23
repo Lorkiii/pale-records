@@ -12,7 +12,7 @@ instructions first; a more specific nested `AGENTS.md` may override them.
 3. Simple, readable code
 4. Consistency with the existing project
 
-## Keep Changes Simple
+## YAGNI, Scalability, and Maintainability
 
 - Follow YAGNI: implement only what the current request requires.
 - Keep simple tasks simple. Choose the smallest clear solution that fully works.
@@ -25,6 +25,21 @@ instructions first; a more specific nested `AGENTS.md` may override them.
   not used by a real runtime path.
 - Avoid unrelated refactors. Preserve existing behavior and project structure
   unless the request requires a change.
+- Scale from demonstrated product and runtime needs. Do not add queues, caches,
+  workers, repository layers, distributed-system patterns, or other
+  infrastructure for hypothetical load.
+- Keep request flow and ownership clear: routes register middleware and
+  controllers, controllers own HTTP concerns, services own meaningful business
+  or database logic, validation modules own runtime schemas, and `lib/` owns
+  shared infrastructure.
+- Keep modules focused and dependencies explicit. Split a module when it gains a
+  distinct current responsibility or testing boundary, not merely because it is
+  long.
+- Extract shared helpers only for real repeated behavior or a stable boundary
+  used by multiple current call sites.
+- Prefer bounded queries and operations, explicit field selection, database
+  constraints, and stateless request handling where practical before adding
+  architectural complexity.
 
 ## Inspect Before Editing
 

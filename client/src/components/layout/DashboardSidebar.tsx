@@ -1,30 +1,19 @@
+// Renders responsive workspace navigation and account controls for the dashboard.
 import type { ReactNode, SVGProps } from 'react';
+import { NavLink } from 'react-router-dom';
+import {
+  DASHBOARD_NAVIGATION,
+  type DashboardNavigationIconName,
+} from './dashboard-navigation';
 
 type NavigationIconName =
-  | 'overview'
-  | 'class'
-  | 'attendance'
-  | 'activity'
-  | 'agenda'
+  | DashboardNavigationIconName
   | 'settings'
   | 'logout';
-
-interface NavigationItem {
-  id: NavigationIconName;
-  label: string;
-}
 
 interface DashboardSidebarProps {
   onNavigate?: () => void;
 }
-
-const PRIMARY_NAVIGATION: NavigationItem[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'class', label: 'Class' },
-  { id: 'attendance', label: 'Attendance' },
-  { id: 'activity', label: 'Activity' },
-  { id: 'agenda', label: 'Agenda' },
-];
 
 const ICON_PATHS: Record<NavigationIconName, ReactNode> = {
   overview: (
@@ -74,6 +63,7 @@ const ICON_PATHS: Record<NavigationIconName, ReactNode> = {
   ),
 };
 
+// Renders the requested navigation symbol with shared accessible SVG settings.
 function NavigationIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: NavigationIconName }) {
   return (
     <svg
@@ -94,6 +84,7 @@ function NavigationIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: Na
 const navigationItemStyles =
   'group flex min-h-11 w-full items-center gap-3 border-l-2 px-4 py-2.5 text-left font-sans text-sm font-medium transition-colors';
 
+// Renders route-aware workspace navigation for desktop and mobile dashboard shells.
 export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
   return (
     <aside className="flex h-full w-full flex-col overflow-y-auto border-r border-ink bg-paper-muted text-ink">
@@ -114,39 +105,32 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
           Workspace
         </p>
         <ul className="space-y-1">
-          {PRIMARY_NAVIGATION.map((item) => {
-            const isCurrent = item.id === 'overview';
-
-            if (!isCurrent) {
-              return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    disabled
-                    className={`${navigationItemStyles} cursor-default border-transparent text-ink-secondary disabled:opacity-100`}
-                  >
+          {DASHBOARD_NAVIGATION.map((item) => (
+            <li key={item.id}>
+              <NavLink
+                to={item.to}
+                end={item.to === '/dashboard'}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  `${navigationItemStyles} ${
+                    isActive
+                      ? 'border-ink bg-ink text-paper-light'
+                      : 'border-transparent text-ink-secondary hover:border-paper-dark hover:bg-paper-light'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
                     <NavigationIcon name={item.id} className="h-4.5 w-4.5 shrink-0" />
                     <span>{item.label}</span>
-                  </button>
-                </li>
-              );
-            }
-
-            return (
-              <li key={item.id}>
-                <a
-                  href={`#${item.id}`}
-                  aria-current="page"
-                  onClick={onNavigate}
-                  className={`${navigationItemStyles} border-ink bg-ink text-paper-light`}
-                >
-                  <NavigationIcon name={item.id} className="h-4.5 w-4.5 shrink-0" />
-                  <span>{item.label}</span>
-                  <span className="ml-auto h-1.5 w-1.5 bg-paper-light" aria-hidden="true" />
-                </a>
-              </li>
-            );
-          })}
+                    {isActive ? (
+                      <span className="ml-auto h-1.5 w-1.5 bg-paper-light" aria-hidden="true" />
+                    ) : null}
+                  </>
+                )}
+              </NavLink>
+            </li>
+          ))}
         </ul>
       </nav>
 

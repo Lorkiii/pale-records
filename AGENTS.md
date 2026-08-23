@@ -28,6 +28,22 @@ repository.
 - Avoid unrelated refactors and do not invent product features, data, metrics,
   activity, security behavior, or operational claims.
 
+## YAGNI, Scalability, and Maintainability
+
+- Follow YAGNI: implement only the behavior required by the current request and
+  demonstrated runtime paths.
+- Do not add abstractions, configuration, dependencies, state, or infrastructure
+  solely for imagined future requirements.
+- Make the project scalable through clear responsibilities, stable boundaries,
+  bounded work, and explicit data flow rather than additional layers by default.
+- Keep modules focused and names explicit. Split code when a distinct current
+  responsibility or testing boundary can be identified, not only because a file
+  has grown.
+- Extract shared code only when there is real duplication or a stable boundary
+  that multiple current consumers need.
+- Prefer maintainable, readable code over clever compression, premature
+  optimization, or highly generic solutions.
+
 ## File Documentation
 
 - Every source file that is created or meaningfully modified must contain a
