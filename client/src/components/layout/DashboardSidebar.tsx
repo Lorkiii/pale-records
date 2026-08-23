@@ -31,6 +31,12 @@ const ICON_PATHS: Record<NavigationIconName, ReactNode> = {
       <path d="M21 7v6" />
     </>
   ),
+  student: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c.7-4.5 3.4-7 8-7s7.3 2.5 8 7" />
+    </>
+  ),
   attendance: (
     <>
       <rect x="4" y="3" width="16" height="18" />

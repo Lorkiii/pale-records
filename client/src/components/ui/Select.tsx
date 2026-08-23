@@ -1,3 +1,4 @@
+// Renders an accessible labeled select with shared sizing, validation, and hint styles.
 import React, { forwardRef } from 'react';
 import { Label } from './Label';
 
@@ -49,6 +50,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     }[size];
 
     const fontStyle = isMonospace ? 'font-mono' : 'font-sans';
+    const describedBy = selectId
+      ? error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined
+      : undefined;
 
     return (
       <div className={`w-full ${wrapperClassName}`}>
@@ -70,6 +74,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             id={selectId}
             disabled={disabled}
             aria-invalid={Boolean(error)}
+            aria-describedby={describedBy}
             className={`w-full appearance-none rounded-none border border-neutral-400 bg-white text-black transition-colors focus:border-black focus:ring-1 focus:ring-black focus:outline-none disabled:opacity-50 disabled:bg-neutral-100 disabled:cursor-not-allowed pr-8 cursor-pointer ${sizeStyles} ${fontStyle} ${error ? 'border-red-600 focus:border-red-600 focus:ring-red-600' : ''} ${className}`}
             {...props}
           >
@@ -85,14 +90,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         </div>
 
         {error && (
-          <p className="mt-1 text-xs font-mono text-red-600 flex items-center gap-1">
+          <p id={selectId ? `${selectId}-error` : undefined} className="mt-1 text-xs font-mono text-red-600 flex items-center gap-1">
             <span aria-hidden="true">/!/</span>
             <span>{error}</span>
           </p>
         )}
 
         {!error && hint && (
-          <p className="mt-1 text-xs font-mono text-neutral-500">
+          <p id={selectId ? `${selectId}-hint` : undefined} className="mt-1 text-xs font-mono text-neutral-500">
             {hint}
           </p>
         )}

@@ -15,21 +15,21 @@ const SECTION_CONTENT: Record<EmptyWorkspaceSection, {
   emptyDescription: string;
 }> = {
   attendance: {
-    number: '02',
+    number: '03',
     title: 'Attendance',
     description: 'Review attendance records by class session.',
     emptyTitle: 'No attendance records available',
     emptyDescription: 'Attendance records will appear here when class sessions have recorded attendance.',
   },
   activity: {
-    number: '03',
+    number: '04',
     title: 'Activity',
     description: 'Review changes made across academic records.',
     emptyTitle: 'No recent activity available',
     emptyDescription: 'Record changes will appear here when activity data is available.',
   },
   agenda: {
-    number: '04',
+    number: '05',
     title: 'Agenda',
     description: 'Keep upcoming academic work visible and organized.',
     emptyTitle: 'No agenda items available',

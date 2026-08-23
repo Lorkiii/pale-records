@@ -16,16 +16,21 @@ const WORKSPACE_AREAS: WorkspaceArea[] = [
   },
   {
     code: '02',
+    title: 'Students',
+    description: 'Organize student identity records by class.',
+  },
+  {
+    code: '03',
     title: 'Attendance',
     description: 'Record and review attendance by class session.',
   },
   {
-    code: '03',
+    code: '04',
     title: 'Activity',
     description: 'Review changes made across academic records.',
   },
   {
-    code: '04',
+    code: '05',
     title: 'Agenda',
     description: 'Keep upcoming academic work visible and organized.',
   },
@@ -73,14 +78,14 @@ export function DashboardPage() {
                   Overview
                 </h1>
                 <p className="mt-3 max-w-2xl text-base leading-7 text-ink-secondary">
-                  A clear starting point for classes, attendance, academic activity, and upcoming work.
+                  A clear starting point for classes, students, attendance, academic activity, and upcoming work.
                 </p>
               </div>
               <div className="border-l-2 border-ink pl-4 md:max-w-56">
                 <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
                   Academic workspace
                 </p>
-                <p className="mt-1 text-sm leading-5 text-ink-secondary">Class records in one organized view.</p>
+                <p className="mt-1 text-sm leading-5 text-ink-secondary">Class and student records in one organized view.</p>
               </div>
             </div>
           </div>
@@ -144,7 +149,7 @@ export function DashboardPage() {
 
                 <ol className="grid sm:grid-cols-2">
                   {WORKSPACE_AREAS.map((area) => (
-                    <li key={area.code} className="border-b border-paper-border p-5 last:border-b-0 sm:p-6 sm:odd:border-r sm:[&:nth-last-child(-n+2)]:border-b-0">
+                    <li key={area.code} className="border-b border-paper-border p-5 last:border-b-0 sm:p-6 sm:odd:border-r sm:last:col-span-2 sm:last:border-r-0">
                       <div className="flex items-start gap-4">
                         <span className="font-mono text-xs font-bold text-ink-muted">{area.code}</span>
                         <div>
