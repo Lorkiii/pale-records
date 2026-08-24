@@ -6,8 +6,9 @@ import {
   checkAuthenticatedSession,
   type AuthenticatedUser,
 } from './features/auth/auth-api';
-import { DashboardPage } from './pages/DashboardPage';
+import { AttendancePage } from './pages/AttendancePage';
 import { ClassPage } from './pages/ClassPage';
+import { DashboardPage } from './pages/DashboardPage';
 import { EmptyWorkspacePage } from './pages/EmptyWorkspacePage';
 import { LoginPage } from './pages/LoginPage';
 import { StudentPage } from './pages/StudentPage';
@@ -93,7 +94,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="classes" element={<ClassPage onSessionExpired={handleSessionExpired} />} />
         <Route path="students" element={<StudentPage onSessionExpired={handleSessionExpired} />} />
-        <Route path="attendance" element={<EmptyWorkspacePage section="attendance" />} />
+        <Route path="attendance" element={<AttendancePage onSessionExpired={handleSessionExpired} />} />
         <Route path="activity" element={<EmptyWorkspacePage section="activity" />} />
         <Route path="agenda" element={<EmptyWorkspacePage section="agenda" />} />
       </Route>

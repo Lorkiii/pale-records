@@ -1,7 +1,7 @@
 // Renders honest no-content pages for workspace modules without active data flows.
 import { EmptyState } from '../components/ui/EmptyState';
 
-type EmptyWorkspaceSection = 'attendance' | 'activity' | 'agenda';
+type EmptyWorkspaceSection = 'activity' | 'agenda';
 
 interface EmptyWorkspacePageProps {
   section: EmptyWorkspaceSection;
@@ -14,13 +14,6 @@ const SECTION_CONTENT: Record<EmptyWorkspaceSection, {
   emptyTitle: string;
   emptyDescription: string;
 }> = {
-  attendance: {
-    number: '03',
-    title: 'Attendance',
-    description: 'Review attendance records by class session.',
-    emptyTitle: 'No attendance records available',
-    emptyDescription: 'Attendance records will appear here when class sessions have recorded attendance.',
-  },
   activity: {
     number: '04',
     title: 'Activity',
@@ -38,15 +31,6 @@ const SECTION_CONTENT: Record<EmptyWorkspaceSection, {
 };
 
 function SectionIcon({ section }: { section: EmptyWorkspaceSection }) {
-  if (section === 'attendance') {
-    return (
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-        <rect x="4" y="3" width="16" height="18" />
-        <path d="M8 3v4M16 3v4M4 9h16M8 15l2 2 5-5" />
-      </svg>
-    );
-  }
-
   if (section === 'activity') {
     return (
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
