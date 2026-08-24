@@ -24,7 +24,7 @@ model User {
   firstName    String
   lastName     String
   /// Optional unique login name for accounts created before username support.
-  username     String?   @unique
+  username     String?  @unique
   email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
@@ -32,21 +32,18 @@ model User {
 }
 
 model Student {
-  id      String @id @default(uuid())
-  classId String
-
-  studentNo String?
+  id        String  @id @default(uuid())
+  studentNo String? @unique
   firstName String
   lastName  String
 
-  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
-
+  enrollments       StudentEnrollment[]
   attendanceRecords AttendanceRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([classId, lastName, firstName])
+  @@index([lastName, firstName])
 }
 
 model Class {
@@ -66,7 +63,18 @@ model Class {
   updatedAt          DateTime            @updatedAt
   classSchedules     ClassSchedule[]
   attendanceSessions AttendanceSession[]
-  students           Student[]
+  enrollments        StudentEnrollment[]
+}
+
+model StudentEnrollment {
+  studentId String
+  classId   String
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, classId])
+  @@index([classId, studentId])
 }
 
 model ClassSchedule {
@@ -113,7 +121,6 @@ model AttendanceRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([studentId])
-
   @@unique([sessionId, studentId])
+  @@index([studentId])
 }

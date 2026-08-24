@@ -65,6 +65,21 @@ test("class endpoints require an authenticated session", async () => {
   assert.equal(archiveResponse.body.error.code, "UNAUTHENTICATED");
 });
 
+// Confirms both student operations are protected by the shared session middleware.
+test("student endpoints require an authenticated session", async () => {
+  const listResponse = await request(app).get("/api/students");
+  const createResponse = await request(app).post("/api/students").send({
+    firstName: "Ana",
+    lastName: "Reyes",
+    classIds: ["2c6e62cc-584d-4faf-90f6-fdb50b27c9d0"],
+  });
+
+  assert.equal(listResponse.status, 401);
+  assert.equal(listResponse.body.error.code, "UNAUTHENTICATED");
+  assert.equal(createResponse.status, 401);
+  assert.equal(createResponse.body.error.code, "UNAUTHENTICATED");
+});
+
 // Confirms Express syntax failures are converted into the safe API error contract.
 test("malformed JSON uses the safe API error response", async () => {
   const response = await request(app)

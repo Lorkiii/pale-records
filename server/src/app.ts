@@ -7,6 +7,7 @@ import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import authRouter from "./routes/auth.route.js";
 import classRouter from "./routes/class.route.js";
+import studentRouter from "./routes/student.route.js";
 
 export const app = express();
 
@@ -22,6 +23,7 @@ app.use(express.json({ limit: "16kb" }));
 
 app.use("/api/auth", authRouter);
 app.use("/api/classes", classRouter);
+app.use("/api/students", studentRouter);
 
 // Provides a minimal process-independent endpoint for confirming that Express responds.
 app.get("/test", (req, res) => {

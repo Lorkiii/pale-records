@@ -84,13 +84,50 @@ async function readApiError(response: Response) {
   return new ClassApiError(message, response.status, details);
 }
 
-// Reads successful JSON while preserving a request-specific fallback message.
-async function readSuccessPayload(response: Response, errorMessage: string) {
+// Selects and validates the class collection from a successful response's data object.
+function readClasses(data: Record<string, unknown>) {
+  if (!Array.isArray(data.classes) || !data.classes.every(isClassRecord)) {
+    return undefined;
+  }
+
+  return data.classes;
+}
+
+// Selects and validates the class record shared by create and update responses.
+function readClass(data: Record<string, unknown>) {
+  return isClassRecord(data.class) ? data.class : undefined;
+}
+
+// Selects the archived class identifier confirmed by the server.
+function readArchivedClassId(data: Record<string, unknown>) {
+  return typeof data.classId === 'string' ? data.classId : undefined;
+}
+
+// Parses the shared success envelope and delegates endpoint-specific data validation.
+async function readSuccessData<Result>(
+  response: Response,
+  errorMessage: string,
+  readData: (data: Record<string, unknown>) => Result | undefined,
+) {
+  let payload: unknown;
+
   try {
-    return await response.json() as unknown;
+    payload = await response.json();
   } catch {
     throw new ClassApiError(errorMessage, response.status);
   }
+
+  if (!isRecord(payload) || payload.success !== true || !isRecord(payload.data)) {
+    throw new ClassApiError(errorMessage, response.status);
+  }
+
+  const result = readData(payload.data);
+
+  if (result === undefined) {
+    throw new ClassApiError(errorMessage, response.status);
+  }
+
+  return result;
 }
 
 // Loads the active class directory and validates every returned record.
@@ -113,20 +150,8 @@ export async function fetchClasses(signal: AbortSignal) {
   if (!response.ok) {
     throw await readApiError(response);
   }
-  // Reads the successful JSON payload and validates it against the expected shape.
-  const payload = await readSuccessPayload(response, 'Unable to read the class directory.');
 
-  if (
-    !isRecord(payload) ||
-    payload.success !== true ||
-    !isRecord(payload.data) ||
-    !Array.isArray(payload.data.classes) ||
-    !payload.data.classes.every(isClassRecord)
-  ) {
-    throw new ClassApiError('Unable to read the class directory.', response.status);
-  }
-
-  return payload.data.classes;
+  return readSuccessData(response, 'Unable to read the class directory.', readClasses);
 }
 
 // Persists a new class and returns the validated record created by the server.
@@ -148,18 +173,7 @@ export async function createClass(input: CreateClassInput) {
     throw await readApiError(response);
   }
 
-  const payload = await readSuccessPayload(response, 'Unable to read the created class.');
-
-  if (
-    !isRecord(payload) ||
-    payload.success !== true ||
-    !isRecord(payload.data) ||
-    !isClassRecord(payload.data.class)
-  ) {
-    throw new ClassApiError('Unable to read the created class.', response.status);
-  }
-
-  return payload.data.class;
+  return readSuccessData(response, 'Unable to read the created class.', readClass);
 }
 
 // Replaces the editable fields of an active class and returns its validated record.
@@ -181,18 +195,7 @@ export async function updateClass(classId: string, input: CreateClassInput) {
     throw await readApiError(response);
   }
 
-  const payload = await readSuccessPayload(response, 'Unable to read the updated class.');
-
-  if (
-    !isRecord(payload) ||
-    payload.success !== true ||
-    !isRecord(payload.data) ||
-    !isClassRecord(payload.data.class)
-  ) {
-    throw new ClassApiError('Unable to read the updated class.', response.status);
-  }
-
-  return payload.data.class;
+  return readSuccessData(response, 'Unable to read the updated class.', readClass);
 }
 
 // Soft-archives an active class and returns the identifier confirmed by the server.
@@ -212,16 +215,5 @@ export async function archiveClass(classId: string) {
     throw await readApiError(response);
   }
 
-  const payload = await readSuccessPayload(response, 'Unable to confirm the archived class.');
-
-  if (
-    !isRecord(payload) ||
-    payload.success !== true ||
-    !isRecord(payload.data) ||
-    typeof payload.data.classId !== 'string'
-  ) {
-    throw new ClassApiError('Unable to confirm the archived class.', response.status);
-  }
-
-  return payload.data.classId;
+  return readSuccessData(response, 'Unable to confirm the archived class.', readArchivedClassId);
 }

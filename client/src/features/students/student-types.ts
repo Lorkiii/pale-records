@@ -1,13 +1,24 @@
-// Defines the schema-aligned student values and page-local record shape used by the student workspace.
-export interface StudentInput {
-  classId: string;
-  studentNo: string | null;
+// Defines the student creation contract and safe persisted records used by the student workspace.
+export interface CreateStudentInput {
+  classIds: string[];
+  studentNo?: string;
   firstName: string;
   lastName: string;
 }
 
-export interface StudentRecord extends StudentInput {
-  clientId: string;
+export interface StudentClassRecord {
+  id: string;
+  subjectName: string;
+  subjectCode: string | null;
+  section: string | null;
 }
 
-export type StudentFieldName = keyof StudentInput;
+export interface StudentRecord {
+  id: string;
+  studentNo: string | null;
+  firstName: string;
+  lastName: string;
+  classes: StudentClassRecord[];
+}
+
+export type StudentTextFieldName = 'studentNo' | 'firstName' | 'lastName';
