@@ -5,6 +5,7 @@ import helmet from "helmet";
 
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/error-handler.js";
+import attendanceRouter from "./routes/attendance.route.js";
 import authRouter from "./routes/auth.route.js";
 import classRouter from "./routes/class.route.js";
 import studentRouter from "./routes/student.route.js";
@@ -18,6 +19,11 @@ app.use(
     origin: env.CLIENT_ORIGINS,
     credentials: true,
   }),
+);
+app.use(
+  "/api/attendance",
+  express.json({ limit: "128kb" }),
+  attendanceRouter,
 );
 app.use(express.json({ limit: "16kb" }));
 

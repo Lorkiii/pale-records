@@ -1,4 +1,4 @@
-// Renders attendance selection, page-memory actions, live totals, and status guidance.
+// Renders persisted Attendance selection, edit/delete actions, totals, and schedule feedback.
 import type { ReactNode } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -6,7 +6,11 @@ import { Notice } from '../../../components/ui/Notice';
 import { Select } from '../../../components/ui/Select';
 import type { ClassRecord } from '../../classes/class-types';
 import type { AttendanceStatusCounts } from '../attendance-draft';
-import { formatAttendanceDateLong } from '../attendance-draft';
+import {
+  formatAttendanceDateLong,
+  formatAttendanceSessionSchedule,
+} from '../attendance-draft';
+import type { AttendanceSessionDraft } from '../attendance-types';
 
 export interface AttendanceToolbarFeedback {
   variant: 'info' | 'warning' | 'error' | 'success';
@@ -19,8 +23,12 @@ interface AttendanceToolbarProps {
   selectedClassId: string;
   dateInput: string;
   selectedDate: string | null;
+  selectedSession: AttendanceSessionDraft | null;
   isEditing: boolean;
   hasUnsavedChanges: boolean;
+  isBusy: boolean;
+  isCreating: boolean;
+  isSaving: boolean;
   canUndo: boolean;
   canAddDate: boolean;
   dateHint: string;
@@ -30,6 +38,7 @@ interface AttendanceToolbarProps {
   onDateInputChange: (date: string) => void;
   onAddDate: () => void;
   onEdit: () => void;
+  onDelete: () => void;
   onMarkUnmarkedPresent: () => void;
   onUndo: () => void;
   onCancel: () => void;
@@ -63,8 +72,12 @@ export function AttendanceToolbar({
   selectedClassId,
   dateInput,
   selectedDate,
+  selectedSession,
   isEditing,
   hasUnsavedChanges,
+  isBusy,
+  isCreating,
+  isSaving,
   canUndo,
   canAddDate,
   dateHint,
@@ -74,6 +87,7 @@ export function AttendanceToolbar({
   onDateInputChange,
   onAddDate,
   onEdit,
+  onDelete,
   onMarkUnmarkedPresent,
   onUndo,
   onCancel,
@@ -96,6 +110,7 @@ export function AttendanceToolbar({
             id="attendance-class"
             label="Class"
             value={selectedClassId}
+            disabled={isBusy}
             onChange={(event) => onClassChange(event.target.value)}
             options={[
               { value: '', label: 'Select a class' },
@@ -104,7 +119,7 @@ export function AttendanceToolbar({
                 label: getClassOptionLabel(classRecord),
               })),
             ]}
-            hint="Attendance dates are kept separately for each selected class."
+            hint="Saved sessions and roster snapshots are kept separately for each class."
           />
 
           <Input
@@ -112,6 +127,7 @@ export function AttendanceToolbar({
             type="date"
             label="Attendance date"
             value={dateInput}
+            disabled={isBusy}
             onChange={(event) => onDateInputChange(event.target.value)}
             hint={dateHint}
           />
@@ -121,7 +137,7 @@ export function AttendanceToolbar({
             disabled={!canAddDate}
             className="w-full lg:w-auto"
           >
-            Add date
+            {isCreating ? 'Adding date…' : 'Add date'}
           </Button>
         </div>
 
@@ -144,36 +160,46 @@ export function AttendanceToolbar({
                       Unsaved changes
                     </span>
                   ) : null}
+                  {selectedSession ? (
+                    <span className="border border-paper-dark bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink-secondary">
+                      {formatAttendanceSessionSchedule(selectedSession)}
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
               {isEditing ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" onClick={onMarkUnmarkedPresent}>
+                  <Button variant="secondary" onClick={onMarkUnmarkedPresent} disabled={isBusy}>
                     Mark unmarked as P
                   </Button>
-                  <Button variant="ghost" onClick={onUndo} disabled={!canUndo}>
+                  <Button variant="ghost" onClick={onUndo} disabled={!canUndo || isBusy}>
                     Undo last change
                   </Button>
-                  <Button variant="secondary" onClick={onCancel}>
+                  <Button variant="secondary" onClick={onCancel} disabled={isBusy}>
                     Cancel changes
                   </Button>
-                  <Button onClick={onSave}>
-                    Save attendance
+                  <Button onClick={onSave} disabled={isBusy}>
+                    {isSaving ? 'Saving…' : 'Save attendance'}
                   </Button>
                 </div>
               ) : (
-                <Button variant="secondary" onClick={onEdit}>
-                  Edit attendance
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="destructive" onClick={onDelete} disabled={isBusy}>
+                    Delete date
+                  </Button>
+                  <Button variant="secondary" onClick={onEdit} disabled={isBusy}>
+                    Edit attendance
+                  </Button>
+                </div>
               )}
             </div>
           </div>
         ) : null}
       </div>
 
-      <Notice variant="info" title="Page-memory preview">
-        This attendance workspace is a UI preview. Attendance, remarks, and selected files remain on this page only and reset on refresh.
+      <Notice variant="info" title="Persisted attendance">
+        Dates, roster snapshots, PALE statuses, and Excused remarks are saved to PALE Records. Proof upload remains unavailable until protected file storage is configured.
       </Notice>
 
       {feedback ? (

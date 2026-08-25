@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   classCreateResponseSchema,
   classRecordSchema,
+  classScheduleConflictResponseSchema,
   classUpdateResponseSchema,
 } from "./class.response.js";
 
@@ -88,4 +89,16 @@ test("class write response schemas include weekly schedules", () => {
 
   assert.equal(classCreateResponseSchema.parse(response).data.class.schedules.length, 2);
   assert.equal(classUpdateResponseSchema.parse(response).data.class.schedules[1]?.dayOfWeek, 4);
+});
+
+test("class schedule conflicts use the safe expected error envelope", () => {
+  const response = classScheduleConflictResponseSchema.parse({
+    success: false,
+    error: {
+      code: "CLASS_SCHEDULE_CONFLICT",
+      message: "A weekly schedule overlaps another active class.",
+    },
+  });
+
+  assert.equal(response.error.code, "CLASS_SCHEDULE_CONFLICT");
 });

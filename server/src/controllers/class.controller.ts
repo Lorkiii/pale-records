@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 
 import {
   archiveClass,
+  ClassScheduleConflictError,
   createClass,
   listClasses,
   updateClass,
@@ -17,6 +18,7 @@ import {
   classCreateResponseSchema,
   classListResponseSchema,
   classNotFoundResponseSchema,
+  classScheduleConflictResponseSchema,
   classUpdateResponseSchema,
 } from "../validations/class.response.js";
 
@@ -31,6 +33,17 @@ function sendClassNotFoundResponse(res: Response) {
   });
 
   return res.status(404).json(response);
+}
+
+// Sends the safe expected conflict shared by class creation and schedule replacement.
+function sendClassScheduleConflictResponse(res: Response) {
+  return res.status(409).json(classScheduleConflictResponseSchema.parse({
+    success: false,
+    error: {
+      code: "CLASS_SCHEDULE_CONFLICT",
+      message: "A weekly schedule overlaps another active class.",
+    },
+  }));
 }
 
 // Returns the bounded active class directory in the public response contract.
@@ -67,6 +80,10 @@ export async function createClassController(
 
     return res.status(201).json(response);
   } catch (error) {
+    if (error instanceof ClassScheduleConflictError) {
+      return sendClassScheduleConflictResponse(res);
+    }
+
     next(error);
   }
 }
@@ -91,6 +108,10 @@ export async function updateClassController(
 
     return res.status(200).json(response);
   } catch (error) {
+    if (error instanceof ClassScheduleConflictError) {
+      return sendClassScheduleConflictResponse(res);
+    }
+
     next(error);
   }
 }

@@ -1,4 +1,5 @@
-// Owns bounded class queries and atomic schedule persistence with explicit public mapping.
+// Owns bounded class queries, collision-safe schedule writes, and explicit public mapping.
+import type { Prisma } from "../generated/prisma/client.js";
 import prisma from "../lib/db-client.js";
 import type {
   ClassScheduleInput,
@@ -21,6 +22,13 @@ type ClassDatabaseRecord = Omit<
 type ClassScalarData = Omit<ClassDatabaseRecord, "id" | "classSchedules">;
 type CreateClassData = ClassScalarData & { schedules: ClassScheduleInput[] };
 type UpdateClassData = ClassScalarData & { schedules?: ClassScheduleInput[] };
+
+export class ClassScheduleConflictError extends Error {
+  constructor() {
+    super("A weekly schedule overlaps another active class.");
+    this.name = "ClassScheduleConflictError";
+  }
+}
 
 export type ClassServiceDependencies = {
   findClasses: () => Promise<ClassDatabaseRecord[]>;
@@ -57,6 +65,39 @@ const classSelect = {
   },
 } as const;
 
+// Serializes schedule writes before checking half-open time ranges on the same weekday.
+async function ensureSchedulesAreAvailable(
+  transaction: Prisma.TransactionClient,
+  schedules: ClassScheduleInput[],
+  excludedClassId?: string,
+) {
+  if (schedules.length === 0) {
+    return;
+  }
+
+  // Every class schedule write uses this transaction lock, closing concurrent check/write races.
+  await transaction.$queryRaw<Array<{ locked: number }>>`
+    SELECT 1 AS "locked" FROM pg_advisory_xact_lock(1935764301)
+  `;
+
+  const conflict = await transaction.classSchedule.findFirst({
+    where: {
+      ...(excludedClassId ? { classId: { not: excludedClassId } } : {}),
+      class: { archivedAt: null },
+      OR: schedules.map((schedule) => ({
+        dayOfWeek: schedule.dayOfWeek,
+        startTime: { lt: schedule.endTime },
+        endTime: { gt: schedule.startTime },
+      })),
+    },
+    select: { id: true },
+  });
+
+  if (conflict) {
+    throw new ClassScheduleConflictError();
+  }
+}
+
 const defaultDependencies: ClassServiceDependencies = {
   // Retrieves only the newest bounded set of active public class fields and schedules.
   findClasses: () =>
@@ -68,14 +109,18 @@ const defaultDependencies: ClassServiceDependencies = {
     }),
   // Creates scalar fields and optional schedule rows in one nested atomic write.
   insertClass: ({ schedules, ...classData }) =>
-    prisma.class.create({
-      data: {
-        ...classData,
-        classSchedules: schedules.length > 0
-          ? { create: schedules }
-          : undefined,
-      },
-      select: classSelect,
+    prisma.$transaction(async (transaction) => {
+      await ensureSchedulesAreAvailable(transaction, schedules);
+
+      return transaction.class.create({
+        data: {
+          ...classData,
+          classSchedules: schedules.length > 0
+            ? { create: schedules }
+            : undefined,
+        },
+        select: classSelect,
+      });
     }),
   // Synchronizes one active class and its supplied schedule set in one transaction.
   updateClassRecord: (classId, { schedules, ...classData }) =>
@@ -90,6 +135,8 @@ const defaultDependencies: ClassServiceDependencies = {
       }
 
       if (schedules !== undefined) {
+        await ensureSchedulesAreAvailable(transaction, schedules, classId);
+
         const suppliedWeekdays = schedules.map((schedule) => schedule.dayOfWeek);
 
         await transaction.classSchedule.deleteMany({

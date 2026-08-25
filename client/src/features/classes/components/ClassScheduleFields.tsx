@@ -56,7 +56,7 @@ export function ClassScheduleFields({
       </legend>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <p id="class-schedule-help" className="mt-1 max-w-xl text-sm leading-6 text-ink-muted">
-          Add up to one time range per weekday. Each selected day can use a different start and end time.
+          Add up to one time range per weekday. Times cannot overlap another active class on the same day.
         </p>
         <Button type="button" variant="secondary" onClick={addRow} disabled={disabled || rows.length >= 7}>
           Add schedule day

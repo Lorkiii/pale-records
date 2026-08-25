@@ -80,6 +80,33 @@ test("student endpoints require an authenticated session", async () => {
   assert.equal(createResponse.body.error.code, "UNAUTHENTICATED");
 });
 
+// Confirms the registered Attendance router protects every endpoint before validation or data access.
+test("Attendance endpoints require an authenticated session", async () => {
+  const createResponse = await request(app)
+    .post("/api/attendance/classes/2c6e62cc-584d-4faf-90f6-fdb50b27c9d0/sessions")
+    .send({ sessionDate: "2026-08-25" });
+  const listResponse = await request(app)
+    .get("/api/attendance/classes/2c6e62cc-584d-4faf-90f6-fdb50b27c9d0/sessions");
+  const loadResponse = await request(app)
+    .get("/api/attendance/sessions/099aa026-ef03-4ab6-92ee-68fa37fb6523");
+  const deleteResponse = await request(app)
+    .delete("/api/attendance/sessions/099aa026-ef03-4ab6-92ee-68fa37fb6523");
+  const saveResponse = await request(app)
+    .put("/api/attendance/sessions/099aa026-ef03-4ab6-92ee-68fa37fb6523/records")
+    .send({ records: [] });
+
+  for (const response of [
+    createResponse,
+    listResponse,
+    loadResponse,
+    deleteResponse,
+    saveResponse,
+  ]) {
+    assert.equal(response.status, 401);
+    assert.equal(response.body.error.code, "UNAUTHENTICATED");
+  }
+});
+
 // Confirms Express syntax failures are converted into the safe API error contract.
 test("malformed JSON uses the safe API error response", async () => {
   const response = await request(app)

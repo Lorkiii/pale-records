@@ -1,4 +1,4 @@
-// Defines page-memory attendance records and the stable PALE status vocabulary.
+// Defines persisted Attendance API records and the separate local working snapshot model.
 export type AttendanceStatusCode = 'P' | 'A' | 'L' | 'E';
 
 export const ATTENDANCE_STATUS_ORDER: readonly AttendanceStatusCode[] = [
@@ -15,23 +15,54 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatusCode, string> = {
   E: 'Excused',
 };
 
-export interface SelectedProofMetadata {
-  file: File;
-  name: string;
-  type: string;
-  size: number;
+export const ATTENDANCE_REMARKS_MAX_LENGTH = 1_000;
+
+export interface AttendanceStudentRecord {
+  id: string;
+  studentNo: string | null;
+  firstName: string;
+  lastName: string;
 }
 
-export interface AttendanceDraftRecord {
+export interface AttendanceRecord {
+  id: string;
+  student: AttendanceStudentRecord;
+  status: AttendanceStatusCode | null;
+  remarks: string | null;
+}
+
+export interface AttendanceSessionRecord {
+  id: string;
+  classId: string;
+  classScheduleId: string | null;
+  sessionDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  records: AttendanceRecord[];
+}
+
+export interface SaveAttendanceRecordInput {
+  studentId: string;
+  status: AttendanceStatusCode | null;
+  remarks: string | null;
+}
+
+export interface WorkingAttendanceRecord {
+  id: string;
+  student: AttendanceStudentRecord;
   status: AttendanceStatusCode | null;
   remarks: string;
-  proof: SelectedProofMetadata | null;
 }
 
-export type AttendanceRecordsByStudentId = Record<string, AttendanceDraftRecord>;
+export type WorkingAttendanceRecordsByStudentId = Record<string, WorkingAttendanceRecord>;
 
-export interface AttendanceDateDraft {
-  date: string;
-  records: AttendanceRecordsByStudentId;
-  savedRecords: AttendanceRecordsByStudentId | null;
+export interface AttendanceSessionDraft {
+  id: string;
+  classId: string;
+  classScheduleId: string | null;
+  sessionDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  records: WorkingAttendanceRecordsByStudentId;
+  savedRecords: WorkingAttendanceRecordsByStudentId;
 }

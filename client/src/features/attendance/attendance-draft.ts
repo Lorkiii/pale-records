@@ -1,12 +1,14 @@
-// Provides pure helpers for page-memory attendance dates, rosters, updates, and validation.
-import type { StudentRecord } from '../students/student-types';
+// Provides pure helpers for persisted Attendance sessions, local edits, snapshots, and validation.
 import {
+  ATTENDANCE_REMARKS_MAX_LENGTH,
   ATTENDANCE_STATUS_LABELS,
   ATTENDANCE_STATUS_ORDER,
-  type AttendanceDateDraft,
-  type AttendanceDraftRecord,
-  type AttendanceRecordsByStudentId,
+  type AttendanceSessionDraft,
+  type AttendanceSessionRecord,
   type AttendanceStatusCode,
+  type AttendanceStudentRecord,
+  type WorkingAttendanceRecord,
+  type WorkingAttendanceRecordsByStudentId,
 } from './attendance-types';
 
 export interface AttendanceStatusCounts {
@@ -37,7 +39,7 @@ const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
   month: 'short',
 });
 
-// Parses the native date-input value in local time so calendar labels never shift through UTC.
+// Parses the native date-input value in local time so display labels never shift calendar days.
 function parseLocalAttendanceDate(date: string) {
   const match = DATE_PATTERN.exec(date);
 
@@ -57,19 +59,37 @@ function parseLocalAttendanceDate(date: string) {
     : null;
 }
 
-// Returns a fresh unmarked record so rows never share mutable page state.
-function createEmptyAttendanceRecord(): AttendanceDraftRecord {
-  return {
-    status: null,
-    remarks: '',
-    proof: null,
-  };
+// Sorts the immutable student snapshot by name and optional student number.
+function compareAttendanceStudents(
+  first: AttendanceStudentRecord,
+  second: AttendanceStudentRecord,
+) {
+  const lastNameOrder = ROSTER_COLLATOR.compare(first.lastName, second.lastName);
+  if (lastNameOrder !== 0) {
+    return lastNameOrder;
+  }
+
+  const firstNameOrder = ROSTER_COLLATOR.compare(first.firstName, second.firstName);
+  if (firstNameOrder !== 0) {
+    return firstNameOrder;
+  }
+
+  if (first.studentNo === null) {
+    return second.studentNo === null ? first.id.localeCompare(second.id) : 1;
+  }
+
+  if (second.studentNo === null) {
+    return -1;
+  }
+
+  return ROSTER_COLLATOR.compare(first.studentNo, second.studentNo) ||
+    first.id.localeCompare(second.id);
 }
 
-// Compares local File-backed records without serializing or dropping the original File object.
+// Compares working values against the last validated server snapshot.
 function areAttendanceRecordsEqual(
-  first: AttendanceRecordsByStudentId,
-  second: AttendanceRecordsByStudentId,
+  first: WorkingAttendanceRecordsByStudentId,
+  second: WorkingAttendanceRecordsByStudentId,
 ) {
   const firstIds = Object.keys(first);
   const secondIds = Object.keys(second);
@@ -81,17 +101,13 @@ function areAttendanceRecordsEqual(
   return firstIds.every((studentId) => {
     const firstRecord = first[studentId];
     const secondRecord = second[studentId];
-
-    if (!firstRecord || !secondRecord) {
-      return false;
-    }
-
-    return firstRecord.status === secondRecord.status &&
-      firstRecord.remarks === secondRecord.remarks &&
-      firstRecord.proof?.file === secondRecord.proof?.file &&
-      firstRecord.proof?.name === secondRecord.proof?.name &&
-      firstRecord.proof?.type === secondRecord.proof?.type &&
-      firstRecord.proof?.size === secondRecord.proof?.size;
+    return Boolean(
+      firstRecord &&
+      secondRecord &&
+      firstRecord.id === secondRecord.id &&
+      firstRecord.status === secondRecord.status &&
+      firstRecord.remarks === secondRecord.remarks,
+    );
   });
 }
 
@@ -105,77 +121,62 @@ export function cycleAttendanceStatus(status: AttendanceStatusCode | null) {
   return ATTENDANCE_STATUS_ORDER[(currentIndex + 1) % ATTENDANCE_STATUS_ORDER.length];
 }
 
-// Filters the saved directory by enrollment and applies the register's stable identity order.
-export function filterAndSortRoster(students: StudentRecord[], classId: string) {
-  return students
-    .filter((student) => student.classes.some((classRecord) => classRecord.id === classId))
-    .toSorted((first, second) => {
-      const lastNameOrder = ROSTER_COLLATOR.compare(first.lastName, second.lastName);
-      if (lastNameOrder !== 0) {
-        return lastNameOrder;
-      }
-
-      const firstNameOrder = ROSTER_COLLATOR.compare(first.firstName, second.firstName);
-      if (firstNameOrder !== 0) {
-        return firstNameOrder;
-      }
-
-      if (first.studentNo === null) {
-        return second.studentNo === null ? 0 : 1;
-      }
-
-      if (second.studentNo === null) {
-        return -1;
-      }
-
-      return ROSTER_COLLATOR.compare(first.studentNo, second.studentNo);
-    });
-}
-
-// Creates the first unsaved working copy for one class roster and calendar date.
-export function createAttendanceDateDraft(
-  date: string,
-  roster: StudentRecord[],
-): AttendanceDateDraft {
-  return {
-    date,
-    records: Object.fromEntries(
-      roster.map((student) => [student.id, createEmptyAttendanceRecord()]),
-    ),
-    savedRecords: null,
-  };
-}
-
-// Copies the record containers while intentionally retaining each page-memory File reference.
-export function cloneAttendanceRecords(records: AttendanceRecordsByStudentId) {
+// Copies working containers while retaining real record and student database identifiers.
+export function cloneAttendanceRecords(records: WorkingAttendanceRecordsByStudentId) {
   return Object.fromEntries(
     Object.entries(records).map(([studentId, record]) => [
       studentId,
-      { ...record, proof: record.proof ? { ...record.proof } : null },
+      { ...record, student: { ...record.student } },
     ]),
   );
 }
 
-// Replaces one student's working record without mutating the selected date draft.
-export function updateAttendanceRecord(
-  dateDraft: AttendanceDateDraft,
-  studentId: string,
-  record: AttendanceDraftRecord,
-): AttendanceDateDraft {
+// Converts a validated persisted session into equal working and last-server snapshots.
+export function createAttendanceSessionDraft(
+  session: AttendanceSessionRecord,
+): AttendanceSessionDraft {
+  const records = Object.fromEntries(session.records.map((record) => [
+    record.student.id,
+    {
+      id: record.id,
+      student: { ...record.student },
+      status: record.status,
+      remarks: record.remarks ?? '',
+    },
+  ]));
+
   return {
-    ...dateDraft,
+    id: session.id,
+    classId: session.classId,
+    classScheduleId: session.classScheduleId,
+    sessionDate: session.sessionDate,
+    startTime: session.startTime,
+    endTime: session.endTime,
+    records,
+    savedRecords: cloneAttendanceRecords(records),
+  };
+}
+
+// Replaces one student's working value without mutating the persisted session draft.
+export function updateAttendanceRecord(
+  sessionDraft: AttendanceSessionDraft,
+  studentId: string,
+  record: WorkingAttendanceRecord,
+): AttendanceSessionDraft {
+  return {
+    ...sessionDraft,
     records: {
-      ...dateDraft.records,
+      ...sessionDraft.records,
       [studentId]: record,
     },
   };
 }
 
-// Marks only currently unmarked roster members Present and preserves every other status.
-export function markUnmarkedAsPresent(dateDraft: AttendanceDateDraft) {
+// Marks only currently unmarked roster members Present and preserves other values.
+export function markUnmarkedAsPresent(sessionDraft: AttendanceSessionDraft) {
   let didChange = false;
   const records = Object.fromEntries(
-    Object.entries(dateDraft.records).map(([studentId, record]) => {
+    Object.entries(sessionDraft.records).map(([studentId, record]) => {
       if (record.status !== null) {
         return [studentId, record];
       }
@@ -185,13 +186,21 @@ export function markUnmarkedAsPresent(dateDraft: AttendanceDateDraft) {
     }),
   );
 
-  return didChange ? { ...dateDraft, records } : dateDraft;
+  return didChange ? { ...sessionDraft, records } : sessionDraft;
 }
 
-// Counts the actual selected roster, including students that remain unmarked.
+// Returns the selected session's immutable roster snapshot in stable register order.
+export function getAttendanceSessionRoster(sessionDraft: AttendanceSessionDraft | undefined) {
+  return sessionDraft
+    ? Object.values(sessionDraft.records)
+      .map((record) => record.student)
+      .toSorted(compareAttendanceStudents)
+    : [];
+}
+
+// Counts the complete selected persisted roster, including records still unmarked.
 export function countAttendanceStatuses(
-  dateDraft: AttendanceDateDraft | undefined,
-  roster: StudentRecord[],
+  sessionDraft: AttendanceSessionDraft | undefined,
 ): AttendanceStatusCounts {
   const counts: AttendanceStatusCounts = {
     P: 0,
@@ -201,46 +210,47 @@ export function countAttendanceStatuses(
     unmarked: 0,
   };
 
-  for (const student of roster) {
-    const status = dateDraft?.records[student.id]?.status ?? null;
-    if (status === null) {
+  for (const record of Object.values(sessionDraft?.records ?? {})) {
+    if (record.status === null) {
       counts.unmarked += 1;
     } else {
-      counts[status] += 1;
+      counts[record.status] += 1;
     }
   }
 
   return counts;
 }
 
-// Reports whether a record contains page-memory excuse information regardless of status.
-export function hasExcuseDetails(record: AttendanceDraftRecord) {
-  return record.remarks.trim().length > 0 || record.proof !== null;
+// Reports whether a working record contains an Excused remark.
+export function hasExcuseDetails(record: WorkingAttendanceRecord) {
+  return record.remarks.trim().length > 0;
 }
 
-// Blocks saves that omit Excused remarks or leave preserved details on another status.
-export function validateAttendanceDateDraft(
-  dateDraft: AttendanceDateDraft,
-  roster: StudentRecord[],
-) {
+// Enforces the same Excused-only and maximum-length rules before the network save.
+export function validateAttendanceSessionDraft(sessionDraft: AttendanceSessionDraft) {
   const issues: AttendanceValidationIssue[] = [];
 
-  for (const student of roster) {
-    const record = dateDraft.records[student.id] ?? createEmptyAttendanceRecord();
-    const studentName = `${student.lastName}, ${student.firstName}`;
+  for (const record of Object.values(sessionDraft.records)) {
+    const studentName = `${record.student.lastName}, ${record.student.firstName}`;
+    const normalizedRemarks = record.remarks.trim();
 
-    if (record.status === 'E' && record.remarks.trim().length === 0) {
+    if (normalizedRemarks.length > ATTENDANCE_REMARKS_MAX_LENGTH) {
       issues.push({
-        studentId: student.id,
+        studentId: record.student.id,
+        message: `${studentName} has remarks longer than ${ATTENDANCE_REMARKS_MAX_LENGTH} characters.`,
+      });
+    } else if (record.status === 'E' && normalizedRemarks.length === 0) {
+      issues.push({
+        studentId: record.student.id,
         message: `${studentName} is Excused and requires a remark.`,
       });
-    } else if (record.status !== 'E' && hasExcuseDetails(record)) {
+    } else if (record.status !== 'E' && normalizedRemarks.length > 0) {
       const currentStatus = record.status
         ? ATTENDANCE_STATUS_LABELS[record.status]
         : 'Unmarked';
       issues.push({
-        studentId: student.id,
-        message: `${studentName} has excuse details while ${currentStatus}. Return the status to Excused or remove the details.`,
+        studentId: record.student.id,
+        message: `${studentName} has an Excused remark while ${currentStatus}.`,
       });
     }
   }
@@ -248,17 +258,15 @@ export function validateAttendanceDateDraft(
   return issues;
 }
 
-// Determines whether the working date differs from its last page-memory save.
-export function isAttendanceDateDirty(dateDraft: AttendanceDateDraft | undefined) {
-  if (!dateDraft) {
-    return false;
-  }
-
-  return dateDraft.savedRecords === null ||
-    !areAttendanceRecordsEqual(dateDraft.records, dateDraft.savedRecords);
+// Determines whether local working values differ from the last server response.
+export function isAttendanceSessionDirty(sessionDraft: AttendanceSessionDraft | undefined) {
+  return Boolean(
+    sessionDraft &&
+    !areAttendanceRecordsEqual(sessionDraft.records, sessionDraft.savedRecords),
+  );
 }
 
-// Validates a YYYY-MM-DD input without interpreting it as a UTC timestamp.
+// Validates a YYYY-MM-DD input without interpreting it as a UTC display timestamp.
 export function isAttendanceDateValue(date: string) {
   return parseLocalAttendanceDate(date) !== null;
 }
@@ -275,20 +283,25 @@ export function formatAttendanceDateShort(date: string) {
   return parsedDate ? SHORT_DATE_FORMATTER.format(parsedDate) : date;
 }
 
-// Keeps date columns in chronological YYYY-MM-DD order without mutating page state.
-export function sortAttendanceDateDrafts(dateDrafts: AttendanceDateDraft[]) {
-  return dateDrafts.toSorted((first, second) => first.date.localeCompare(second.date));
+// Keeps persisted date columns chronological without mutating page state.
+export function sortAttendanceSessionDrafts(sessionDrafts: AttendanceSessionDraft[]) {
+  return sessionDrafts.toSorted(
+    (first, second) => first.sessionDate.localeCompare(second.sessionDate),
+  );
 }
 
-// Presents selected proof sizes without imposing a fictional upload limit.
-export function formatFileSize(size: number) {
-  if (size < 1024) {
-    return `${size} B`;
-  }
+// Formats copied HH:mm schedule values without applying timezone conversion.
+function formatAttendanceTime(time: string) {
+  const [hourValue, minute] = time.split(':');
+  const hour = Number(hourValue);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${period}`;
+}
 
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+// Describes whether one historical session matched and snapshotted a weekly schedule.
+export function formatAttendanceSessionSchedule(sessionDraft: AttendanceSessionDraft) {
+  return sessionDraft.startTime && sessionDraft.endTime
+    ? `Scheduled / ${formatAttendanceTime(sessionDraft.startTime)}–${formatAttendanceTime(sessionDraft.endTime)}`
+    : 'Unscheduled';
 }

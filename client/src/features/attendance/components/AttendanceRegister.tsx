@@ -1,5 +1,4 @@
-// Renders the accessible sticky attendance matrix and selected-date detail columns.
-import type { StudentRecord } from '../../students/student-types';
+// Renders the responsive persisted Attendance matrix and selected roster snapshot details.
 import {
   cycleAttendanceStatus,
   formatAttendanceDateLong,
@@ -8,27 +7,22 @@ import {
 } from '../attendance-draft';
 import {
   ATTENDANCE_STATUS_LABELS,
-  type AttendanceDateDraft,
-  type AttendanceDraftRecord,
+  type AttendanceSessionDraft,
   type AttendanceStatusCode,
+  type AttendanceStudentRecord,
+  type WorkingAttendanceRecord,
 } from '../attendance-types';
 
 interface AttendanceRegisterProps {
-  roster: StudentRecord[];
-  dateDrafts: AttendanceDateDraft[];
-  selectedDate: string;
+  roster: AttendanceStudentRecord[];
+  sessionDrafts: AttendanceSessionDraft[];
+  selectedSessionId: string;
   isEditing: boolean;
   liveMessage: string;
-  onSelectDate: (date: string) => void;
+  onSelectSession: (sessionId: string) => void;
   onCycleStatus: (studentId: string) => void;
-  onOpenDetails: (student: StudentRecord) => void;
+  onOpenDetails: (student: AttendanceStudentRecord) => void;
 }
-
-const EMPTY_RECORD: AttendanceDraftRecord = {
-  status: null,
-  remarks: '',
-  proof: null,
-};
 
 const STATUS_CLASS_NAMES: Record<AttendanceStatusCode, string> = {
   P: 'border-signal-emerald bg-signal-emerald/10 text-signal-emerald',
@@ -37,27 +31,22 @@ const STATUS_CLASS_NAMES: Record<AttendanceStatusCode, string> = {
   E: 'border-signal-blue bg-signal-blue/10 text-signal-blue',
 };
 
-// Provides a restrained inline paperclip that never stands alone as the proof label.
-function PaperclipIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-      <path d="m5.4 8.7 4.1-4.1a2 2 0 0 1 2.8 2.8L7.1 12.6a3 3 0 1 1-4.2-4.2l5.2-5.2" />
-    </svg>
-  );
-}
-
-// Builds a complete action label for editable, selectable, and review-only cells.
+// Builds a complete accessible label for a persisted, missing-roster, or editable cell.
 function getStatusButtonLabel(
-  student: StudentRecord,
-  date: string,
-  record: AttendanceDraftRecord,
+  student: AttendanceStudentRecord,
+  sessionDraft: AttendanceSessionDraft,
+  record: WorkingAttendanceRecord | undefined,
   isSelected: boolean,
   isEditable: boolean,
 ) {
   const studentName = `${student.lastName}, ${student.firstName}`;
-  const currentStatus = record.status ? ATTENDANCE_STATUS_LABELS[record.status] : 'Unmarked';
-  const dateLabel = formatAttendanceDateLong(date);
+  const dateLabel = formatAttendanceDateLong(sessionDraft.sessionDate);
 
+  if (!record) {
+    return `${studentName}, ${dateLabel}, not included in this saved roster. Activate to select this date.`;
+  }
+
+  const currentStatus = record.status ? ATTENDANCE_STATUS_LABELS[record.status] : 'Unmarked';
   if (isEditable) {
     const nextStatus = cycleAttendanceStatus(record.status);
     return `${studentName}, ${dateLabel}, ${currentStatus}. Activate to change to ${ATTENDANCE_STATUS_LABELS[nextStatus]}.`;
@@ -70,39 +59,40 @@ function getStatusButtonLabel(
   return `${studentName}, ${dateLabel}, ${currentStatus}. Read-only. Activate to review attendance details.`;
 }
 
-// Presents each status as a letter plus optional detail indicators and an explicit detail action.
+// Presents one snapshotted record while keeping selection and editing responsibilities explicit.
 function AttendanceStatusCell({
   student,
-  dateDraft,
+  sessionDraft,
   isSelected,
   isEditing,
-  onSelectDate,
+  onSelectSession,
   onCycleStatus,
   onOpenDetails,
 }: {
-  student: StudentRecord;
-  dateDraft: AttendanceDateDraft;
+  student: AttendanceStudentRecord;
+  sessionDraft: AttendanceSessionDraft;
   isSelected: boolean;
   isEditing: boolean;
-  onSelectDate: (date: string) => void;
+  onSelectSession: (sessionId: string) => void;
   onCycleStatus: (studentId: string) => void;
-  onOpenDetails: (student: StudentRecord) => void;
+  onOpenDetails: (student: AttendanceStudentRecord) => void;
 }) {
-  const record = dateDraft.records[student.id] ?? EMPTY_RECORD;
-  const isEditable = isSelected && isEditing;
-  const statusClassName = record.status
+  const record = sessionDraft.records[student.id];
+  const isEditable = Boolean(record && isSelected && isEditing);
+  const statusClassName = record?.status
     ? STATUS_CLASS_NAMES[record.status]
-    : 'border-paper-dark bg-paper-light text-ink-secondary';
-  const containsDetails = hasExcuseDetails(record);
-  const hasDetailsConflict = record.status !== 'E' && containsDetails;
+    : record
+      ? 'border-paper-dark bg-paper-light text-ink-secondary'
+      : 'border-paper-border bg-paper-muted text-ink-faint';
+  const containsDetails = record ? hasExcuseDetails(record) : false;
 
-  // Gives one click one responsibility: select, cycle while editing, or review while read-only.
+  // Selects another session, cycles a working value, or opens the selected read-only detail.
   const handleStatusClick = () => {
     if (!isSelected) {
-      onSelectDate(dateDraft.date);
-    } else if (isEditing) {
+      onSelectSession(sessionDraft.id);
+    } else if (record && isEditing) {
       onCycleStatus(student.id);
-    } else {
+    } else if (record) {
       onOpenDetails(student);
     }
   };
@@ -116,32 +106,32 @@ function AttendanceStatusCell({
       <div className="p-1.5">
         <button
           type="button"
-          aria-label={getStatusButtonLabel(student, dateDraft.date, record, isSelected, isEditable)}
+          aria-label={getStatusButtonLabel(
+            student,
+            sessionDraft,
+            record,
+            isSelected,
+            isEditable,
+          )}
           onClick={handleStatusClick}
           className={`flex min-h-11 w-full cursor-pointer flex-col items-center justify-center border px-2 py-2 font-mono transition-colors hover:border-ink focus-visible:relative focus-visible:z-10 ${statusClassName}`}
         >
-          <span className="text-lg font-bold leading-none">{record.status ?? '—'}</span>
-          <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em]">
-            {record.status ? ATTENDANCE_STATUS_LABELS[record.status] : 'Unmarked'}
+          <span className="text-lg font-bold leading-none">
+            {record?.status ?? (record ? '—' : 'N/R')}
           </span>
-          {record.remarks.trim() || record.proof ? (
-            <span className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.06em] text-ink">
-              {record.remarks.trim() ? <span>Remark</span> : null}
-              {record.proof ? (
-                <span className="inline-flex items-center gap-1">
-                  <PaperclipIcon /> Proof
-                </span>
-              ) : null}
-            </span>
-          ) : null}
-          {hasDetailsConflict ? (
-            <span className="mt-1 border-t border-signal-red pt-1 text-[9px] font-bold uppercase text-signal-red">
-              Resolve details
+          <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em]">
+            {record
+              ? record.status ? ATTENDANCE_STATUS_LABELS[record.status] : 'Unmarked'
+              : 'Not in roster'}
+          </span>
+          {record?.remarks.trim() ? (
+            <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.06em] text-ink">
+              Remark
             </span>
           ) : null}
         </button>
 
-        {isEditable ? (
+        {isEditable && record ? (
           <button
             type="button"
             onClick={() => onOpenDetails(student)}
@@ -151,7 +141,7 @@ function AttendanceStatusCell({
                 : 'border-paper-dark bg-paper-light text-ink-secondary'
             }`}
           >
-            {containsDetails ? 'Review details' : 'Add details'}
+            {containsDetails ? 'Review remark' : 'Add remark'}
           </button>
         ) : null}
       </div>
@@ -162,16 +152,18 @@ function AttendanceStatusCell({
 // Keeps one semantic table model across desktop and narrow horizontal-scroll layouts.
 export function AttendanceRegister({
   roster,
-  dateDrafts,
-  selectedDate,
+  sessionDrafts,
+  selectedSessionId,
   isEditing,
   liveMessage,
-  onSelectDate,
+  onSelectSession,
   onCycleStatus,
   onOpenDetails,
 }: AttendanceRegisterProps) {
-  const selectedDraft = dateDrafts.find((dateDraft) => dateDraft.date === selectedDate);
-  const selectedDateLabel = formatAttendanceDateShort(selectedDate);
+  const selectedDraft = sessionDrafts.find((session) => session.id === selectedSessionId);
+  const selectedDateLabel = selectedDraft
+    ? formatAttendanceDateShort(selectedDraft.sessionDate)
+    : '';
 
   return (
     <section className="min-w-0 max-w-full" aria-labelledby="attendance-register-heading">
@@ -185,7 +177,7 @@ export function AttendanceRegister({
           </h2>
         </div>
         <p className="max-w-lg text-sm leading-6 text-ink-muted">
-          Select a date header to review it. Only the selected date can be edited.
+          Select a saved date to load its roster snapshot. Only that date can be edited.
         </p>
       </div>
 
@@ -194,7 +186,7 @@ export function AttendanceRegister({
       <div className="max-h-[70vh] max-w-full overflow-auto border border-ink bg-paper-light">
         <table className="w-max min-w-full border-separate border-spacing-0 text-left">
           <caption className="sr-only">
-            Attendance register with a sticky student identity column, chronological date columns, and selected-date remarks and proof details.
+            Persisted Attendance register with sticky student identity, chronological date columns, selected-date remarks, and an unavailable proof boundary.
           </caption>
           <thead>
             <tr>
@@ -204,11 +196,11 @@ export function AttendanceRegister({
               >
                 Student
               </th>
-              {dateDrafts.map((dateDraft) => {
-                const isSelected = dateDraft.date === selectedDate;
+              {sessionDrafts.map((sessionDraft) => {
+                const isSelected = sessionDraft.id === selectedSessionId;
                 return (
                   <th
-                    key={dateDraft.date}
+                    key={sessionDraft.id}
                     scope="col"
                     className={`sticky top-0 z-20 w-28 min-w-28 border-r border-b border-ink bg-paper-muted p-0 text-center ${
                       isSelected ? 'border-x-2 border-x-ink' : ''
@@ -217,13 +209,17 @@ export function AttendanceRegister({
                     <button
                       type="button"
                       aria-pressed={isSelected}
-                      aria-label={`${formatAttendanceDateLong(dateDraft.date)}${isSelected ? ', selected' : '. Activate to select this date.'}`}
-                      onClick={() => onSelectDate(dateDraft.date)}
+                      aria-label={`${formatAttendanceDateLong(sessionDraft.sessionDate)}${
+                        isSelected ? ', selected' : '. Activate to select this saved date.'
+                      }`}
+                      onClick={() => onSelectSession(sessionDraft.id)}
                       className="flex min-h-16 w-full cursor-pointer flex-col items-center justify-center px-2 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink hover:bg-paper-dark"
                     >
-                      <span>{formatAttendanceDateShort(dateDraft.date)}</span>
+                      <span>{formatAttendanceDateShort(sessionDraft.sessionDate)}</span>
                       {isSelected ? (
-                        <span className="mt-1 border-t border-ink pt-1 text-[9px] tracking-[0.12em]">Selected</span>
+                        <span className="mt-1 border-t border-ink pt-1 text-[9px] tracking-[0.12em]">
+                          Selected
+                        </span>
                       ) : null}
                     </button>
                   </th>
@@ -241,13 +237,13 @@ export function AttendanceRegister({
                 className="sticky top-0 right-0 z-40 hidden w-48 min-w-48 border-b border-ink bg-paper-muted px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell"
               >
                 <span className="block">Proof</span>
-                <span className="mt-1 block text-[10px] text-ink-muted">{selectedDateLabel}</span>
+                <span className="mt-1 block text-[10px] text-ink-muted">Unavailable</span>
               </th>
             </tr>
           </thead>
           <tbody>
             {roster.map((student) => {
-              const selectedRecord = selectedDraft?.records[student.id] ?? EMPTY_RECORD;
+              const selectedRecord = selectedDraft?.records[student.id];
               return (
                 <tr key={student.id}>
                   <th
@@ -264,14 +260,14 @@ export function AttendanceRegister({
                     ) : null}
                   </th>
 
-                  {dateDrafts.map((dateDraft) => (
+                  {sessionDrafts.map((sessionDraft) => (
                     <AttendanceStatusCell
-                      key={dateDraft.date}
+                      key={sessionDraft.id}
                       student={student}
-                      dateDraft={dateDraft}
-                      isSelected={dateDraft.date === selectedDate}
+                      sessionDraft={sessionDraft}
+                      isSelected={sessionDraft.id === selectedSessionId}
                       isEditing={isEditing}
-                      onSelectDate={onSelectDate}
+                      onSelectSession={onSelectSession}
                       onCycleStatus={onCycleStatus}
                       onOpenDetails={onOpenDetails}
                     />
@@ -284,22 +280,13 @@ export function AttendanceRegister({
                       className="flex min-h-11 w-full cursor-pointer items-center px-3 text-left text-sm text-ink-secondary hover:bg-paper-muted"
                     >
                       <span className="block max-w-48 truncate">
-                        {selectedRecord.remarks.trim() || 'Add remark'}
+                        {selectedRecord?.remarks.trim() ||
+                          (isEditing && selectedRecord?.status === 'E' ? 'Add remark' : 'No remark')}
                       </span>
                     </button>
                   </td>
-                  <td className="sticky right-0 z-10 hidden w-48 min-w-48 border-b border-paper-border bg-paper-light p-1.5 xl:table-cell">
-                    <button
-                      type="button"
-                      onClick={() => onOpenDetails(student)}
-                      className="flex min-h-11 w-full cursor-pointer items-center gap-2 px-3 text-left text-sm text-ink-secondary hover:bg-paper-muted"
-                      title={selectedRecord.proof?.name}
-                    >
-                      {selectedRecord.proof ? <PaperclipIcon /> : null}
-                      <span className="block max-w-36 truncate">
-                        {selectedRecord.proof?.name ?? 'Add proof'}
-                      </span>
-                    </button>
+                  <td className="sticky right-0 z-10 hidden w-48 min-w-48 border-b border-paper-border bg-paper-muted p-3 text-sm text-ink-muted xl:table-cell">
+                    Protected storage required
                   </td>
                 </tr>
               );

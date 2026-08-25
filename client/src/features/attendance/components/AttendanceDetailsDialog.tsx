@@ -1,38 +1,28 @@
-// Owns the temporary remarks, proof selection, and explicit status clearing form.
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+// Owns temporary Excused-remark editing and the honest unavailable proof-storage boundary.
+import { useState, type FormEvent } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Dialog } from '../../../components/ui/Dialog';
 import { Label } from '../../../components/ui/Label';
 import { Notice } from '../../../components/ui/Notice';
 import type { ClassRecord } from '../../classes/class-types';
-import type { StudentRecord } from '../../students/student-types';
+import { formatAttendanceDateLong } from '../attendance-draft';
 import {
-  formatAttendanceDateLong,
-  formatFileSize,
-  hasExcuseDetails,
-} from '../attendance-draft';
-import {
+  ATTENDANCE_REMARKS_MAX_LENGTH,
   ATTENDANCE_STATUS_LABELS,
-  type AttendanceDraftRecord,
   type AttendanceStatusCode,
-  type SelectedProofMetadata,
+  type AttendanceStudentRecord,
+  type WorkingAttendanceRecord,
 } from '../attendance-types';
 
 interface AttendanceDetailsDialogProps {
-  student: StudentRecord;
+  student: AttendanceStudentRecord;
   classRecord: ClassRecord;
   date: string;
-  record: AttendanceDraftRecord;
+  record: WorkingAttendanceRecord;
   isEditable: boolean;
   onClose: () => void;
-  onApply: (record: AttendanceDraftRecord) => void;
+  onApply: (record: WorkingAttendanceRecord) => void;
 }
-
-const SUPPORTED_PROOF_TYPES = new Set([
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-]);
 
 const STATUS_BADGE_CLASS_NAMES: Record<AttendanceStatusCode, string> = {
   P: 'border-signal-emerald text-signal-emerald',
@@ -49,17 +39,7 @@ function getClassLabel(classRecord: ClassRecord) {
   return classRecord.section ? `${identity} / ${classRecord.section}` : identity;
 }
 
-// Captures the selected File together with display metadata while retaining the original object.
-function toSelectedProofMetadata(file: File): SelectedProofMetadata {
-  return {
-    file,
-    name: file.name,
-    type: file.type,
-    size: file.size,
-  };
-}
-
-// Keeps canceled edits inside the dialog and reports only explicitly applied values to the page.
+// Keeps canceled remark edits local and applies only explicitly confirmed working values.
 export function AttendanceDetailsDialog({
   student,
   classRecord,
@@ -71,36 +51,14 @@ export function AttendanceDetailsDialog({
 }: AttendanceDetailsDialogProps) {
   const [status, setStatus] = useState<AttendanceStatusCode | null>(record.status);
   const [remarks, setRemarks] = useState(record.remarks);
-  const [proof, setProof] = useState<SelectedProofMetadata | null>(record.proof);
   const [remarksError, setRemarksError] = useState('');
-  const [fileError, setFileError] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const workingRecord: AttendanceDraftRecord = { status, remarks, proof };
-  const hasDetailsConflict = status !== 'E' && hasExcuseDetails(workingRecord);
   const statusLabel = status ? `${status} / ${ATTENDANCE_STATUS_LABELS[status]}` : '— / Unmarked';
   const statusClassName = status
     ? STATUS_BADGE_CLASS_NAMES[status]
     : 'border-paper-dark text-ink-secondary';
+  const remarksEnabled = isEditable && status === 'E';
 
-  // Rejects unsupported local selections without replacing the previously chosen proof.
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    if (!SUPPORTED_PROOF_TYPES.has(file.type)) {
-      setFileError('File type not supported. Select a PDF, JPEG, or PNG file.');
-      event.target.value = '';
-      return;
-    }
-
-    setProof(toSelectedProofMetadata(file));
-    setFileError('');
-  };
-
-  // Validates the Excused remark rule before applying the temporary dialog values.
+  // Enforces Excused-only, trimmed, bounded remarks before applying dialog state.
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -110,10 +68,15 @@ export function AttendanceDetailsDialog({
       return;
     }
 
+    if (normalizedRemarks.length > ATTENDANCE_REMARKS_MAX_LENGTH) {
+      setRemarksError(`Remarks must be at most ${ATTENDANCE_REMARKS_MAX_LENGTH} characters.`);
+      return;
+    }
+
     onApply({
+      ...record,
       status,
-      remarks: normalizedRemarks,
-      proof,
+      remarks: status === 'E' ? normalizedRemarks : '',
     });
   };
 
@@ -137,7 +100,7 @@ export function AttendanceDetailsDialog({
       <form id="attendance-details-form" onSubmit={handleSubmit} noValidate>
         {!isEditable ? (
           <Notice variant="info" title="Read-only date" className="mb-5">
-            Choose Edit attendance to change this student record.
+            Choose Edit attendance to change this persisted student record.
           </Notice>
         ) : null}
 
@@ -165,42 +128,42 @@ export function AttendanceDetailsDialog({
           </div>
         </dl>
 
-        {hasDetailsConflict ? (
-          <Notice variant="warning" title="Excuse details preserved" className="mt-5">
-            This status is not Excused, so the date cannot be saved until you return the status to E or intentionally remove the remark and proof.
-          </Notice>
-        ) : null}
-
         <div className="mt-5">
-          <Label htmlFor="attendance-remarks" required={status === 'E'} optional={status !== 'E'}>
-            Remarks
+          <Label htmlFor="attendance-remarks" required={status === 'E'}>
+            Excused remark
           </Label>
           <textarea
             id="attendance-remarks"
-            value={remarks}
+            value={status === 'E' ? remarks : ''}
             onChange={(event) => {
               setRemarks(event.target.value);
               setRemarksError('');
             }}
-            disabled={!isEditable}
+            disabled={!remarksEnabled}
+            maxLength={ATTENDANCE_REMARKS_MAX_LENGTH}
             rows={5}
             aria-invalid={Boolean(remarksError)}
             aria-describedby={remarksError ? 'attendance-remarks-error' : 'attendance-remarks-hint'}
             className={`w-full resize-y rounded-none border bg-paper-light px-3 py-2 text-sm leading-6 text-ink placeholder:text-ink-faint focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink disabled:cursor-not-allowed disabled:bg-paper-muted disabled:opacity-70 ${
               remarksError ? 'border-signal-red' : 'border-paper-dark'
             }`}
-            placeholder="Add the reason or relevant attendance note."
+            placeholder="Add the reason for the Excused attendance status."
           />
           {remarksError ? (
             <p id="attendance-remarks-error" className="mt-1 font-mono text-xs text-signal-red">
               /!/ {remarksError}
             </p>
           ) : (
-            <p id="attendance-remarks-hint" className="mt-1 text-xs leading-5 text-ink-muted">
-              Required only when the status is Excused.
-            </p>
+            <div id="attendance-remarks-hint" className="mt-1 flex flex-wrap justify-between gap-2 text-xs leading-5 text-ink-muted">
+              <span>
+                {status === 'E'
+                  ? 'Required for Excused attendance and saved with the sheet.'
+                  : 'Remarks are available only when the status is Excused.'}
+              </span>
+              <span className="font-mono">{status === 'E' ? remarks.length : 0}/{ATTENDANCE_REMARKS_MAX_LENGTH}</span>
+            </div>
           )}
-          {remarks.trim() && isEditable ? (
+          {status === 'E' && remarks.trim() && remarksEnabled ? (
             <Button type="button" variant="ghost" className="mt-2" onClick={() => setRemarks('')}>
               Remove remark
             </Button>
@@ -209,55 +172,22 @@ export function AttendanceDetailsDialog({
 
         <div className="mt-5 border-t border-paper-border pt-5">
           <Label htmlFor="attendance-proof" optional>
-            {proof ? 'Replace proof' : 'Proof file'}
+            Proof file
           </Label>
           <input
-            ref={fileInputRef}
             id="attendance-proof"
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-            disabled={!isEditable}
-            onChange={handleFileChange}
-            aria-invalid={Boolean(fileError)}
-            aria-describedby={`attendance-proof-hint${fileError ? ' attendance-proof-error' : ''}`}
-            className="block min-h-11 w-full cursor-pointer border border-paper-dark bg-paper-light text-sm text-ink file:mr-3 file:min-h-11 file:cursor-pointer file:border-0 file:border-r file:border-paper-dark file:bg-paper-muted file:px-3 file:font-mono file:text-xs file:font-bold file:uppercase file:text-ink disabled:cursor-not-allowed disabled:bg-paper-muted disabled:opacity-70"
+            disabled
+            aria-describedby="attendance-proof-hint"
+            className="block min-h-11 w-full cursor-not-allowed border border-paper-dark bg-paper-muted text-sm text-ink opacity-70 file:mr-3 file:min-h-11 file:border-0 file:border-r file:border-paper-dark file:bg-paper-muted file:px-3 file:font-mono file:text-xs file:font-bold file:uppercase file:text-ink"
           />
           <p id="attendance-proof-hint" className="mt-1 text-xs leading-5 text-ink-muted">
-            Supported types: PDF, JPEG, and PNG. One optional file may be selected for later submission.
+            Proof selection is unavailable because Save attendance cannot persist files in this phase.
           </p>
-          {fileError ? (
-            <p id="attendance-proof-error" className="mt-1 font-mono text-xs text-signal-red">
-              /!/ {fileError}
-            </p>
-          ) : null}
-
-          {proof ? (
-            <div className="mt-3 border border-paper-dark bg-paper-muted p-3">
-              <p className="break-all text-sm font-semibold text-ink">{proof.name}</p>
-              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
-                {proof.type} / {formatFileSize(proof.size)}
-              </p>
-              {isEditable ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="mt-3"
-                  onClick={() => {
-                    setProof(null);
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = '';
-                    }
-                  }}
-                >
-                  Remove proof
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
-        <Notice variant="info" title="File remains local" className="mt-5">
-          Selecting a file stores the original File object in this page only. It is not uploaded, linked, or persisted.
+        <Notice variant="info" title="Proof upload unavailable" className="mt-5">
+          Proof upload will be enabled after protected file storage is configured. PALE does not upload to the Express filesystem or store file binaries in the database.
         </Notice>
 
         <div className="mt-5 border-t border-paper-border pt-5">
@@ -267,13 +197,14 @@ export function AttendanceDetailsDialog({
             disabled={!isEditable || status === null}
             onClick={() => {
               setStatus(null);
+              setRemarks('');
               setRemarksError('');
             }}
           >
             Clear status
           </Button>
           <p className="mt-2 text-xs leading-5 text-ink-muted">
-            Clearing the status does not remove an existing remark or proof.
+            Clearing the status also clears the Excused remark from this working copy.
           </p>
         </div>
       </form>

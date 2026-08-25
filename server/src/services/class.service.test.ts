@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   archiveClass,
+  ClassScheduleConflictError,
   createClass,
   listClasses,
   type ClassServiceDependencies,
@@ -179,6 +180,35 @@ test("createClass creates a class with ordered schedules atomically", async () =
 
   assert.equal(insertCalls, 1);
   assert.deepEqual(receivedSchedules.map((schedule) => schedule.dayOfWeek), [2, 4]);
+});
+
+// Confirms an atomic schedule collision remains the expected product error.
+test("class writes preserve active schedule conflict errors", async () => {
+  const conflict = new ClassScheduleConflictError();
+
+  await assert.rejects(
+    createClass({
+      subjectName: "Conflicting class",
+      schedules: [{ dayOfWeek: 2, startTime: "10:00", endTime: "12:00" }],
+    }, createDependencies({
+      insertClass: async () => {
+        throw conflict;
+      },
+    })),
+    (error) => error === conflict,
+  );
+
+  await assert.rejects(
+    updateClass(storedClass.id, {
+      subjectName: storedClass.subjectName,
+      schedules: [{ dayOfWeek: 2, startTime: "10:00", endTime: "12:00" }],
+    }, createDependencies({
+      updateClassRecord: async () => {
+        throw conflict;
+      },
+    })),
+    (error) => error === conflict,
+  );
 });
 
 // Confirms an omitted update schedule field remains omitted and preserves returned rows.

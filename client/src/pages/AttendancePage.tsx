@@ -1,45 +1,52 @@
-// Composes real class rosters with a mounted-page-only attendance editing workspace.
+// Composes active classes with persisted Attendance sessions and deliberate local draft editing.
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Notice } from '../components/ui/Notice';
 import {
+  AttendanceApiError,
+  createAttendanceSession,
+  listAttendanceSessions,
+  saveAttendanceSessionRecords,
+} from '../features/attendance/attendance-api';
+import {
   cloneAttendanceRecords,
   countAttendanceStatuses,
-  createAttendanceDateDraft,
+  createAttendanceSessionDraft,
   cycleAttendanceStatus,
-  filterAndSortRoster,
   formatAttendanceDateLong,
-  isAttendanceDateDirty,
+  getAttendanceSessionRoster,
   isAttendanceDateValue,
+  isAttendanceSessionDirty,
   markUnmarkedAsPresent,
-  sortAttendanceDateDrafts,
+  sortAttendanceSessionDrafts,
   updateAttendanceRecord,
-  validateAttendanceDateDraft,
+  validateAttendanceSessionDraft,
 } from '../features/attendance/attendance-draft';
 import { AttendanceDetailsDialog } from '../features/attendance/components/AttendanceDetailsDialog';
 import { AttendanceRegister } from '../features/attendance/components/AttendanceRegister';
+import { DeleteAttendanceSessionDialog } from '../features/attendance/components/DeleteAttendanceSessionDialog';
 import {
   AttendanceToolbar,
   type AttendanceToolbarFeedback,
 } from '../features/attendance/components/AttendanceToolbar';
 import type {
-  AttendanceDateDraft,
-  AttendanceDraftRecord,
-  AttendanceRecordsByStudentId,
+  AttendanceSessionDraft,
+  AttendanceStudentRecord,
+  WorkingAttendanceRecord,
+  WorkingAttendanceRecordsByStudentId,
 } from '../features/attendance/attendance-types';
 import { ClassApiError, fetchClasses } from '../features/classes/classes-api';
 import type { ClassRecord } from '../features/classes/class-types';
-import { fetchStudents, StudentApiError } from '../features/students/students-api';
-import type { StudentRecord } from '../features/students/student-types';
 
 interface AttendancePageProps {
   onSessionExpired: () => void;
 }
 
 type LoadStatus = 'loading' | 'ready' | 'error';
-type AttendanceDraftsByClassId = Record<string, AttendanceDateDraft[]>;
+type SessionLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+type AttendanceDraftsByClassId = Record<string, AttendanceSessionDraft[]>;
 
 interface FeedbackState {
   variant: AttendanceToolbarFeedback['variant'];
@@ -47,30 +54,39 @@ interface FeedbackState {
   messages: string[];
 }
 
-const EMPTY_ATTENDANCE_RECORD: AttendanceDraftRecord = {
-  status: null,
-  remarks: '',
-  proof: null,
-};
-
-// Replaces one date inside its class collection while preserving chronological columns.
-function replaceClassDateDraft(
+// Replaces one session in its class collection while preserving chronological columns.
+function replaceClassSessionDraft(
   draftsByClassId: AttendanceDraftsByClassId,
   classId: string,
-  dateDraft: AttendanceDateDraft,
+  sessionDraft: AttendanceSessionDraft,
 ) {
-  const currentDates = draftsByClassId[classId] ?? [];
+  const currentSessions = draftsByClassId[classId] ?? [];
+  const existingIndex = currentSessions.findIndex(
+    (currentSession) => currentSession.id === sessionDraft.id,
+  );
+  const nextSessions = existingIndex === -1
+    ? [...currentSessions, sessionDraft]
+    : currentSessions.map((currentSession) =>
+      currentSession.id === sessionDraft.id ? sessionDraft : currentSession,
+    );
+
   return {
     ...draftsByClassId,
-    [classId]: sortAttendanceDateDrafts(
-      currentDates.map((currentDraft) =>
-        currentDraft.date === dateDraft.date ? dateDraft : currentDraft,
-      ),
-    ),
+    [classId]: sortAttendanceSessionDrafts(nextSessions),
   };
 }
 
-// Provides the attendance symbol used by honest empty workspace states.
+// Collects safe server field and form messages without duplicating the primary error.
+function getAttendanceApiMessages(error: AttendanceApiError) {
+  const messages = [
+    error.message,
+    ...error.formErrors,
+    ...Object.values(error.fieldErrors).flat(),
+  ];
+  return [...new Set(messages)];
+}
+
+// Provides the Attendance symbol used by honest empty workspace states.
 function AttendanceIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -80,34 +96,36 @@ function AttendanceIcon() {
   );
 }
 
-// Coordinates real roster loading and all temporary attendance snapshots in mounted page state.
+// Coordinates persisted session loading with one selected session's local working snapshots.
 export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
   const navigate = useNavigate();
   const [classes, setClasses] = useState<ClassRecord[]>([]);
-  const [students, setStudents] = useState<StudentRecord[]>([]);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadError, setLoadError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [dateInput, setDateInput] = useState('');
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [sessionLoadStatus, setSessionLoadStatus] = useState<SessionLoadStatus>('idle');
+  const [sessionLoadError, setSessionLoadError] = useState('');
+  const [sessionLoadAttempt, setSessionLoadAttempt] = useState(0);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [draftsByClassId, setDraftsByClassId] = useState<AttendanceDraftsByClassId>({});
-  const [undoRecords, setUndoRecords] = useState<AttendanceRecordsByStudentId | null>(null);
-  const [detailsTarget, setDetailsTarget] = useState<StudentRecord | null>(null);
+  const [undoRecords, setUndoRecords] = useState<WorkingAttendanceRecordsByStudentId | null>(null);
+  const [detailsTarget, setDetailsTarget] = useState<AttendanceStudentRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AttendanceSessionDraft | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [liveMessage, setLiveMessage] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [emptyRosterClassId, setEmptyRosterClassId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    Promise.all([
-      fetchClasses(controller.signal),
-      fetchStudents(controller.signal),
-    ])
-      .then(([classRecords, studentRecords]) => {
+    fetchClasses(controller.signal)
+      .then((classRecords) => {
         setClasses(classRecords);
-        setStudents(studentRecords);
         setLoadStatus('ready');
       })
       .catch((error: unknown) => {
@@ -115,10 +133,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
           return;
         }
 
-        if (
-          (error instanceof ClassApiError || error instanceof StudentApiError) &&
-          error.status === 401
-        ) {
+        if (error instanceof ClassApiError && error.status === 401) {
           onSessionExpired();
           return;
         }
@@ -130,29 +145,79 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
     return () => controller.abort();
   }, [loadAttempt, onSessionExpired]);
 
+  useEffect(() => {
+    if (!selectedClassId) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    listAttendanceSessions(selectedClassId, controller.signal)
+      .then((sessions) => {
+        const sessionDrafts = sortAttendanceSessionDrafts(
+          sessions.map(createAttendanceSessionDraft),
+        );
+        setDraftsByClassId((currentDrafts) => ({
+          ...currentDrafts,
+          [selectedClassId]: sessionDrafts,
+        }));
+        setSelectedSessionId(sessions[0]?.id ?? null);
+        if (sessions.length > 0) {
+          setEmptyRosterClassId(null);
+        }
+        setEditingSessionId(null);
+        setUndoRecords(null);
+        setDetailsTarget(null);
+        setDeleteTarget(null);
+        setSessionLoadStatus('ready');
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+
+        if (error instanceof AttendanceApiError && error.status === 401) {
+          onSessionExpired();
+          return;
+        }
+
+        setSessionLoadError(error instanceof Error
+          ? error.message
+          : 'Unable to load saved attendance sessions.');
+        setSessionLoadStatus('error');
+      });
+
+    return () => controller.abort();
+  }, [onSessionExpired, selectedClassId, sessionLoadAttempt]);
+
   const selectedClass = useMemo(
     () => classes.find((classRecord) => classRecord.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
-  const selectedRoster = useMemo(
-    () => selectedClassId ? filterAndSortRoster(students, selectedClassId) : [],
-    [selectedClassId, students],
-  );
-  const selectedClassDates = useMemo(
-    () => sortAttendanceDateDrafts(draftsByClassId[selectedClassId] ?? []),
+  const selectedClassSessions = useMemo(
+    () => sortAttendanceSessionDrafts(draftsByClassId[selectedClassId] ?? []),
     [draftsByClassId, selectedClassId],
   );
-  const selectedDateDraft = selectedClassDates.find(
-    (dateDraft) => dateDraft.date === selectedDate,
+  const selectedSessionDraft = selectedClassSessions.find(
+    (sessionDraft) => sessionDraft.id === selectedSessionId,
   );
-  const isEditing = selectedDate !== null && editingDate === selectedDate;
-  const hasUnsavedChanges = isEditing && isAttendanceDateDirty(selectedDateDraft);
-  const statusCounts = countAttendanceStatuses(selectedDateDraft, selectedRoster);
+  const selectedRoster = useMemo(
+    () => getAttendanceSessionRoster(selectedSessionDraft),
+    [selectedSessionDraft],
+  );
+  const selectedDate = selectedSessionDraft?.sessionDate ?? null;
+  const detailsRecord = detailsTarget && selectedSessionDraft
+    ? selectedSessionDraft.records[detailsTarget.id]
+    : undefined;
+  const isEditing = selectedSessionId !== null && editingSessionId === selectedSessionId;
+  const hasUnsavedChanges = isEditing && isAttendanceSessionDirty(selectedSessionDraft);
+  const statusCounts = countAttendanceStatuses(selectedSessionDraft);
+  const isBusy = sessionLoadStatus === 'loading' || isCreating || isSaving;
   const canAddDate = Boolean(
     selectedClass &&
-    selectedRoster.length > 0 &&
     isAttendanceDateValue(dateInput) &&
-    !hasUnsavedChanges,
+    !hasUnsavedChanges &&
+    !isBusy,
   );
 
   useEffect(() => {
@@ -160,7 +225,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
       return undefined;
     }
 
-    // Asks the browser to protect the only unsaved page-memory draft on refresh or close.
+    // Protects the only unsaved local working copy on refresh or close.
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
@@ -172,9 +237,9 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
 
   const dateHint = !selectedClass
     ? 'Select a class before adding an attendance date.'
-    : selectedRoster.length === 0
-      ? 'This class has no enrolled students to mark.'
-      : 'Dates are stored as local calendar days in this page only.';
+    : sessionLoadStatus === 'loading'
+      ? 'Loading saved attendance dates…'
+      : 'One persisted session is allowed per class and calendar date.';
 
   const toolbarFeedback: AttendanceToolbarFeedback | null = feedback
     ? {
@@ -190,14 +255,14 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
     }
     : null;
 
-  // Updates only the currently selected date in its class-local page-memory collection.
-  const setSelectedDraft = (dateDraft: AttendanceDateDraft) => {
+  // Replaces only the selected session's local working and server snapshots.
+  const setSelectedDraft = (sessionDraft: AttendanceSessionDraft) => {
     setDraftsByClassId((currentDrafts) =>
-      replaceClassDateDraft(currentDrafts, selectedClassId, dateDraft),
+      replaceClassSessionDraft(currentDrafts, selectedClassId, sessionDraft),
     );
   };
 
-  // Refuses a class switch while a date has unsaved changes, otherwise restores that class view.
+  // Refuses a class switch while dirty and otherwise starts a fresh persisted-session load.
   const handleClassChange = (classId: string) => {
     if (hasUnsavedChanges) {
       setFeedback({
@@ -208,84 +273,138 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
       return;
     }
 
-    const nextDates = sortAttendanceDateDrafts(draftsByClassId[classId] ?? []);
     setSelectedClassId(classId);
-    setSelectedDate(nextDates[0]?.date ?? null);
-    setEditingDate(null);
+    setSessionLoadStatus(classId ? 'loading' : 'idle');
+    setSessionLoadError('');
+    setSelectedSessionId(null);
+    setEditingSessionId(null);
     setUndoRecords(null);
     setDetailsTarget(null);
+    setDeleteTarget(null);
+    setEmptyRosterClassId(null);
     setFeedback(null);
   };
 
-  // Creates a new unsaved date or selects the existing date instead of duplicating it.
-  const handleAddDate = () => {
-    if (!selectedClass) {
-      setFeedback({
-        variant: 'warning',
-        title: 'Select a class',
-        messages: ['Choose an active class before adding an attendance date.'],
-      });
-      return;
-    }
-
-    if (selectedRoster.length === 0) {
-      setFeedback({
-        variant: 'warning',
-        title: 'No enrolled students',
-        messages: ['This class needs an enrolled student before an attendance date can be created.'],
-      });
-      return;
-    }
-
-    if (!isAttendanceDateValue(dateInput)) {
+  // Creates one server session or reloads and selects a concurrently created duplicate.
+  const handleAddDate = async () => {
+    if (!selectedClass || !isAttendanceDateValue(dateInput) || isBusy) {
       setFeedback({
         variant: 'error',
         title: 'Attendance date required',
-        messages: ['Choose a valid calendar date.'],
+        messages: ['Choose an active class and a valid calendar date.'],
       });
       return;
     }
 
-    const existingDate = selectedClassDates.find((dateDraft) => dateDraft.date === dateInput);
-    if (existingDate) {
-      if (hasUnsavedChanges && selectedDate !== existingDate.date) {
+    const existingSession = selectedClassSessions.find(
+      (sessionDraft) => sessionDraft.sessionDate === dateInput,
+    );
+    if (existingSession) {
+      setSelectedSessionId(existingSession.id);
+      setEditingSessionId(null);
+      setUndoRecords(null);
+      setFeedback({
+        variant: 'info',
+        title: 'Date already saved',
+        messages: [`${formatAttendanceDateLong(dateInput)} was selected without creating a duplicate.`],
+      });
+      return;
+    }
+
+    setIsCreating(true);
+    setFeedback(null);
+    try {
+      const session = await createAttendanceSession(selectedClass.id, dateInput);
+      const sessionDraft = createAttendanceSessionDraft(session);
+      setDraftsByClassId((currentDrafts) =>
+        replaceClassSessionDraft(currentDrafts, selectedClass.id, sessionDraft),
+      );
+      setSelectedSessionId(session.id);
+      setEmptyRosterClassId(null);
+      setEditingSessionId(session.id);
+      setUndoRecords(null);
+      setFeedback({
+        variant: 'success',
+        title: 'Attendance date created',
+        messages: ['The date and current enrolled roster were saved. Status edits remain local until Save attendance.'],
+      });
+      setLiveMessage(`${formatAttendanceDateLong(session.sessionDate)} created and ready to edit.`);
+    } catch (error: unknown) {
+      if (error instanceof AttendanceApiError && error.status === 401) {
+        onSessionExpired();
+        return;
+      }
+
+      if (
+        error instanceof AttendanceApiError &&
+        error.code === 'ATTENDANCE_SESSION_EXISTS'
+      ) {
+        try {
+          const sessions = await listAttendanceSessions(
+            selectedClass.id,
+            new AbortController().signal,
+          );
+          const sessionDrafts = sortAttendanceSessionDrafts(
+            sessions.map(createAttendanceSessionDraft),
+          );
+          const duplicate = sessions.find((session) => session.sessionDate === dateInput);
+          setDraftsByClassId((currentDrafts) => ({
+            ...currentDrafts,
+            [selectedClass.id]: sessionDrafts,
+          }));
+          setSelectedSessionId(duplicate?.id ?? sessions[0]?.id ?? null);
+          setEditingSessionId(null);
+          setUndoRecords(null);
+          setFeedback({
+            variant: 'info',
+            title: 'Date already saved',
+            messages: [`${formatAttendanceDateLong(dateInput)} was reloaded without creating a duplicate.`],
+          });
+        } catch (reloadError: unknown) {
+          if (reloadError instanceof AttendanceApiError && reloadError.status === 401) {
+            onSessionExpired();
+            return;
+          }
+
+          setFeedback({
+            variant: 'error',
+            title: 'Attendance reload failed',
+            messages: [reloadError instanceof Error
+              ? reloadError.message
+              : 'The existing attendance date could not be reloaded.'],
+          });
+        }
+        return;
+      }
+
+      if (
+        error instanceof AttendanceApiError &&
+        error.code === 'CLASS_HAS_NO_STUDENTS'
+      ) {
+        setEmptyRosterClassId(selectedClass.id);
         setFeedback({
           variant: 'warning',
-          title: 'Unsaved attendance',
-          messages: ['Save attendance or cancel changes before switching dates.'],
+          title: 'No enrolled students',
+          messages: ['This class needs an enrolled student before an Attendance session can be created.'],
         });
         return;
       }
 
-      setSelectedDate(existingDate.date);
-      setEditingDate(existingDate.savedRecords === null ? existingDate.date : null);
-      setUndoRecords(null);
       setFeedback({
-        variant: 'info',
-        title: 'Date already added',
-        messages: [`${formatAttendanceDateLong(existingDate.date)} was selected without creating a duplicate.`],
+        variant: 'error',
+        title: 'Attendance date not created',
+        messages: error instanceof AttendanceApiError
+          ? getAttendanceApiMessages(error)
+          : [error instanceof Error ? error.message : 'Unable to create the attendance date.'],
       });
-      return;
+    } finally {
+      setIsCreating(false);
     }
-
-    const newDateDraft = createAttendanceDateDraft(dateInput, selectedRoster);
-    setDraftsByClassId((currentDrafts) => ({
-      ...currentDrafts,
-      [selectedClassId]: sortAttendanceDateDrafts([
-        ...(currentDrafts[selectedClassId] ?? []),
-        newDateDraft,
-      ]),
-    }));
-    setSelectedDate(dateInput);
-    setEditingDate(dateInput);
-    setUndoRecords(null);
-    setFeedback(null);
-    setLiveMessage(`${formatAttendanceDateLong(dateInput)} added and ready to edit.`);
   };
 
-  // Selects a saved date for review but never abandons the active working copy.
-  const handleSelectDate = (date: string) => {
-    if (date === selectedDate) {
+  // Selects another persisted session without abandoning a dirty working copy.
+  const handleSelectSession = (sessionId: string) => {
+    if (sessionId === selectedSessionId) {
       return;
     }
 
@@ -298,180 +417,208 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
       return;
     }
 
-    setSelectedDate(date);
-    setEditingDate(null);
+    const nextSession = selectedClassSessions.find((session) => session.id === sessionId);
+    setSelectedSessionId(sessionId);
+    setEditingSessionId(null);
     setUndoRecords(null);
     setDetailsTarget(null);
+    setDeleteTarget(null);
     setFeedback(null);
-    setLiveMessage(`${formatAttendanceDateLong(date)} selected in read-only mode.`);
+    if (nextSession) {
+      setLiveMessage(`${formatAttendanceDateLong(nextSession.sessionDate)} selected in read-only mode.`);
+    }
   };
 
-  // Unlocks only the selected saved date for deliberate edits.
+  // Creates a fresh local working copy from the selected server snapshot.
   const handleEdit = () => {
-    if (!selectedDateDraft || !selectedDate) {
+    if (!selectedSessionDraft || !selectedSessionId) {
       return;
     }
 
-    setEditingDate(selectedDate);
+    setSelectedDraft({
+      ...selectedSessionDraft,
+      records: cloneAttendanceRecords(selectedSessionDraft.savedRecords),
+    });
+    setEditingSessionId(selectedSessionId);
     setUndoRecords(null);
     setFeedback(null);
-    setLiveMessage(`${formatAttendanceDateLong(selectedDate)} is now editable.`);
+    setLiveMessage(`${formatAttendanceDateLong(selectedSessionDraft.sessionDate)} is now editable.`);
   };
 
-  // Applies one exact PALE cycle step while retaining any existing excuse details.
+  // Removes the deleted session locally and selects the newest remaining saved date.
+  const handleDeletedSession = (sessionId: string) => {
+    const remainingSessions = selectedClassSessions.filter(
+      (sessionDraft) => sessionDraft.id !== sessionId,
+    );
+
+    setDraftsByClassId((currentDrafts) => ({
+      ...currentDrafts,
+      [selectedClassId]: remainingSessions,
+    }));
+    setSelectedSessionId(remainingSessions.at(-1)?.id ?? null);
+    setEditingSessionId(null);
+    setUndoRecords(null);
+    setDetailsTarget(null);
+    setDeleteTarget(null);
+    setEmptyRosterClassId(null);
+    setFeedback({
+      variant: 'success',
+      title: 'Attendance date deleted',
+      messages: ['The saved date and all attendance records in its roster were deleted.'],
+    });
+    setLiveMessage('The selected attendance date was deleted.');
+  };
+
+  // Applies one PALE cycle step and clears remarks whenever the next status is not Excused.
   const handleCycleStatus = (studentId: string) => {
-    if (!selectedDateDraft || !isEditing) {
+    if (!selectedSessionDraft || !isEditing) {
       return;
     }
 
-    const currentRecord = selectedDateDraft.records[studentId] ?? EMPTY_ATTENDANCE_RECORD;
+    const currentRecord = selectedSessionDraft.records[studentId];
+    if (!currentRecord) {
+      return;
+    }
+
     const nextStatus = cycleAttendanceStatus(currentRecord.status);
-    const student = selectedRoster.find((rosterStudent) => rosterStudent.id === studentId);
-    setUndoRecords(cloneAttendanceRecords(selectedDateDraft.records));
-    setSelectedDraft(updateAttendanceRecord(selectedDateDraft, studentId, {
+    setUndoRecords(cloneAttendanceRecords(selectedSessionDraft.records));
+    setSelectedDraft(updateAttendanceRecord(selectedSessionDraft, studentId, {
       ...currentRecord,
       status: nextStatus,
+      remarks: nextStatus === 'E' ? currentRecord.remarks : '',
     }));
-
-    if (currentRecord.status === 'E' && (currentRecord.remarks.trim() || currentRecord.proof)) {
-      setFeedback({
+    setFeedback(nextStatus === 'E'
+      ? {
         variant: 'warning',
-        title: 'Excuse details preserved',
-        messages: ['The remark and proof remain attached. Return this record to E or remove those details before saving.'],
-      });
-    } else {
-      setFeedback(null);
-    }
-
-    if (student) {
-      setLiveMessage(`${student.lastName}, ${student.firstName} changed to ${nextStatus}.`);
-    }
+        title: 'Excused remark required',
+        messages: ['Open this student’s details and add a remark before saving attendance.'],
+      }
+      : null);
+    setLiveMessage(`${currentRecord.student.lastName}, ${currentRecord.student.firstName} changed to ${nextStatus}.`);
   };
 
-  // Marks only unmarked rows Present and stores the previous matrix for one-step undo.
+  // Marks only unmarked rows Present and captures one local Undo snapshot.
   const handleMarkUnmarkedPresent = () => {
-    if (!selectedDateDraft || !isEditing) {
+    if (!selectedSessionDraft || !isEditing) {
       return;
     }
 
-    const nextDraft = markUnmarkedAsPresent(selectedDateDraft);
-    if (nextDraft === selectedDateDraft) {
+    const nextDraft = markUnmarkedAsPresent(selectedSessionDraft);
+    if (nextDraft === selectedSessionDraft) {
       setLiveMessage('No unmarked attendance rows remain.');
       return;
     }
 
-    setUndoRecords(cloneAttendanceRecords(selectedDateDraft.records));
+    setUndoRecords(cloneAttendanceRecords(selectedSessionDraft.records));
     setSelectedDraft(nextDraft);
     setFeedback(null);
     setLiveMessage('All previously unmarked students changed to Present.');
   };
 
-  // Restores only the matrix captured immediately before the most recent attendance action.
+  // Restores the matrix captured immediately before the most recent local attendance action.
   const handleUndo = () => {
-    if (!selectedDateDraft || !undoRecords || !isEditing) {
+    if (!selectedSessionDraft || !undoRecords || !isEditing) {
       return;
     }
 
     setSelectedDraft({
-      ...selectedDateDraft,
+      ...selectedSessionDraft,
       records: cloneAttendanceRecords(undoRecords),
     });
     setUndoRecords(null);
     setFeedback(null);
-    setLiveMessage('The most recent attendance action was undone.');
+    setLiveMessage('The most recent attendance action was undone locally.');
   };
 
-  // Returns a saved date to its snapshot or removes a never-saved date entirely.
+  // Discards the local working values and restores the last validated server response.
   const handleCancel = () => {
-    if (!selectedDateDraft || !selectedDate) {
+    if (!selectedSessionDraft) {
       return;
     }
 
-    const savedRecords = selectedDateDraft.savedRecords;
-    const isUnsavedDate = savedRecords === null;
-
-    if (isUnsavedDate) {
-      const remainingDates = selectedClassDates.filter(
-        (dateDraft) => dateDraft.date !== selectedDate,
-      );
-      setDraftsByClassId((currentDrafts) => ({
-        ...currentDrafts,
-        [selectedClassId]: remainingDates,
-      }));
-      setSelectedDate(remainingDates[0]?.date ?? null);
-    } else {
-      setSelectedDraft({
-        ...selectedDateDraft,
-        records: cloneAttendanceRecords(savedRecords),
-      });
-    }
-
-    setEditingDate(null);
+    setSelectedDraft({
+      ...selectedSessionDraft,
+      records: cloneAttendanceRecords(selectedSessionDraft.savedRecords),
+    });
+    setEditingSessionId(null);
     setUndoRecords(null);
     setDetailsTarget(null);
     setFeedback({
       variant: 'info',
       title: 'Changes canceled',
-      messages: [isUnsavedDate
-        ? 'The date had no saved page-memory snapshot, so the unsaved column was removed.'
-        : 'The selected date was restored to its last page-memory snapshot.'],
+      messages: ['The selected date was restored to its last saved server version.'],
     });
-    setLiveMessage('Attendance changes canceled.');
+    setLiveMessage('Local attendance changes canceled.');
   };
 
-  // Validates excuse rules, commits one date to page memory, and returns it to read-only mode.
-  const handleSave = () => {
-    if (!selectedDateDraft || !selectedDate || !isEditing) {
+  // Validates and atomically persists the selected session's complete roster.
+  const handleSave = async () => {
+    if (!selectedSessionDraft || !isEditing || isBusy) {
       return;
     }
 
-    const validationIssues = validateAttendanceDateDraft(selectedDateDraft, selectedRoster);
+    const validationIssues = validateAttendanceSessionDraft(selectedSessionDraft);
     if (validationIssues.length > 0) {
       setFeedback({
         variant: 'error',
         title: 'Attendance not saved',
         messages: validationIssues.map((issue) => issue.message),
       });
-      setLiveMessage('Attendance could not be saved. Review the excuse detail errors.');
+      setLiveMessage('Attendance could not be saved. Review the Excused remark errors.');
       return;
     }
 
-    const committedRecords = cloneAttendanceRecords(selectedDateDraft.records);
-    setSelectedDraft({
-      ...selectedDateDraft,
-      records: committedRecords,
-      savedRecords: cloneAttendanceRecords(committedRecords),
-    });
-    setEditingDate(null);
-    setUndoRecords(null);
-    setFeedback({
-      variant: 'success',
-      title: 'Attendance saved in page memory',
-      messages: ['Attendance saved in this page preview. It will reset when the page is refreshed.'],
-    });
-    setLiveMessage(`${formatAttendanceDateLong(selectedDate)} saved in this page preview.`);
+    setIsSaving(true);
+    setFeedback(null);
+    try {
+      const savedSession = await saveAttendanceSessionRecords(
+        selectedSessionDraft.id,
+        Object.values(selectedSessionDraft.records).map((record) => ({
+          studentId: record.student.id,
+          status: record.status,
+          remarks: record.status === 'E' ? record.remarks.trim() : null,
+        })),
+      );
+      const savedDraft = createAttendanceSessionDraft(savedSession);
+      setSelectedDraft(savedDraft);
+      setEditingSessionId(null);
+      setUndoRecords(null);
+      setDetailsTarget(null);
+      setFeedback({
+        variant: 'success',
+        title: 'Attendance saved',
+        messages: ['The complete roster, PALE statuses, and Excused remarks were persisted.'],
+      });
+      setLiveMessage(`${formatAttendanceDateLong(savedSession.sessionDate)} saved to PALE Records.`);
+    } catch (error: unknown) {
+      if (error instanceof AttendanceApiError && error.status === 401) {
+        onSessionExpired();
+        return;
+      }
+
+      setFeedback({
+        variant: 'error',
+        title: 'Attendance not saved',
+        messages: error instanceof AttendanceApiError
+          ? getAttendanceApiMessages(error)
+          : [error instanceof Error ? error.message : 'Unable to save attendance.'],
+      });
+      setLiveMessage('Attendance could not be saved. The local working copy is still available.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Applies dialog details as one undoable action without deleting evidence after a status change.
-  const handleApplyDetails = (record: AttendanceDraftRecord) => {
-    if (!selectedDateDraft || !detailsTarget || !isEditing) {
+  // Applies dialog remarks as one local undoable action before the main sheet save.
+  const handleApplyDetails = (record: WorkingAttendanceRecord) => {
+    if (!selectedSessionDraft || !detailsTarget || !isEditing) {
       return;
     }
 
-    setUndoRecords(cloneAttendanceRecords(selectedDateDraft.records));
-    setSelectedDraft(updateAttendanceRecord(selectedDateDraft, detailsTarget.id, record));
+    setUndoRecords(cloneAttendanceRecords(selectedSessionDraft.records));
+    setSelectedDraft(updateAttendanceRecord(selectedSessionDraft, detailsTarget.id, record));
     setDetailsTarget(null);
-
-    if (record.status !== 'E' && (record.remarks.trim() || record.proof)) {
-      setFeedback({
-        variant: 'warning',
-        title: 'Excuse details need resolution',
-        messages: ['The preserved details belong to an Excused record. Return the status to E or remove the details before saving.'],
-      });
-    } else {
-      setFeedback(null);
-    }
-
+    setFeedback(null);
     setLiveMessage(`Attendance details applied for ${detailsTarget.lastName}, ${detailsTarget.firstName}.`);
   };
 
@@ -486,7 +633,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
             Attendance
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-ink-secondary">
-            Build a date-by-date class register from active classes and saved student enrollments.
+            Maintain persisted date-by-date registers from active classes and snapshotted student rosters.
           </p>
         </div>
       </header>
@@ -543,8 +690,12 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
                 selectedClassId={selectedClassId}
                 dateInput={dateInput}
                 selectedDate={selectedDate}
+                selectedSession={selectedSessionDraft ?? null}
                 isEditing={isEditing}
                 hasUnsavedChanges={hasUnsavedChanges}
+                isBusy={isBusy}
+                isCreating={isCreating}
+                isSaving={isSaving}
                 canUndo={undoRecords !== null}
                 canAddDate={canAddDate}
                 dateHint={dateHint}
@@ -554,6 +705,11 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
                 onDateInputChange={setDateInput}
                 onAddDate={handleAddDate}
                 onEdit={handleEdit}
+                onDelete={() => {
+                  if (selectedSessionDraft) {
+                    setDeleteTarget(selectedSessionDraft);
+                  }
+                }}
                 onMarkUnmarkedPresent={handleMarkUnmarkedPresent}
                 onUndo={handleUndo}
                 onCancel={handleCancel}
@@ -565,18 +721,48 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
                   <EmptyState
                     icon={<AttendanceIcon />}
                     title="No class selected"
-                    description="Select an active class to load its saved student roster."
+                    description="Select an active class to load its saved Attendance sessions."
                     className="min-h-56"
                   />
                 </div>
               ) : null}
 
-              {selectedClass && selectedRoster.length === 0 ? (
+              {selectedClass && sessionLoadStatus === 'loading' ? (
+                <div className="border border-ink bg-paper-light px-5 py-10 text-center">
+                  <p role="status" className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
+                    Loading saved attendance sessions…
+                  </p>
+                </div>
+              ) : null}
+
+              {selectedClass && sessionLoadStatus === 'error' ? (
+                <Notice variant="error" title="Saved attendance unavailable">
+                  <div className="space-y-4">
+                    <p>{sessionLoadError}</p>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setSessionLoadStatus('loading');
+                        setSessionLoadError('');
+                        setSessionLoadAttempt((attempt) => attempt + 1);
+                      }}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                </Notice>
+              ) : null}
+
+              {selectedClass &&
+              sessionLoadStatus === 'ready' &&
+              selectedClassSessions.length === 0 &&
+              emptyRosterClassId === selectedClass.id ? (
                 <div className="border border-ink bg-paper-light p-5 sm:p-8">
                   <EmptyState
                     icon={<AttendanceIcon />}
                     title="No enrolled students"
-                    description="This class has no saved students to include in the attendance register."
+                    description="This class needs an enrolled student before its first roster snapshot can be saved."
                     action={
                       <Button variant="secondary" onClick={() => navigate('/dashboard/students')}>
                         Go to students
@@ -587,25 +773,32 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
                 </div>
               ) : null}
 
-              {selectedClass && selectedRoster.length > 0 && selectedClassDates.length === 0 ? (
+              {selectedClass &&
+              sessionLoadStatus === 'ready' &&
+              selectedClassSessions.length === 0 &&
+              emptyRosterClassId !== selectedClass.id ? (
                 <div className="border border-ink bg-paper-light p-5 sm:p-8">
                   <EmptyState
                     icon={<AttendanceIcon />}
-                    title="No attendance dates added"
-                    description="Choose a calendar date above to create the first page-memory attendance column."
+                    title="No saved attendance dates"
+                    description="Choose a calendar date above to persist the first roster snapshot."
                     className="min-h-56"
                   />
                 </div>
               ) : null}
 
-              {selectedClass && selectedRoster.length > 0 && selectedClassDates.length > 0 && selectedDate ? (
+              {selectedClass &&
+              sessionLoadStatus === 'ready' &&
+              selectedClassSessions.length > 0 &&
+              selectedSessionId &&
+              selectedRoster.length > 0 ? (
                 <AttendanceRegister
                   roster={selectedRoster}
-                  dateDrafts={selectedClassDates}
-                  selectedDate={selectedDate}
+                  sessionDrafts={selectedClassSessions}
+                  selectedSessionId={selectedSessionId}
                   isEditing={isEditing}
                   liveMessage={liveMessage}
-                  onSelectDate={handleSelectDate}
+                  onSelectSession={handleSelectSession}
                   onCycleStatus={handleCycleStatus}
                   onOpenDetails={setDetailsTarget}
                 />
@@ -615,16 +808,26 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
         </div>
       </div>
 
-      {detailsTarget && selectedClass && selectedDate && selectedDateDraft ? (
+      {detailsTarget && selectedClass && selectedSessionDraft && detailsRecord ? (
         <AttendanceDetailsDialog
-          key={`${selectedClass.id}-${selectedDate}-${detailsTarget.id}-${isEditing ? 'edit' : 'review'}`}
+          key={`${selectedClass.id}-${selectedSessionDraft.id}-${detailsTarget.id}-${isEditing ? 'edit' : 'review'}`}
           student={detailsTarget}
           classRecord={selectedClass}
-          date={selectedDate}
-          record={selectedDateDraft.records[detailsTarget.id] ?? EMPTY_ATTENDANCE_RECORD}
+          date={selectedSessionDraft.sessionDate}
+          record={detailsRecord}
           isEditable={isEditing}
           onClose={() => setDetailsTarget(null)}
           onApply={handleApplyDetails}
+        />
+      ) : null}
+
+      {deleteTarget ? (
+        <DeleteAttendanceSessionDialog
+          key={deleteTarget.id}
+          session={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={handleDeletedSession}
+          onSessionExpired={onSessionExpired}
         />
       ) : null}
     </div>

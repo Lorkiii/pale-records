@@ -1,4 +1,4 @@
-// Defines the safe class records returned by class API endpoints.
+// Defines safe class records and expected errors returned by class API endpoints.
 import { z } from "zod";
 
 import { CLASS_SCHEDULE_TIME_PATTERN } from "./class.schema.js";
@@ -85,5 +85,13 @@ export const classNotFoundResponseSchema = z.strictObject({
   error: z.strictObject({
     code: z.literal("CLASS_NOT_FOUND"),
     message: z.literal("Class was not found."),
+  }),
+});
+
+export const classScheduleConflictResponseSchema = z.strictObject({
+  success: z.literal(false),
+  error: z.strictObject({
+    code: z.literal("CLASS_SCHEDULE_CONFLICT"),
+    message: z.literal("A weekly schedule overlaps another active class."),
   }),
 });
