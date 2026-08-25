@@ -1,24 +1,33 @@
-// Owns bounded class queries and explicit mapping between API and Prisma records.
+// Owns bounded class queries and atomic schedule persistence with explicit public mapping.
 import prisma from "../lib/db-client.js";
 import type {
+  ClassScheduleInput,
   CreateClassInput,
   UpdateClassInput,
 } from "../validations/class.schema.js";
 import type { ClassRecord } from "../validations/class.response.js";
 
-type ClassDatabaseRecord = Omit<ClassRecord, "startDate" | "endDate"> & {
+type ClassScheduleDatabaseRecord = ClassRecord["schedules"][number];
+
+type ClassDatabaseRecord = Omit<
+  ClassRecord,
+  "startDate" | "endDate" | "schedules"
+> & {
   startDate: Date | null;
   endDate: Date | null;
+  classSchedules: ClassScheduleDatabaseRecord[];
 };
 
-type CreateClassData = Omit<ClassDatabaseRecord, "id">;
+type ClassScalarData = Omit<ClassDatabaseRecord, "id" | "classSchedules">;
+type CreateClassData = ClassScalarData & { schedules: ClassScheduleInput[] };
+type UpdateClassData = ClassScalarData & { schedules?: ClassScheduleInput[] };
 
 export type ClassServiceDependencies = {
   findClasses: () => Promise<ClassDatabaseRecord[]>;
   insertClass: (data: CreateClassData) => Promise<ClassDatabaseRecord>;
   updateClassRecord: (
     classId: string,
-    data: CreateClassData,
+    data: UpdateClassData,
   ) => Promise<ClassDatabaseRecord | null>;
   markClassArchived: (
     classId: string,
@@ -37,10 +46,19 @@ const classSelect = {
   room: true,
   startDate: true,
   endDate: true,
+  classSchedules: {
+    select: {
+      id: true,
+      dayOfWeek: true,
+      startTime: true,
+      endTime: true,
+    },
+    orderBy: { dayOfWeek: "asc" },
+  },
 } as const;
 
 const defaultDependencies: ClassServiceDependencies = {
-  // Retrieves only the newest bounded set of active public class fields.
+  // Retrieves only the newest bounded set of active public class fields and schedules.
   findClasses: () =>
     prisma.class.findMany({
       where: { archivedAt: null },
@@ -48,22 +66,61 @@ const defaultDependencies: ClassServiceDependencies = {
       orderBy: [{ createdAt: "desc" }, { id: "asc" }],
       select: classSelect,
     }),
-  // Inserts only explicitly mapped class data and selects the public fields back.
-  insertClass: (data) =>
+  // Creates scalar fields and optional schedule rows in one nested atomic write.
+  insertClass: ({ schedules, ...classData }) =>
     prisma.class.create({
-      data,
+      data: {
+        ...classData,
+        classSchedules: schedules.length > 0
+          ? { create: schedules }
+          : undefined,
+      },
       select: classSelect,
     }),
-  // Atomically updates and reloads an active class so archived records cannot be edited.
-  updateClassRecord: (classId, data) =>
+  // Synchronizes one active class and its supplied schedule set in one transaction.
+  updateClassRecord: (classId, { schedules, ...classData }) =>
     prisma.$transaction(async (transaction) => {
       const result = await transaction.class.updateMany({
         where: { id: classId, archivedAt: null },
-        data,
+        data: classData,
       });
 
       if (result.count === 0) {
         return null;
+      }
+
+      if (schedules !== undefined) {
+        const suppliedWeekdays = schedules.map((schedule) => schedule.dayOfWeek);
+
+        await transaction.classSchedule.deleteMany({
+          where: schedules.length === 0
+            ? { classId }
+            : {
+              classId,
+              dayOfWeek: { notIn: suppliedWeekdays },
+            },
+        });
+
+        for (const schedule of schedules) {
+          await transaction.classSchedule.upsert({
+            where: {
+              classId_dayOfWeek: {
+                classId,
+                dayOfWeek: schedule.dayOfWeek,
+              },
+            },
+            update: {
+              startTime: schedule.startTime,
+              endTime: schedule.endTime,
+            },
+            create: {
+              classId,
+              dayOfWeek: schedule.dayOfWeek,
+              startTime: schedule.startTime,
+              endTime: schedule.endTime,
+            },
+          });
+        }
       }
 
       return transaction.class.findUnique({
@@ -92,17 +149,45 @@ function toDateOnly(value: Date | null) {
   return value?.toISOString().slice(0, 10) ?? null;
 }
 
-// Maps internal database dates to the safe public class record representation.
+// Maps schedule input explicitly and keeps database operations in weekday order.
+function normalizeSchedules(schedules: ClassScheduleInput[]) {
+  return schedules
+    .map((schedule) => ({
+      dayOfWeek: schedule.dayOfWeek,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+    }))
+    .sort((first, second) => first.dayOfWeek - second.dayOfWeek);
+}
+
+// Maps internal dates and schedule relation names to the safe public response shape.
 function toClassRecord(record: ClassDatabaseRecord): ClassRecord {
   return {
-    ...record,
+    id: record.id,
+    subjectName: record.subjectName,
+    subjectCode: record.subjectCode,
+    section: record.section,
+    schoolYear: record.schoolYear,
+    semester: record.semester,
+    teacher: record.teacher,
+    room: record.room,
     startDate: toDateOnly(record.startDate),
     endDate: toDateOnly(record.endDate),
+    schedules: record.classSchedules
+      .map((schedule) => ({
+        id: schedule.id,
+        dayOfWeek: schedule.dayOfWeek,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+      }))
+      .sort((first, second) => first.dayOfWeek - second.dayOfWeek),
   };
 }
 
-// Explicitly maps validated write input into nullable Prisma class fields.
-function toClassData(input: CreateClassInput | UpdateClassInput): CreateClassData {
+// Explicitly maps validated scalar input into nullable Prisma class fields.
+function toClassScalarData(
+  input: CreateClassInput | UpdateClassInput,
+): ClassScalarData {
   return {
     subjectName: input.subjectName,
     subjectCode: input.subjectCode ?? null,
@@ -116,6 +201,25 @@ function toClassData(input: CreateClassInput | UpdateClassInput): CreateClassDat
   };
 }
 
+// Combines create scalars with the normalized optional weekly schedule set.
+function toCreateClassData(input: CreateClassInput): CreateClassData {
+  return {
+    ...toClassScalarData(input),
+    schedules: normalizeSchedules(input.schedules),
+  };
+}
+
+// Preserves existing schedules only when the update field was omitted.
+function toUpdateClassData(input: UpdateClassInput): UpdateClassData {
+  const classData: UpdateClassData = toClassScalarData(input);
+
+  if (input.schedules !== undefined) {
+    classData.schedules = normalizeSchedules(input.schedules);
+  }
+
+  return classData;
+}
+
 // Lists active classes through injectable dependencies for isolated testing.
 export async function listClasses(
   dependencies: ClassServiceDependencies = defaultDependencies,
@@ -124,17 +228,17 @@ export async function listClasses(
   return classes.map(toClassRecord);
 }
 
-// Creates a class from validated input and maps the stored record for the API.
+// Creates a class and its schedules through one atomic dependency operation.
 export async function createClass(
   input: CreateClassInput,
   dependencies: ClassServiceDependencies = defaultDependencies,
 ) {
-  const createdClass = await dependencies.insertClass(toClassData(input));
+  const createdClass = await dependencies.insertClass(toCreateClassData(input));
 
   return toClassRecord(createdClass);
 }
 
-// Replaces the editable fields of an active class or reports that no record matched.
+// Replaces editable scalars and synchronizes schedules only when they were supplied.
 export async function updateClass(
   classId: string,
   input: UpdateClassInput,
@@ -142,7 +246,7 @@ export async function updateClass(
 ) {
   const updatedClass = await dependencies.updateClassRecord(
     classId,
-    toClassData(input),
+    toUpdateClassData(input),
   );
 
   return updatedClass ? toClassRecord(updatedClass) : null;

@@ -1,5 +1,11 @@
 // Owns credentialed class requests and validates their public response shapes.
-import type { ClassRecord, CreateClassInput } from './class-types';
+import type {
+  ClassRecord,
+  ClassScheduleRecord,
+  CreateClassInput,
+} from './class-types';
+
+const CLASS_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
 interface ErrorDetails {
   fieldErrors?: Record<string, string[]>;
@@ -29,6 +35,23 @@ function isNullableString(value: unknown): value is string | null {
   return typeof value === 'string' || value === null;
 }
 
+// Verifies one untrusted weekly schedule before it reaches the Class UI.
+function isClassScheduleRecord(value: unknown): value is ClassScheduleRecord {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.dayOfWeek === 'number' &&
+    Number.isInteger(value.dayOfWeek) &&
+    value.dayOfWeek >= 1 &&
+    value.dayOfWeek <= 7 &&
+    typeof value.startTime === 'string' &&
+    CLASS_TIME_PATTERN.test(value.startTime) &&
+    typeof value.endTime === 'string' &&
+    CLASS_TIME_PATTERN.test(value.endTime) &&
+    value.endTime > value.startTime
+  );
+}
+
 // Verifies that an untrusted value matches the complete public class record shape.
 function isClassRecord(value: unknown): value is ClassRecord {
   return (
@@ -42,7 +65,9 @@ function isClassRecord(value: unknown): value is ClassRecord {
     isNullableString(value.teacher) &&
     isNullableString(value.room) &&
     isNullableString(value.startDate) &&
-    isNullableString(value.endDate)
+    isNullableString(value.endDate) &&
+    Array.isArray(value.schedules) &&
+    value.schedules.every(isClassScheduleRecord)
   );
 }
 

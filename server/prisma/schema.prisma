@@ -87,7 +87,7 @@ model ClassSchedule {
   class              Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
   attendanceSessions AttendanceSession[]
 
-  @@index([classId, dayOfWeek])
+  @@unique([classId, dayOfWeek])
 }
 
 model AttendanceSession {

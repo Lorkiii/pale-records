@@ -1,10 +1,45 @@
 // Defines the safe class records returned by class API endpoints.
 import { z } from "zod";
 
+import { CLASS_SCHEDULE_TIME_PATTERN } from "./class.schema.js";
+
 const nullableDateOnlySchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .nullable();
+
+export const classScheduleRecordSchema = z
+  .strictObject({
+    id: z.string().uuid(),
+    dayOfWeek: z.number().int().min(1).max(7),
+    startTime: z.string().regex(CLASS_SCHEDULE_TIME_PATTERN),
+    endTime: z.string().regex(CLASS_SCHEDULE_TIME_PATTERN),
+  })
+  .superRefine((schedule, context) => {
+    // Rejects internal records that violate the same non-overnight public contract.
+    if (schedule.endTime <= schedule.startTime) {
+      context.addIssue({
+        code: "custom",
+        path: ["endTime"],
+        message: "End time must be later than start time",
+      });
+    }
+  });
+
+const classScheduleRecordsSchema = z
+  .array(classScheduleRecordSchema)
+  .max(7)
+  .superRefine((schedules, context) => {
+    schedules.forEach((schedule, index) => {
+      if (index > 0 && schedule.dayOfWeek <= schedules[index - 1]!.dayOfWeek) {
+        context.addIssue({
+          code: "custom",
+          path: [index, "dayOfWeek"],
+          message: "Schedules must be uniquely ordered Monday through Sunday",
+        });
+      }
+    });
+  });
 
 export const classRecordSchema = z.strictObject({
   id: z.string().uuid(),
@@ -17,6 +52,7 @@ export const classRecordSchema = z.strictObject({
   room: z.string().nullable(),
   startDate: nullableDateOnlySchema,
   endDate: nullableDateOnlySchema,
+  schedules: classScheduleRecordsSchema,
 });
 
 export type ClassRecord = z.infer<typeof classRecordSchema>;

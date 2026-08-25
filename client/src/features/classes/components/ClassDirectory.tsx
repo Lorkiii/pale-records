@@ -1,6 +1,6 @@
 // Displays active class records and exposes their edit/archive actions.
 import { useRef, type FocusEvent } from 'react';
-import type { ClassRecord } from '../class-types';
+import { CLASS_WEEKDAYS, type ClassRecord } from '../class-types';
 
 interface ClassDirectoryProps {
   classes: ClassRecord[];
@@ -35,6 +35,21 @@ function getDateRange(classRecord: ClassRecord) {
   }
 
   return null;
+}
+
+// Formats an already validated HH:mm value without Date or timezone conversion.
+function formatScheduleTime(value: string) {
+  const [hourValue, minute] = value.split(':');
+  const hour = Number(hourValue);
+  const period = hour < 12 ? 'AM' : 'PM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${period}`;
+}
+
+// Resolves the short ISO weekday label used by compact schedule lines.
+function getWeekdayShortLabel(dayOfWeek: number) {
+  return CLASS_WEEKDAYS.find((weekday) => weekday.value === dayOfWeek)?.shortLabel
+    ?? String(dayOfWeek);
 }
 
 interface ClassActionsProps {
@@ -108,6 +123,9 @@ export function ClassDirectory({ classes, onEdit, onArchive }: ClassDirectoryPro
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {classes.map((classRecord, index) => {
           const dateRange = getDateRange(classRecord);
+          const schedules = [...classRecord.schedules].sort(
+            (first, second) => first.dayOfWeek - second.dayOfWeek,
+          );
           const metadata = [
             { label: 'Section', value: classRecord.section },
             { label: 'School year', value: classRecord.schoolYear },
@@ -155,6 +173,25 @@ export function ClassDirectory({ classes, onEdit, onArchive }: ClassDirectoryPro
                 ) : (
                   <p className="text-sm leading-6 text-ink-muted">No additional class details recorded.</p>
                 )}
+
+                <div className="mt-4 border-t border-paper-border pt-4">
+                  <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
+                    Weekly schedule
+                  </p>
+                  {schedules.length > 0 ? (
+                    <ul className="mt-2 space-y-1.5" aria-label={`${classRecord.subjectName} weekly schedule`}>
+                      {schedules.map((schedule) => (
+                        <li key={schedule.id} className="font-mono text-xs text-ink-secondary">
+                          <span className="font-semibold text-ink">{getWeekdayShortLabel(schedule.dayOfWeek)}</span>
+                          {' / '}
+                          {formatScheduleTime(schedule.startTime)}-{formatScheduleTime(schedule.endTime)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-ink-muted">No weekly schedule.</p>
+                  )}
+                </div>
               </div>
             </article>
           );

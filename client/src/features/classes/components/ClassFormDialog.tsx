@@ -6,10 +6,17 @@ import { Input } from '../../../components/ui/Input';
 import { Notice } from '../../../components/ui/Notice';
 import { ClassApiError, createClass, updateClass } from '../classes-api';
 import type {
-  ClassFieldName,
   ClassRecord,
+  ClassScalarFieldName,
   CreateClassInput,
 } from '../class-types';
+import { ClassScheduleFields } from './ClassScheduleFields';
+import {
+  type ClassScheduleFormRow,
+  type ClassScheduleRowErrors,
+  toClassScheduleInputs,
+  validateClassScheduleRows,
+} from '../class-schedule-form';
 
 interface ClassFormDialogProps {
   isOpen: boolean;
@@ -19,8 +26,8 @@ interface ClassFormDialogProps {
   onSessionExpired: () => void;
 }
 
-type ClassFormValues = Record<ClassFieldName, string>;
-type ClassFormErrors = Partial<Record<ClassFieldName | 'form', string>>;
+type ClassFormValues = Record<ClassScalarFieldName, string>;
+type ClassFormErrors = Partial<Record<ClassScalarFieldName | 'schedules' | 'form', string>>;
 
 const EMPTY_FORM: ClassFormValues = {
   subjectName: '',
@@ -34,7 +41,7 @@ const EMPTY_FORM: ClassFormValues = {
   endDate: '',
 };
 
-const FIELD_LIMITS: Partial<Record<ClassFieldName, number>> = {
+const FIELD_LIMITS: Partial<Record<ClassScalarFieldName, number>> = {
   subjectName: 120,
   subjectCode: 32,
   section: 64,
@@ -44,7 +51,7 @@ const FIELD_LIMITS: Partial<Record<ClassFieldName, number>> = {
   room: 64,
 };
 
-const CLASS_FIELDS = Object.keys(EMPTY_FORM) as ClassFieldName[];
+const CLASS_FIELDS = Object.keys(EMPTY_FORM) as ClassScalarFieldName[];
 
 // Converts an existing record into controlled form values or supplies a blank add form.
 function getInitialValues(classRecord?: ClassRecord): ClassFormValues {
@@ -63,6 +70,16 @@ function getInitialValues(classRecord?: ClassRecord): ClassFormValues {
     startDate: classRecord.startDate ?? '',
     endDate: classRecord.endDate ?? '',
   };
+}
+
+// Converts saved schedules into stable local rows without exposing keys to the API.
+function getInitialScheduleRows(classRecord?: ClassRecord): ClassScheduleFormRow[] {
+  return classRecord?.schedules.map((schedule) => ({
+    key: schedule.id,
+    dayOfWeek: String(schedule.dayOfWeek),
+    startTime: schedule.startTime,
+    endTime: schedule.endTime,
+  })) ?? [];
 }
 
 // Applies immediate form rules before a class request reaches the server.
@@ -88,7 +105,10 @@ function validateForm(values: ClassFormValues) {
 }
 
 // Normalizes controlled form strings into the class API input contract.
-function toCreateClassInput(values: ClassFormValues): CreateClassInput {
+function toCreateClassInput(
+  values: ClassFormValues,
+  scheduleRows: ClassScheduleFormRow[],
+): CreateClassInput {
   // Omits blank optional values so the server can normalize them consistently.
   const optionalValue = (value: string) => value.trim() || undefined;
 
@@ -102,6 +122,7 @@ function toCreateClassInput(values: ClassFormValues): CreateClassInput {
     room: optionalValue(values.room),
     startDate: optionalValue(values.startDate),
     endDate: optionalValue(values.endDate),
+    schedules: toClassScheduleInputs(scheduleRows),
   };
 }
 
@@ -114,6 +135,11 @@ function readApiFieldErrors(error: ClassApiError) {
     if (message) {
       errors[field] = message;
     }
+  }
+
+  const schedulesMessage = error.fieldErrors.schedules?.[0];
+  if (schedulesMessage) {
+    errors.schedules = schedulesMessage;
   }
 
   return errors;
@@ -129,11 +155,15 @@ export function ClassFormDialog({
 }: ClassFormDialogProps) {
   const isEditing = Boolean(classRecord);
   const [values, setValues] = useState<ClassFormValues>(() => getInitialValues(classRecord));
+  const [scheduleRows, setScheduleRows] = useState<ClassScheduleFormRow[]>(
+    () => getInitialScheduleRows(classRecord),
+  );
+  const [scheduleRowErrors, setScheduleRowErrors] = useState<Record<string, ClassScheduleRowErrors>>({});
   const [errors, setErrors] = useState<ClassFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Updates one controlled field and clears errors made stale by the new value.
-  const updateField = (field: ClassFieldName) => (event: ChangeEvent<HTMLInputElement>) => {
+  const updateField = (field: ClassScalarFieldName) => (event: ChangeEvent<HTMLInputElement>) => {
     setValues((currentValues) => ({
       ...currentValues,
       [field]: event.target.value,
@@ -141,6 +171,17 @@ export function ClassFormDialog({
     setErrors((currentErrors) => ({
       ...currentErrors,
       [field]: undefined,
+      form: undefined,
+    }));
+  };
+
+  // Replaces local schedule rows and clears validation made stale by the edit.
+  const updateScheduleRows = (rows: ClassScheduleFormRow[]) => {
+    setScheduleRows(rows);
+    setScheduleRowErrors({});
+    setErrors((currentErrors) => ({
+      ...currentErrors,
+      schedules: undefined,
       form: undefined,
     }));
   };
@@ -158,16 +199,24 @@ export function ClassFormDialog({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextErrors = validateForm(values);
+    const scheduleValidation = validateClassScheduleRows(scheduleRows);
+    if (scheduleValidation.sectionError) {
+      nextErrors.schedules = scheduleValidation.sectionError;
+    }
     setErrors(nextErrors);
+    setScheduleRowErrors(scheduleValidation.rowErrors);
 
-    if (Object.keys(nextErrors).length > 0) {
+    if (
+      Object.keys(nextErrors).length > 0 ||
+      Object.keys(scheduleValidation.rowErrors).length > 0
+    ) {
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const input = toCreateClassInput(values);
+      const input = toCreateClassInput(values, scheduleRows);
       const savedClass = classRecord
         ? await updateClass(classRecord.id, input)
         : await createClass(input);
@@ -314,6 +363,16 @@ export function ClassFormDialog({
             error={errors.endDate}
             min={values.startDate || undefined}
             isMonospace
+          />
+        </div>
+
+        <div className="mt-6">
+          <ClassScheduleFields
+            rows={scheduleRows}
+            rowErrors={scheduleRowErrors}
+            sectionError={errors.schedules}
+            disabled={isSubmitting}
+            onRowsChange={updateScheduleRows}
           />
         </div>
       </form>
