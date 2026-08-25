@@ -17,7 +17,7 @@ export const attendanceStudentRecordSchema = z.strictObject({
 
 export const attendanceRecordSchema = z
   .strictObject({
-    id: z.string().uuid(),
+    id: z.string().uuid().nullable(),
     student: attendanceStudentRecordSchema,
     status: attendanceStatusCodeSchema.nullable(),
     remarks: z.string().max(ATTENDANCE_REMARKS_MAX_LENGTH).nullable(),
@@ -40,7 +40,6 @@ export const attendanceRecordSchema = z
 
 const attendanceRecordsSchema = z
   .array(attendanceRecordSchema)
-  .min(1)
   .superRefine((records, context) => {
     const studentIds = new Set<string>();
 
@@ -64,6 +63,7 @@ export const attendanceSessionRecordSchema = z
     sessionDate: z.string().regex(ATTENDANCE_DATE_PATTERN),
     startTime: z.string().regex(CLASS_SCHEDULE_TIME_PATTERN).nullable(),
     endTime: z.string().regex(CLASS_SCHEDULE_TIME_PATTERN).nullable(),
+    isRosterInitialized: z.boolean(),
     records: attendanceRecordsSchema,
   })
   .superRefine((session, context) => {
@@ -84,6 +84,25 @@ export const attendanceSessionRecordSchema = z
         message: "Session end time must be later than start time",
       });
     }
+
+    session.records.forEach((record, index) => {
+      if (session.isRosterInitialized && record.id === null) {
+        context.addIssue({
+          code: "custom",
+          path: ["records", index, "id"],
+          message: "Saved roster records require database identifiers",
+        });
+      } else if (
+        !session.isRosterInitialized &&
+        (record.id !== null || record.status !== null || record.remarks !== null)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["records", index],
+          message: "Draft roster records must remain unpersisted and unmarked",
+        });
+      }
+    });
   });
 
 export type AttendanceStudentRecord = z.infer<typeof attendanceStudentRecordSchema>;
@@ -133,10 +152,6 @@ export const attendanceClassArchivedResponseSchema = attendanceErrorResponseSche
   "CLASS_ARCHIVED",
   "Archived classes cannot create attendance sessions.",
 );
-export const attendanceClassHasNoStudentsResponseSchema = attendanceErrorResponseSchema(
-  "CLASS_HAS_NO_STUDENTS",
-  "The class has no enrolled students.",
-);
 export const attendanceSessionExistsResponseSchema = attendanceErrorResponseSchema(
   "ATTENDANCE_SESSION_EXISTS",
   "Attendance already exists for this class and date.",
@@ -147,7 +162,7 @@ export const attendanceSessionNotFoundResponseSchema = attendanceErrorResponseSc
 );
 export const attendanceRosterMismatchResponseSchema = attendanceErrorResponseSchema(
   "ATTENDANCE_ROSTER_MISMATCH",
-  "The submitted roster does not match the saved attendance session.",
+  "The submitted roster does not match this attendance session. Reload and review the roster.",
 );
 export const attendanceStudentDuplicateResponseSchema = attendanceErrorResponseSchema(
   "ATTENDANCE_STUDENT_DUPLICATE",

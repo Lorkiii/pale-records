@@ -1,4 +1,4 @@
-// Owns credentialed Attendance requests and validates every persisted response at runtime.
+// Owns credentialed Attendance month, date, and roster requests with runtime response validation.
 import {
   ATTENDANCE_REMARKS_MAX_LENGTH,
   type AttendanceRecord,
@@ -77,11 +77,11 @@ function isAttendanceStudentRecord(value: unknown): value is AttendanceStudentRe
     typeof value.lastName === 'string';
 }
 
-// Validates one persisted record including its real database ID and PALE code.
+// Validates one saved or draft roster row, including its nullable database ID.
 function isAttendanceRecord(value: unknown): value is AttendanceRecord {
   if (!(isRecord(value) &&
     hasExactKeys(value, ['id', 'student', 'status', 'remarks']) &&
-    typeof value.id === 'string' && UUID_PATTERN.test(value.id) &&
+    (value.id === null || typeof value.id === 'string' && UUID_PATTERN.test(value.id)) &&
     isAttendanceStudentRecord(value.student) &&
     (value.status === null || isAttendanceStatusCode(value.status)) &&
     (value.remarks === null ||
@@ -103,6 +103,7 @@ function isAttendanceSessionRecord(value: unknown): value is AttendanceSessionRe
     'sessionDate',
     'startTime',
     'endTime',
+    'isRosterInitialized',
     'records',
   ])) {
     return false;
@@ -122,15 +123,18 @@ function isAttendanceSessionRecord(value: unknown): value is AttendanceSessionRe
       typeof value.classScheduleId === 'string' && UUID_PATTERN.test(value.classScheduleId)) ||
     !isDateOnly(value.sessionDate) ||
     !hasValidTimes ||
+    typeof value.isRosterInitialized !== 'boolean' ||
     !Array.isArray(value.records) ||
-    value.records.length === 0 ||
     !value.records.every(isAttendanceRecord)
   ) {
     return false;
   }
 
   const studentIds = value.records.map((record) => record.student.id);
-  return new Set(studentIds).size === studentIds.length;
+  return new Set(studentIds).size === studentIds.length &&
+    value.records.every((record) => value.isRosterInitialized
+      ? record.id !== null
+      : record.id === null && record.status === null && record.remarks === null);
 }
 
 // Keeps only string-array field errors from the shared server validation envelope.
@@ -254,6 +258,37 @@ export async function createAttendanceSession(classId: string, sessionDate: stri
   }
 
   return readSuccessData(response, 'Unable to read the created attendance session.', readSession);
+}
+
+// Ensures scheduled dates once for a class/month and returns that month's draft or saved rosters.
+export async function ensureAttendanceSessionMonth(
+  classId: string,
+  year: number,
+  month: number,
+  signal: AbortSignal,
+) {
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `/api/attendance/classes/${encodeURIComponent(classId)}/session-months`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, month }),
+        signal,
+      },
+    );
+  } catch (error) {
+    handleNetworkError(error);
+  }
+
+  if (!response.ok) {
+    throw await readApiError(response);
+  }
+
+  return readSuccessData(response, 'Unable to read the attendance month.', readSessions);
 }
 
 // Loads at most 31 newest complete sessions for one class.

@@ -15,6 +15,7 @@ import {
   attendanceClassIdParamsSchema,
   attendanceSessionIdParamsSchema,
   createAttendanceSessionSchema,
+  ensureAttendanceMonthSchema,
   saveAttendanceRecordsSchema,
 } from "../validations/attendance.schema.js";
 import type { AttendanceSessionRecord } from "../validations/attendance.response.js";
@@ -30,6 +31,7 @@ const publicSession: AttendanceSessionRecord = {
   sessionDate: "2026-08-25",
   startTime: null,
   endTime: null,
+  isRosterInitialized: true,
   records: [{
     id: "6fd5133c-0985-49a2-b3dc-10a3b03110de",
     student: {
@@ -43,13 +45,25 @@ const publicSession: AttendanceSessionRecord = {
   }],
 };
 
+const publicDraftSession: AttendanceSessionRecord = {
+  ...publicSession,
+  isRosterInitialized: false,
+  records: publicSession.records.map((record) => ({
+    ...record,
+    id: null,
+    status: null,
+    remarks: null,
+  })),
+};
+
 // Mounts controller-focused routes without authentication so service outcomes can be isolated.
 function createTestApp(
   overrides: Partial<AttendanceControllerDependencies> = {},
 ) {
   const dependencies: AttendanceControllerDependencies = {
-    createSession: async () => ({ status: "created", session: publicSession }),
+    createSession: async () => ({ status: "created", session: publicDraftSession }),
     deleteSession: async () => true,
+    ensureMonth: async () => ({ status: "ensured", sessions: [publicDraftSession] }),
     listSessions: async () => ({ status: "found", sessions: [publicSession] }),
     loadSession: async () => publicSession,
     saveRecords: async () => ({ status: "saved", session: publicSession }),
@@ -58,6 +72,12 @@ function createTestApp(
   const handlers = createAttendanceControllerHandlers(dependencies);
   const testApp = express();
   testApp.use(express.json());
+  testApp.post(
+    "/classes/:classId/session-months",
+    validateParams(attendanceClassIdParamsSchema),
+    validateBody(ensureAttendanceMonthSchema),
+    handlers.ensureAttendanceMonthController,
+  );
   testApp.post(
     "/classes/:classId/sessions",
     validateParams(attendanceClassIdParamsSchema),
@@ -94,6 +114,9 @@ test("Attendance controllers return correct success statuses and envelopes", asy
   const createResponse = await request(testApp)
     .post(`/classes/${classId}/sessions`)
     .send({ sessionDate: "2026-08-25" });
+  const monthResponse = await request(testApp)
+    .post(`/classes/${classId}/session-months`)
+    .send({ year: 2026, month: 8 });
   const listResponse = await request(testApp).get(`/classes/${classId}/sessions`);
   const loadResponse = await request(testApp).get(`/sessions/${sessionId}`);
   const deleteResponse = await request(testApp).delete(`/sessions/${sessionId}`);
@@ -103,6 +126,8 @@ test("Attendance controllers return correct success statuses and envelopes", asy
 
   assert.equal(createResponse.status, 201);
   assert.equal(createResponse.body.data.session.id, sessionId);
+  assert.equal(monthResponse.status, 200);
+  assert.equal(monthResponse.body.data.sessions.length, 1);
   assert.equal(listResponse.status, 200);
   assert.equal(listResponse.body.data.sessions.length, 1);
   assert.equal(loadResponse.status, 200);
@@ -113,15 +138,29 @@ test("Attendance controllers return correct success statuses and envelopes", asy
   assert.equal(saveResponse.body.data.session.records[0].student.id, studentId);
 });
 
+test("Attendance create response permits a genuine empty unsaved roster", async () => {
+  const response = await request(createTestApp({
+    createSession: async () => ({
+      status: "created",
+      session: { ...publicDraftSession, records: [] },
+    }),
+  }))
+    .post(`/classes/${classId}/sessions`)
+    .send({ sessionDate: "2026-08-25" });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.data.session.isRosterInitialized, false);
+  assert.deepEqual(response.body.data.session.records, []);
+});
+
 test("Attendance create controller returns safe expected product conflicts", async () => {
   const cases: Array<{
-    serviceStatus: "class_not_found" | "class_archived" | "class_has_no_students" | "session_exists";
+    serviceStatus: "class_not_found" | "class_archived" | "session_exists";
     httpStatus: number;
     code: string;
   }> = [
     { serviceStatus: "class_not_found", httpStatus: 404, code: "CLASS_NOT_FOUND" },
     { serviceStatus: "class_archived", httpStatus: 409, code: "CLASS_ARCHIVED" },
-    { serviceStatus: "class_has_no_students", httpStatus: 409, code: "CLASS_HAS_NO_STUDENTS" },
     { serviceStatus: "session_exists", httpStatus: 409, code: "ATTENDANCE_SESSION_EXISTS" },
   ];
 
@@ -136,6 +175,29 @@ test("Attendance create controller returns safe expected product conflicts", asy
     assert.equal(response.body.success, false);
     assert.equal(response.body.error.code, currentCase.code);
   }
+});
+
+test("Attendance month controller returns safe class errors and validates year/month", async () => {
+  const archivedResponse = await request(createTestApp({
+    ensureMonth: async () => ({ status: "class_archived" }),
+  }))
+    .post(`/classes/${classId}/session-months`)
+    .send({ year: 2026, month: 8 });
+  let ensureWasCalled = false;
+  const invalidResponse = await request(createTestApp({
+    ensureMonth: async () => {
+      ensureWasCalled = true;
+      return { status: "ensured", sessions: [] };
+    },
+  }))
+    .post(`/classes/${classId}/session-months`)
+    .send({ year: 2026, month: 13 });
+
+  assert.equal(archivedResponse.status, 409);
+  assert.equal(archivedResponse.body.error.code, "CLASS_ARCHIVED");
+  assert.equal(invalidResponse.status, 400);
+  assert.equal(invalidResponse.body.error.code, "VALIDATION_ERROR");
+  assert.equal(ensureWasCalled, false);
 });
 
 test("Attendance load and save controllers return safe missing and roster errors", async () => {

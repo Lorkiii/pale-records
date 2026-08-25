@@ -6,6 +6,7 @@ import {
   attendanceClassIdParamsSchema,
   attendanceSessionIdParamsSchema,
   createAttendanceSessionSchema,
+  ensureAttendanceMonthSchema,
   saveAttendanceRecordsSchema,
 } from "./attendance.schema.js";
 
@@ -34,6 +35,24 @@ test("createAttendanceSessionSchema rejects malformed and impossible dates", () 
   }
 });
 
+test("ensureAttendanceMonthSchema accepts only bounded integer year/month input", () => {
+  assert.deepEqual(ensureAttendanceMonthSchema.parse({ year: 2026, month: 8 }), {
+    year: 2026,
+    month: 8,
+  });
+
+  for (const input of [
+    { year: 1999, month: 8 },
+    { year: 2026.5, month: 8 },
+    { year: 2026, month: 0 },
+    { year: 2026, month: 13 },
+    { year: "2026", month: 8 },
+    { year: 2026, month: 8, extra: true },
+  ]) {
+    assert.equal(ensureAttendanceMonthSchema.safeParse(input).success, false);
+  }
+});
+
 test("saveAttendanceRecordsSchema accepts P, A, L, E, and null", () => {
   for (const status of ["P", "A", "L", "E", null]) {
     const result = saveAttendanceRecordsSchema.safeParse({
@@ -51,6 +70,10 @@ test("saveAttendanceRecordsSchema accepts P, A, L, E, and null", () => {
       );
     }
   }
+});
+
+test("saveAttendanceRecordsSchema accepts an empty first-save roster", () => {
+  assert.deepEqual(saveAttendanceRecordsSchema.parse({ records: [] }), { records: [] });
 });
 
 test("saveAttendanceRecordsSchema rejects invalid PALE status codes", () => {

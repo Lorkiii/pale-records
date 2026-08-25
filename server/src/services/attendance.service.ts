@@ -1,4 +1,4 @@
-// Owns Attendance date matching, roster snapshots, status mapping, and atomic persistence.
+// Owns monthly Attendance generation, response-only draft rosters, and atomic historical saves.
 import {
   AttendanceStatus,
   Prisma,
@@ -10,17 +10,19 @@ import type {
 } from "../validations/attendance.schema.js";
 import type { AttendanceSessionRecord } from "../validations/attendance.response.js";
 
+type AttendanceStudentDatabaseRecord = {
+  id: string;
+  studentNo: string | null;
+  firstName: string;
+  lastName: string;
+};
+
 type AttendanceDatabaseRecord = {
   id: string;
   studentId: string;
   status: AttendanceStatus | null;
   remarks: string | null;
-  student: {
-    id: string;
-    studentNo: string | null;
-    firstName: string;
-    lastName: string;
-  };
+  student: AttendanceStudentDatabaseRecord;
 };
 
 type AttendanceSessionDatabaseRecord = {
@@ -30,7 +32,11 @@ type AttendanceSessionDatabaseRecord = {
   sessionDate: Date;
   startTime: string | null;
   endTime: string | null;
+  rosterInitializedAt: Date | null;
   attendanceRecords: AttendanceDatabaseRecord[];
+  class: {
+    enrollments: Array<{ student: AttendanceStudentDatabaseRecord }>;
+  };
 };
 
 type AttendanceClassSnapshot = {
@@ -41,16 +47,19 @@ type AttendanceClassSnapshot = {
     startTime: string;
     endTime: string;
   }>;
-  enrollments: Array<{ studentId: string }>;
 };
 
-type CreateAttendanceSessionData = {
+export type AttendanceClassMonthSnapshot = AttendanceClassSnapshot & {
+  startDate: Date | null;
+  endDate: Date | null;
+};
+
+export type CreateAttendanceSessionData = {
   classId: string;
   classScheduleId: string | null;
   sessionDate: Date;
   startTime: string | null;
   endTime: string | null;
-  studentIds: string[];
 };
 
 type SaveAttendanceRecordData = {
@@ -58,6 +67,16 @@ type SaveAttendanceRecordData = {
   status: AttendanceStatus | null;
   remarks: string | null;
 };
+
+type EnsureAttendanceMonthDatabaseResult =
+  | { status: "ensured"; sessions: AttendanceSessionDatabaseRecord[] }
+  | { status: "class_not_found" }
+  | { status: "class_archived" };
+
+type SaveAttendanceRecordsDatabaseResult =
+  | { status: "saved"; session: AttendanceSessionDatabaseRecord }
+  | { status: "session_not_found" }
+  | { status: "roster_mismatch" };
 
 export type AttendanceServiceDependencies = {
   findClassSnapshot: (classId: string) => Promise<AttendanceClassSnapshot | null>;
@@ -72,11 +91,15 @@ export type AttendanceServiceDependencies = {
     sessionId: string,
   ) => Promise<AttendanceSessionDatabaseRecord | null>;
   deleteSession: (sessionId: string) => Promise<boolean>;
-  findSessionRoster: (sessionId: string) => Promise<string[] | null>;
-  updateSessionRecords: (
+  ensureSessionMonth: (
+    classId: string,
+    year: number,
+    month: number,
+  ) => Promise<EnsureAttendanceMonthDatabaseResult>;
+  saveSessionRecords: (
     sessionId: string,
     records: SaveAttendanceRecordData[],
-  ) => Promise<AttendanceSessionDatabaseRecord | null>;
+  ) => Promise<SaveAttendanceRecordsDatabaseResult>;
 };
 
 export class AttendanceSessionConflictError extends Error {
@@ -86,6 +109,20 @@ export class AttendanceSessionConflictError extends Error {
   }
 }
 
+class AttendanceRosterMismatchError extends Error {
+  constructor() {
+    super("The submitted roster does not match the current class enrollment.");
+    this.name = "AttendanceRosterMismatchError";
+  }
+}
+
+const attendanceStudentSelect = {
+  id: true,
+  studentNo: true,
+  firstName: true,
+  lastName: true,
+} as const;
+
 const attendanceSessionSelect = {
   id: true,
   classId: true,
@@ -93,20 +130,14 @@ const attendanceSessionSelect = {
   sessionDate: true,
   startTime: true,
   endTime: true,
+  rosterInitializedAt: true,
   attendanceRecords: {
     select: {
       id: true,
       studentId: true,
       status: true,
       remarks: true,
-      student: {
-        select: {
-          id: true,
-          studentNo: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
+      student: { select: attendanceStudentSelect },
     },
     orderBy: [
       { student: { lastName: "asc" } },
@@ -114,9 +145,23 @@ const attendanceSessionSelect = {
       { studentId: "asc" },
     ],
   },
+  class: {
+    select: {
+      enrollments: {
+        select: {
+          student: { select: attendanceStudentSelect },
+        },
+        orderBy: [
+          { student: { lastName: "asc" } },
+          { student: { firstName: "asc" } },
+          { studentId: "asc" },
+        ],
+      },
+    },
+  },
 } satisfies Prisma.AttendanceSessionSelect;
 
-// Recognizes only the class/date unique constraint used for concurrent creates.
+// Recognizes only the class/date unique constraint used for concurrent manual creates.
 function isAttendanceSessionUniqueConflict(error: unknown) {
   if (
     !(error instanceof Prisma.PrismaClientKnownRequestError) ||
@@ -134,8 +179,92 @@ function isAttendanceSessionUniqueConflict(error: unknown) {
   );
 }
 
+// Resolves Monday=1 through Sunday=7 without browser or server local-time conversion.
+export function getIsoWeekday(sessionDate: string) {
+  const utcWeekday = new Date(`${sessionDate}T00:00:00.000Z`).getUTCDay();
+  return utcWeekday === 0 ? 7 : utcWeekday;
+}
+
+// Converts a validated calendar date to Prisma's date-only transport value.
+function toDatabaseDate(sessionDate: string) {
+  return new Date(`${sessionDate}T00:00:00.000Z`);
+}
+
+// Converts a PostgreSQL date value to the stable YYYY-MM-DD API representation.
+function toDateOnly(sessionDate: Date) {
+  return sessionDate.toISOString().slice(0, 10);
+}
+
+// Returns stable inclusive/exclusive Date values for one validated calendar month.
+function getAttendanceMonthBounds(year: number, month: number) {
+  return {
+    monthStart: new Date(Date.UTC(year, month - 1, 1)),
+    nextMonthStart: new Date(Date.UTC(year, month, 1)),
+  };
+}
+
+// Produces scheduled session snapshots inside the requested month and class date range.
+export function buildScheduledAttendanceSessions(
+  classId: string,
+  year: number,
+  month: number,
+  classSnapshot: AttendanceClassMonthSnapshot,
+): CreateAttendanceSessionData[] {
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const startDate = classSnapshot.startDate
+    ? toDateOnly(classSnapshot.startDate)
+    : null;
+  const endDate = classSnapshot.endDate
+    ? toDateOnly(classSnapshot.endDate)
+    : null;
+  const schedulesByWeekday = new Map(
+    classSnapshot.classSchedules.map((schedule) => [schedule.dayOfWeek, schedule]),
+  );
+  const sessions: CreateAttendanceSessionData[] = [];
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const sessionDate = [
+      year.toString().padStart(4, "0"),
+      month.toString().padStart(2, "0"),
+      day.toString().padStart(2, "0"),
+    ].join("-");
+
+    if (
+      (startDate !== null && sessionDate < startDate) ||
+      (endDate !== null && sessionDate > endDate)
+    ) {
+      continue;
+    }
+
+    const schedule = schedulesByWeekday.get(getIsoWeekday(sessionDate));
+    if (!schedule) {
+      continue;
+    }
+
+    sessions.push({
+      classId,
+      classScheduleId: schedule.id,
+      sessionDate: toDatabaseDate(sessionDate),
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+    });
+  }
+
+  return sessions;
+}
+
+// Compares complete student sets without relying on request ordering.
+function hasExactStudentSet(storedStudentIds: string[], submittedStudentIds: string[]) {
+  if (storedStudentIds.length !== submittedStudentIds.length) {
+    return false;
+  }
+
+  const storedStudentIdSet = new Set(storedStudentIds);
+  return submittedStudentIds.every((studentId) => storedStudentIdSet.has(studentId));
+}
+
 const defaultDependencies: AttendanceServiceDependencies = {
-  // Loads active-state, weekly schedule, and current enrollment data needed for one snapshot.
+  // Loads only active-state and weekly schedule data needed for one manual date.
   findClassSnapshot: (classId) =>
     prisma.class.findUnique({
       where: { id: classId },
@@ -150,34 +279,15 @@ const defaultDependencies: AttendanceServiceDependencies = {
           },
           orderBy: { dayOfWeek: "asc" },
         },
-        enrollments: {
-          select: { studentId: true },
-          orderBy: { studentId: "asc" },
-        },
       },
     }),
-  // Creates the session and every unmarked roster row in one database transaction.
+  // Creates only the manual session; current enrollments remain a response-only draft.
   insertSession: async (data) => {
     try {
-      return await prisma.$transaction((transaction) =>
-        transaction.attendanceSession.create({
-          data: {
-            classId: data.classId,
-            classScheduleId: data.classScheduleId,
-            sessionDate: data.sessionDate,
-            startTime: data.startTime,
-            endTime: data.endTime,
-            attendanceRecords: {
-              create: data.studentIds.map((studentId) => ({
-                studentId,
-                status: null,
-                remarks: null,
-              })),
-            },
-          },
-          select: attendanceSessionSelect,
-        }),
-      );
+      return await prisma.attendanceSession.create({
+        data,
+        select: attendanceSessionSelect,
+      });
     } catch (error) {
       if (isAttendanceSessionUniqueConflict(error)) {
         throw new AttendanceSessionConflictError();
@@ -215,42 +325,184 @@ const defaultDependencies: AttendanceServiceDependencies = {
     });
     return result.count === 1;
   },
-  // Reads only the persisted student identifiers needed for exact roster comparison.
-  findSessionRoster: async (sessionId) => {
-    const session = await prisma.attendanceSession.findUnique({
-      where: { id: sessionId },
-      select: {
-        attendanceRecords: {
-          select: { studentId: true },
-          orderBy: { studentId: "asc" },
-        },
-      },
-    });
-    return session?.attendanceRecords.map((record) => record.studentId) ?? null;
-  },
-  // Updates the complete validated roster and reloads its public shape atomically.
-  updateSessionRecords: (sessionId, records) =>
+  // Serializes one class/month, creates missing sessions, then marks the month in one transaction.
+  ensureSessionMonth: (classId, year, month) =>
     prisma.$transaction(async (transaction) => {
-      for (const record of records) {
-        await transaction.attendanceRecord.update({
-          where: {
-            sessionId_studentId: {
-              sessionId,
-              studentId: record.studentId,
+      const monthLockKey = `${classId}:${year}-${month.toString().padStart(2, "0")}`;
+      await transaction.$queryRaw<Array<{ locked: number }>>`
+        SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtext(${monthLockKey}))
+      `;
+
+      const classSnapshot = await transaction.class.findUnique({
+        where: { id: classId },
+        select: {
+          archivedAt: true,
+          startDate: true,
+          endDate: true,
+          classSchedules: {
+            select: {
+              id: true,
+              dayOfWeek: true,
+              startTime: true,
+              endTime: true,
             },
+            orderBy: { dayOfWeek: "asc" },
           },
-          data: {
-            status: record.status,
-            remarks: record.remarks,
-          },
+        },
+      });
+
+      if (!classSnapshot) {
+        return { status: "class_not_found" };
+      }
+
+      if (classSnapshot.archivedAt !== null) {
+        return { status: "class_archived" };
+      }
+
+      const { monthStart, nextMonthStart } = getAttendanceMonthBounds(year, month);
+      const generation = await transaction.attendanceMonthGeneration.findUnique({
+        where: {
+          classId_monthStart: { classId, monthStart },
+        },
+        select: { id: true },
+      });
+
+      if (!generation) {
+        const sessions = buildScheduledAttendanceSessions(
+          classId,
+          year,
+          month,
+          classSnapshot,
+        );
+
+        if (sessions.length > 0) {
+          await transaction.attendanceSession.createMany({
+            data: sessions,
+            skipDuplicates: true,
+          });
+        }
+
+        await transaction.attendanceMonthGeneration.create({
+          data: { classId, monthStart },
+          select: { id: true },
         });
       }
 
-      return transaction.attendanceSession.findUnique({
-        where: { id: sessionId },
+      const sessions = await transaction.attendanceSession.findMany({
+        where: {
+          classId,
+          sessionDate: { gte: monthStart, lt: nextMonthStart },
+        },
+        take: 31,
+        orderBy: [{ sessionDate: "desc" }, { id: "asc" }],
         select: attendanceSessionSelect,
       });
+
+      return { status: "ensured", sessions };
     }),
+  // Claims first initialization before reading enrollments so roster creation and values are atomic.
+  saveSessionRecords: async (sessionId, records) => {
+    try {
+      return await prisma.$transaction(async (transaction) => {
+        const session = await transaction.attendanceSession.findUnique({
+          where: { id: sessionId },
+          select: {
+            classId: true,
+            rosterInitializedAt: true,
+          },
+        });
+
+        if (!session) {
+          return { status: "session_not_found" };
+        }
+
+        let isInitializing = false;
+        if (session.rosterInitializedAt === null) {
+          const claimed = await transaction.attendanceSession.updateMany({
+            where: { id: sessionId, rosterInitializedAt: null },
+            data: { rosterInitializedAt: new Date() },
+          });
+          isInitializing = claimed.count === 1;
+        }
+
+        const submittedStudentIds = records.map((record) => record.studentId);
+        if (isInitializing) {
+          const enrollments = await transaction.studentEnrollment.findMany({
+            where: { classId: session.classId },
+            select: { studentId: true },
+            orderBy: { studentId: "asc" },
+          });
+          const currentStudentIds = enrollments.map((enrollment) => enrollment.studentId);
+
+          if (!hasExactStudentSet(currentStudentIds, submittedStudentIds)) {
+            throw new AttendanceRosterMismatchError();
+          }
+
+          if (records.length > 0) {
+            await transaction.attendanceRecord.createMany({
+              data: records.map((record) => ({
+                sessionId,
+                studentId: record.studentId,
+                status: record.status,
+                remarks: record.remarks,
+              })),
+            });
+          }
+        } else {
+          const storedSession = await transaction.attendanceSession.findUnique({
+            where: { id: sessionId },
+            select: {
+              attendanceRecords: {
+                select: { studentId: true },
+                orderBy: { studentId: "asc" },
+              },
+            },
+          });
+
+          if (!storedSession) {
+            return { status: "session_not_found" };
+          }
+
+          const storedStudentIds = storedSession.attendanceRecords.map(
+            (record) => record.studentId,
+          );
+          if (!hasExactStudentSet(storedStudentIds, submittedStudentIds)) {
+            return { status: "roster_mismatch" };
+          }
+
+          for (const record of records) {
+            await transaction.attendanceRecord.update({
+              where: {
+                sessionId_studentId: {
+                  sessionId,
+                  studentId: record.studentId,
+                },
+              },
+              data: {
+                status: record.status,
+                remarks: record.remarks,
+              },
+            });
+          }
+        }
+
+        const savedSession = await transaction.attendanceSession.findUnique({
+          where: { id: sessionId },
+          select: attendanceSessionSelect,
+        });
+
+        return savedSession
+          ? { status: "saved", session: savedSession }
+          : { status: "session_not_found" };
+      });
+    } catch (error) {
+      if (error instanceof AttendanceRosterMismatchError) {
+        return { status: "roster_mismatch" };
+      }
+
+      throw error;
+    }
+  },
 };
 
 // Maps stored Prisma enum values to the four public PALE codes.
@@ -289,28 +541,13 @@ export function toDatabaseAttendanceStatus(
   }
 }
 
-// Resolves Monday=1 through Sunday=7 without browser or server local-time conversion.
-export function getIsoWeekday(sessionDate: string) {
-  const utcWeekday = new Date(`${sessionDate}T00:00:00.000Z`).getUTCDay();
-  return utcWeekday === 0 ? 7 : utcWeekday;
-}
-
-// Converts the validated calendar date to Prisma's date-only transport value.
-function toDatabaseDate(sessionDate: string) {
-  return new Date(`${sessionDate}T00:00:00.000Z`);
-}
-
-// Converts a PostgreSQL date value to the stable YYYY-MM-DD API representation.
-function toDateOnly(sessionDate: Date) {
-  return sessionDate.toISOString().slice(0, 10);
-}
-
-// Maps internal relations and enum values to the safe public Attendance session.
+// Maps persisted records or current-enrollment drafts to one safe public session.
 function toAttendanceSessionRecord(
   session: AttendanceSessionDatabaseRecord,
 ): AttendanceSessionRecord {
-  const records = session.attendanceRecords
-    .map((record) => ({
+  const isRosterInitialized = session.rosterInitializedAt !== null;
+  const records = isRosterInitialized
+    ? session.attendanceRecords.map((record) => ({
       id: record.id,
       student: {
         id: record.student.id,
@@ -321,12 +558,24 @@ function toAttendanceSessionRecord(
       status: toPaleAttendanceStatus(record.status),
       remarks: record.remarks,
     }))
-    .sort(
-      (left, right) =>
-        left.student.lastName.localeCompare(right.student.lastName) ||
-        left.student.firstName.localeCompare(right.student.firstName) ||
-        left.student.id.localeCompare(right.student.id),
-    );
+    : session.class.enrollments.map((enrollment) => ({
+      id: null,
+      student: {
+        id: enrollment.student.id,
+        studentNo: enrollment.student.studentNo,
+        firstName: enrollment.student.firstName,
+        lastName: enrollment.student.lastName,
+      },
+      status: null,
+      remarks: null,
+    }));
+
+  records.sort(
+    (left, right) =>
+      left.student.lastName.localeCompare(right.student.lastName) ||
+      left.student.firstName.localeCompare(right.student.firstName) ||
+      left.student.id.localeCompare(right.student.id),
+  );
 
   return {
     id: session.id,
@@ -335,6 +584,7 @@ function toAttendanceSessionRecord(
     sessionDate: toDateOnly(session.sessionDate),
     startTime: session.startTime,
     endTime: session.endTime,
+    isRosterInitialized,
     records,
   };
 }
@@ -343,10 +593,9 @@ export type CreateAttendanceSessionResult =
   | { status: "created"; session: AttendanceSessionRecord }
   | { status: "class_not_found" }
   | { status: "class_archived" }
-  | { status: "class_has_no_students" }
   | { status: "session_exists" };
 
-// Matches one date to its weekly schedule and snapshots the current enrolled roster.
+// Creates one manual date-only session and returns current enrollments as an unsaved draft.
 export async function createAttendanceSession(
   classId: string,
   sessionDate: string,
@@ -362,10 +611,6 @@ export async function createAttendanceSession(
     return { status: "class_archived" };
   }
 
-  if (classSnapshot.enrollments.length === 0) {
-    return { status: "class_has_no_students" };
-  }
-
   const weekday = getIsoWeekday(sessionDate);
   const matchingSchedule = classSnapshot.classSchedules.find(
     (schedule) => schedule.dayOfWeek === weekday,
@@ -378,7 +623,6 @@ export async function createAttendanceSession(
       sessionDate: toDatabaseDate(sessionDate),
       startTime: matchingSchedule?.startTime ?? null,
       endTime: matchingSchedule?.endTime ?? null,
-      studentIds: classSnapshot.enrollments.map((enrollment) => enrollment.studentId),
     });
 
     return { status: "created", session: toAttendanceSessionRecord(session) };
@@ -389,6 +633,27 @@ export async function createAttendanceSession(
 
     throw error;
   }
+}
+
+export type EnsureAttendanceMonthResult =
+  | { status: "ensured"; sessions: AttendanceSessionRecord[] }
+  | { status: "class_not_found" }
+  | { status: "class_archived" };
+
+// Ensures one active class/month exactly once and returns every session in that month.
+export async function ensureAttendanceMonth(
+  classId: string,
+  year: number,
+  month: number,
+  dependencies: AttendanceServiceDependencies = defaultDependencies,
+): Promise<EnsureAttendanceMonthResult> {
+  const result = await dependencies.ensureSessionMonth(classId, year, month);
+  return result.status === "ensured"
+    ? {
+      status: "ensured",
+      sessions: result.sessions.map(toAttendanceSessionRecord),
+    }
+    : result;
 }
 
 export type ListAttendanceSessionsResult =
@@ -411,7 +676,7 @@ export async function listAttendanceSessions(
   };
 }
 
-// Loads one persisted session and its immutable roster snapshot.
+// Loads one session with either its saved history or a current-enrollment draft roster.
 export async function loadAttendanceSession(
   sessionId: string,
   dependencies: AttendanceServiceDependencies = defaultDependencies,
@@ -434,7 +699,7 @@ export type SaveAttendanceRecordsResult =
   | { status: "student_duplicate" }
   | { status: "roster_mismatch" };
 
-// Requires an exact submitted student set before atomically replacing every saved record.
+// Initializes the current roster on first save or updates only the stored historical roster.
 export async function saveAttendanceRecords(
   sessionId: string,
   records: AttendanceRecordInput[],
@@ -445,20 +710,7 @@ export async function saveAttendanceRecords(
     return { status: "student_duplicate" };
   }
 
-  const storedStudentIds = await dependencies.findSessionRoster(sessionId);
-  if (!storedStudentIds) {
-    return { status: "session_not_found" };
-  }
-
-  const storedStudentIdSet = new Set(storedStudentIds);
-  if (
-    storedStudentIds.length !== submittedStudentIds.length ||
-    submittedStudentIds.some((studentId) => !storedStudentIdSet.has(studentId))
-  ) {
-    return { status: "roster_mismatch" };
-  }
-
-  const savedSession = await dependencies.updateSessionRecords(
+  const result = await dependencies.saveSessionRecords(
     sessionId,
     records.map((record) => ({
       studentId: record.studentId,
@@ -467,7 +719,7 @@ export async function saveAttendanceRecords(
     })),
   );
 
-  return savedSession
-    ? { status: "saved", session: toAttendanceSessionRecord(savedSession) }
-    : { status: "session_not_found" };
+  return result.status === "saved"
+    ? { status: "saved", session: toAttendanceSessionRecord(result.session) }
+    : result;
 }

@@ -1,4 +1,4 @@
-// Renders persisted Attendance selection, edit/delete actions, totals, and schedule feedback.
+// Renders Attendance class/month selection, manual dates, edit actions, totals, and draft feedback.
 import type { ReactNode } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -21,6 +21,7 @@ export interface AttendanceToolbarFeedback {
 interface AttendanceToolbarProps {
   classes: ClassRecord[];
   selectedClassId: string;
+  monthInput: string;
   dateInput: string;
   selectedDate: string | null;
   selectedSession: AttendanceSessionDraft | null;
@@ -35,6 +36,7 @@ interface AttendanceToolbarProps {
   statusCounts: AttendanceStatusCounts;
   feedback: AttendanceToolbarFeedback | null;
   onClassChange: (classId: string) => void;
+  onMonthInputChange: (month: string) => void;
   onDateInputChange: (date: string) => void;
   onAddDate: () => void;
   onEdit: () => void;
@@ -70,6 +72,7 @@ function getClassOptionLabel(classRecord: ClassRecord) {
 export function AttendanceToolbar({
   classes,
   selectedClassId,
+  monthInput,
   dateInput,
   selectedDate,
   selectedSession,
@@ -84,6 +87,7 @@ export function AttendanceToolbar({
   statusCounts,
   feedback,
   onClassChange,
+  onMonthInputChange,
   onDateInputChange,
   onAddDate,
   onEdit,
@@ -105,7 +109,7 @@ export function AttendanceToolbar({
           </h2>
         </div>
 
-        <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(13rem,0.75fr)_auto] lg:items-end">
+        <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)_minmax(12rem,0.75fr)_auto] lg:items-end">
           <Select
             id="attendance-class"
             label="Class"
@@ -120,6 +124,18 @@ export function AttendanceToolbar({
               })),
             ]}
             hint="Saved sessions and roster snapshots are kept separately for each class."
+          />
+
+          <Input
+            id="attendance-month"
+            type="month"
+            label="Calendar month"
+            value={monthInput}
+            disabled={isBusy || hasUnsavedChanges}
+            min="2000-01"
+            max="2100-12"
+            onChange={(event) => onMonthInputChange(event.target.value)}
+            hint="Scheduled dates are generated once when this month is opened."
           />
 
           <Input
@@ -155,6 +171,11 @@ export function AttendanceToolbar({
                   <span className="border border-ink bg-paper-muted px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
                     {isEditing ? 'Editing' : 'Read-only'}
                   </span>
+                  {selectedSession && !selectedSession.isRosterInitialized ? (
+                    <span className="border border-signal-blue bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-signal-blue">
+                      Unsaved roster draft
+                    </span>
+                  ) : null}
                   {hasUnsavedChanges ? (
                     <span className="border border-signal-amber bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
                       Unsaved changes
@@ -198,8 +219,8 @@ export function AttendanceToolbar({
         ) : null}
       </div>
 
-      <Notice variant="info" title="Persisted attendance">
-        Dates, roster snapshots, PALE statuses, and Excused remarks are saved to PALE Records. Proof upload remains unavailable until protected file storage is configured.
+      <Notice variant="info" title="Attendance storage">
+        Attendance dates are saved when created. A date’s current-enrollment roster remains a draft until its first Save attendance; later enrollment changes do not rewrite a saved historical roster.
       </Notice>
 
       {feedback ? (

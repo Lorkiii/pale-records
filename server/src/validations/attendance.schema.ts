@@ -1,4 +1,4 @@
-// Validates Attendance identifiers, calendar dates, PALE codes, and complete roster writes.
+// Validates Attendance identifiers, calendar months, dates, PALE codes, and complete roster writes.
 import { z } from "zod";
 
 export const ATTENDANCE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -57,10 +57,22 @@ export const createAttendanceSessionSchema = z.strictObject({
   sessionDate: attendanceDateSchema,
 });
 
+export const ensureAttendanceMonthSchema = z.strictObject({
+  year: z
+    .number({ error: "Year is required" })
+    .int("Year must be a whole number")
+    .min(2000, "Year must be between 2000 and 2100")
+    .max(2100, "Year must be between 2000 and 2100"),
+  month: z
+    .number({ error: "Month is required" })
+    .int("Month must be a whole number")
+    .min(1, "Month must be between 1 and 12")
+    .max(12, "Month must be between 1 and 12"),
+});
+
 export const saveAttendanceRecordsSchema = z.strictObject({
   records: z
     .array(attendanceRecordInputSchema)
-    .min(1, "Submit at least one attendance record")
     .max(100, "Submit at most 100 attendance records")
     .superRefine((records, context) => {
       const firstIndexByStudentId = new Map<string, number>();
@@ -95,6 +107,7 @@ export const attendanceSessionIdParamsSchema = z.strictObject({
 export type AttendanceStatusCode = z.infer<typeof attendanceStatusCodeSchema>;
 export type AttendanceRecordInput = z.infer<typeof attendanceRecordInputSchema>;
 export type CreateAttendanceSessionInput = z.infer<typeof createAttendanceSessionSchema>;
+export type EnsureAttendanceMonthInput = z.infer<typeof ensureAttendanceMonthSchema>;
 export type SaveAttendanceRecordsInput = z.infer<typeof saveAttendanceRecordsSchema>;
 export type AttendanceClassIdParams = z.infer<typeof attendanceClassIdParamsSchema>;
 export type AttendanceSessionIdParams = z.infer<typeof attendanceSessionIdParamsSchema>;

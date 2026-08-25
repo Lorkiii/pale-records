@@ -1,4 +1,4 @@
-// Composes active classes with persisted Attendance sessions and deliberate local draft editing.
+// Composes monthly Attendance generation with manual dates and deliberate local draft editing.
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
@@ -7,7 +7,7 @@ import { Notice } from '../components/ui/Notice';
 import {
   AttendanceApiError,
   createAttendanceSession,
-  listAttendanceSessions,
+  ensureAttendanceSessionMonth,
   saveAttendanceSessionRecords,
 } from '../features/attendance/attendance-api';
 import {
@@ -52,6 +52,28 @@ interface FeedbackState {
   variant: AttendanceToolbarFeedback['variant'];
   title: string;
   messages: string[];
+}
+
+const ATTENDANCE_MONTH_PATTERN = /^(\d{4})-(\d{2})$/;
+
+// Formats the browser's current local month for the native month control.
+function getCurrentAttendanceMonth() {
+  const today = new Date();
+  return `${today.getFullYear().toString().padStart(4, '0')}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+}
+
+// Parses the bounded native month value without applying a timezone conversion.
+function getAttendanceMonthParts(value: string) {
+  const match = ATTENDANCE_MONTH_PATTERN.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return year >= 2000 && year <= 2100 && month >= 1 && month <= 12
+    ? { year, month }
+    : null;
 }
 
 // Replaces one session in its class collection while preserving chronological columns.
@@ -104,6 +126,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
   const [loadError, setLoadError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedClassId, setSelectedClassId] = useState('');
+  const [monthInput, setMonthInput] = useState(getCurrentAttendanceMonth);
   const [dateInput, setDateInput] = useState('');
   const [sessionLoadStatus, setSessionLoadStatus] = useState<SessionLoadStatus>('idle');
   const [sessionLoadError, setSessionLoadError] = useState('');
@@ -118,7 +141,6 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
   const [liveMessage, setLiveMessage] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [emptyRosterClassId, setEmptyRosterClassId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -146,13 +168,19 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
   }, [loadAttempt, onSessionExpired]);
 
   useEffect(() => {
-    if (!selectedClassId) {
+    const month = getAttendanceMonthParts(monthInput);
+    if (!selectedClassId || !month) {
       return undefined;
     }
 
     const controller = new AbortController();
 
-    listAttendanceSessions(selectedClassId, controller.signal)
+    ensureAttendanceSessionMonth(
+      selectedClassId,
+      month.year,
+      month.month,
+      controller.signal,
+    )
       .then((sessions) => {
         const sessionDrafts = sortAttendanceSessionDrafts(
           sessions.map(createAttendanceSessionDraft),
@@ -162,9 +190,6 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
           [selectedClassId]: sessionDrafts,
         }));
         setSelectedSessionId(sessions[0]?.id ?? null);
-        if (sessions.length > 0) {
-          setEmptyRosterClassId(null);
-        }
         setEditingSessionId(null);
         setUndoRecords(null);
         setDetailsTarget(null);
@@ -183,12 +208,12 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
 
         setSessionLoadError(error instanceof Error
           ? error.message
-          : 'Unable to load saved attendance sessions.');
+          : 'Unable to generate and load attendance dates for this month.');
         setSessionLoadStatus('error');
       });
 
     return () => controller.abort();
-  }, [onSessionExpired, selectedClassId, sessionLoadAttempt]);
+  }, [monthInput, onSessionExpired, selectedClassId, sessionLoadAttempt]);
 
   const selectedClass = useMemo(
     () => classes.find((classRecord) => classRecord.id === selectedClassId) ?? null,
@@ -238,7 +263,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
   const dateHint = !selectedClass
     ? 'Select a class before adding an attendance date.'
     : sessionLoadStatus === 'loading'
-      ? 'Loading saved attendance dates…'
+      ? 'Generating and loading this month’s attendance dates…'
       : 'One persisted session is allowed per class and calendar date.';
 
   const toolbarFeedback: AttendanceToolbarFeedback | null = feedback
@@ -262,7 +287,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
     );
   };
 
-  // Refuses a class switch while dirty and otherwise starts a fresh persisted-session load.
+  // Refuses a class switch while dirty and otherwise starts generation for the selected month.
   const handleClassChange = (classId: string) => {
     if (hasUnsavedChanges) {
       setFeedback({
@@ -281,8 +306,56 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
     setUndoRecords(null);
     setDetailsTarget(null);
     setDeleteTarget(null);
-    setEmptyRosterClassId(null);
     setFeedback(null);
+  };
+
+  // Refuses a month switch while dirty and clears date-specific state before generation.
+  const handleMonthChange = (month: string) => {
+    if (hasUnsavedChanges) {
+      setFeedback({
+        variant: 'warning',
+        title: 'Unsaved attendance',
+        messages: ['Save attendance or cancel changes before switching months.'],
+      });
+      return;
+    }
+
+    if (!getAttendanceMonthParts(month)) {
+      setFeedback({
+        variant: 'error',
+        title: 'Calendar month required',
+        messages: ['Choose a month between January 2000 and December 2100.'],
+      });
+      return;
+    }
+
+    setMonthInput(month);
+    setDateInput('');
+    setSessionLoadStatus(selectedClassId && getAttendanceMonthParts(month) ? 'loading' : 'idle');
+    setSessionLoadError('');
+    setSelectedSessionId(null);
+    setEditingSessionId(null);
+    setUndoRecords(null);
+    setDetailsTarget(null);
+    setDeleteTarget(null);
+    setFeedback(null);
+  };
+
+  // Keeps a manual date visible by opening its calendar month before creation.
+  const handleDateInputChange = (date: string) => {
+    setDateInput(date);
+    const dateMonth = date.slice(0, 7);
+    if (!hasUnsavedChanges && getAttendanceMonthParts(dateMonth) && dateMonth !== monthInput) {
+      setMonthInput(dateMonth);
+      setSessionLoadStatus(selectedClassId ? 'loading' : 'idle');
+      setSessionLoadError('');
+      setSelectedSessionId(null);
+      setEditingSessionId(null);
+      setUndoRecords(null);
+      setDetailsTarget(null);
+      setDeleteTarget(null);
+      setFeedback(null);
+    }
   };
 
   // Creates one server session or reloads and selects a concurrently created duplicate.
@@ -320,13 +393,12 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
         replaceClassSessionDraft(currentDrafts, selectedClass.id, sessionDraft),
       );
       setSelectedSessionId(session.id);
-      setEmptyRosterClassId(null);
       setEditingSessionId(session.id);
       setUndoRecords(null);
       setFeedback({
         variant: 'success',
         title: 'Attendance date created',
-        messages: ['The date and current enrolled roster were saved. Status edits remain local until Save attendance.'],
+        messages: ['The date was saved. Its current enrolled roster remains an unsaved draft until Save attendance.'],
       });
       setLiveMessage(`${formatAttendanceDateLong(session.sessionDate)} created and ready to edit.`);
     } catch (error: unknown) {
@@ -340,8 +412,19 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
         error.code === 'ATTENDANCE_SESSION_EXISTS'
       ) {
         try {
-          const sessions = await listAttendanceSessions(
+          const month = getAttendanceMonthParts(monthInput);
+          if (!month) {
+            setFeedback({
+              variant: 'error',
+              title: 'Attendance reload failed',
+              messages: ['Choose a valid calendar month before reloading attendance.'],
+            });
+            return;
+          }
+          const sessions = await ensureAttendanceSessionMonth(
             selectedClass.id,
+            month.year,
+            month.month,
             new AbortController().signal,
           );
           const sessionDrafts = sortAttendanceSessionDrafts(
@@ -374,19 +457,6 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
               : 'The existing attendance date could not be reloaded.'],
           });
         }
-        return;
-      }
-
-      if (
-        error instanceof AttendanceApiError &&
-        error.code === 'CLASS_HAS_NO_STUDENTS'
-      ) {
-        setEmptyRosterClassId(selectedClass.id);
-        setFeedback({
-          variant: 'warning',
-          title: 'No enrolled students',
-          messages: ['This class needs an enrolled student before an Attendance session can be created.'],
-        });
         return;
       }
 
@@ -460,7 +530,6 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
     setUndoRecords(null);
     setDetailsTarget(null);
     setDeleteTarget(null);
-    setEmptyRosterClassId(null);
     setFeedback({
       variant: 'success',
       title: 'Attendance date deleted',
@@ -546,7 +615,9 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
     setFeedback({
       variant: 'info',
       title: 'Changes canceled',
-      messages: ['The selected date was restored to its last saved server version.'],
+      messages: [selectedSessionDraft.isRosterInitialized
+        ? 'The selected date was restored to its last saved server version.'
+        : 'The draft roster was restored to Unmarked without creating attendance records.'],
     });
     setLiveMessage('Local attendance changes canceled.');
   };
@@ -587,7 +658,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
       setFeedback({
         variant: 'success',
         title: 'Attendance saved',
-        messages: ['The complete roster, PALE statuses, and Excused remarks were persisted.'],
+        messages: ['The roster became this date’s historical snapshot, and all PALE statuses and Excused remarks were persisted.'],
       });
       setLiveMessage(`${formatAttendanceDateLong(savedSession.sessionDate)} saved to PALE Records.`);
     } catch (error: unknown) {
@@ -633,7 +704,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
             Attendance
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-ink-secondary">
-            Maintain persisted date-by-date registers from active classes and snapshotted student rosters.
+            Open a class month to create scheduled dates, then save each date’s roster deliberately.
           </p>
         </div>
       </header>
@@ -688,6 +759,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
               <AttendanceToolbar
                 classes={classes}
                 selectedClassId={selectedClassId}
+                monthInput={monthInput}
                 dateInput={dateInput}
                 selectedDate={selectedDate}
                 selectedSession={selectedSessionDraft ?? null}
@@ -702,7 +774,8 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
                 statusCounts={statusCounts}
                 feedback={toolbarFeedback}
                 onClassChange={handleClassChange}
-                onDateInputChange={setDateInput}
+                onMonthInputChange={handleMonthChange}
+                onDateInputChange={handleDateInputChange}
                 onAddDate={handleAddDate}
                 onEdit={handleEdit}
                 onDelete={() => {
@@ -721,7 +794,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
                   <EmptyState
                     icon={<AttendanceIcon />}
                     title="No class selected"
-                    description="Select an active class to load its saved Attendance sessions."
+                    description="Select an active class to generate and load attendance dates for the calendar month."
                     className="min-h-56"
                   />
                 </div>
@@ -730,13 +803,13 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
               {selectedClass && sessionLoadStatus === 'loading' ? (
                 <div className="border border-ink bg-paper-light px-5 py-10 text-center">
                   <p role="status" className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-                    Loading saved attendance sessions…
+                    Generating and loading attendance dates…
                   </p>
                 </div>
               ) : null}
 
               {selectedClass && sessionLoadStatus === 'error' ? (
-                <Notice variant="error" title="Saved attendance unavailable">
+                <Notice variant="error" title="Attendance month unavailable">
                   <div className="space-y-4">
                     <p>{sessionLoadError}</p>
                     <Button
@@ -756,18 +829,12 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
 
               {selectedClass &&
               sessionLoadStatus === 'ready' &&
-              selectedClassSessions.length === 0 &&
-              emptyRosterClassId === selectedClass.id ? (
+              selectedClassSessions.length === 0 ? (
                 <div className="border border-ink bg-paper-light p-5 sm:p-8">
                   <EmptyState
                     icon={<AttendanceIcon />}
-                    title="No enrolled students"
-                    description="This class needs an enrolled student before its first roster snapshot can be saved."
-                    action={
-                      <Button variant="secondary" onClick={() => navigate('/dashboard/students')}>
-                        Go to students
-                      </Button>
-                    }
+                    title="No attendance dates this month"
+                    description="This generated month has no scheduled dates. Manual Add date remains available for past, makeup, or unscheduled attendance."
                     className="min-h-56"
                   />
                 </div>
@@ -775,13 +842,21 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
 
               {selectedClass &&
               sessionLoadStatus === 'ready' &&
-              selectedClassSessions.length === 0 &&
-              emptyRosterClassId !== selectedClass.id ? (
+              selectedClassSessions.length > 0 &&
+              selectedSessionId &&
+              selectedRoster.length === 0 ? (
                 <div className="border border-ink bg-paper-light p-5 sm:p-8">
                   <EmptyState
                     icon={<AttendanceIcon />}
-                    title="No saved attendance dates"
-                    description="Choose a calendar date above to persist the first roster snapshot."
+                    title="No students in this roster"
+                    description={selectedSessionDraft?.isRosterInitialized
+                      ? 'This saved historical roster contains no students.'
+                      : 'This attendance date has no currently enrolled students. Viewing it has not created attendance records.'}
+                    action={!selectedSessionDraft?.isRosterInitialized ? (
+                      <Button variant="secondary" onClick={() => navigate('/dashboard/students')}>
+                        Go to students
+                      </Button>
+                    ) : undefined}
                     className="min-h-56"
                   />
                 </div>

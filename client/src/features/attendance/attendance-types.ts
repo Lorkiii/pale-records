@@ -25,7 +25,7 @@ export interface AttendanceStudentRecord {
 }
 
 export interface AttendanceRecord {
-  id: string;
+  id: string | null;
   student: AttendanceStudentRecord;
   status: AttendanceStatusCode | null;
   remarks: string | null;
@@ -38,6 +38,7 @@ export interface AttendanceSessionRecord {
   sessionDate: string;
   startTime: string | null;
   endTime: string | null;
+  isRosterInitialized: boolean;
   records: AttendanceRecord[];
 }
 
@@ -48,7 +49,7 @@ export interface SaveAttendanceRecordInput {
 }
 
 export interface WorkingAttendanceRecord {
-  id: string;
+  id: string | null;
   student: AttendanceStudentRecord;
   status: AttendanceStatusCode | null;
   remarks: string;
@@ -63,6 +64,7 @@ export interface AttendanceSessionDraft {
   sessionDate: string;
   startTime: string | null;
   endTime: string | null;
+  isRosterInitialized: boolean;
   records: WorkingAttendanceRecordsByStudentId;
   savedRecords: WorkingAttendanceRecordsByStudentId;
 }

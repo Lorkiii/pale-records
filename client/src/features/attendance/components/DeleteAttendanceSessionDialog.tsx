@@ -1,4 +1,4 @@
-// Owns confirmation and deletion of one persisted Attendance date and its roster records.
+// Owns confirmation and deletion of one Attendance date and any saved roster records.
 import { useState } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Dialog } from '../../../components/ui/Dialog';
@@ -55,7 +55,7 @@ export function DeleteAttendanceSessionDialog({
       isOpen
       onClose={onClose}
       title="Delete attendance date"
-      description="This permanently removes the saved roster and attendance recorded for this date."
+      description="This permanently removes the date and any roster attendance saved for it."
       isDismissDisabled={isDeleting}
       footer={
         <>
@@ -83,7 +83,7 @@ export function DeleteAttendanceSessionDialog({
         Delete <strong className="font-semibold text-ink">
           {formatAttendanceDateLong(session.sessionDate)}
         </strong>? Saved PALE statuses and Excused remarks for every student in this roster
-        will also be deleted. This action cannot be undone.
+        will also be deleted when present. This action cannot be undone.
       </p>
     </Dialog>
   );

@@ -152,6 +152,7 @@ export function createAttendanceSessionDraft(
     sessionDate: session.sessionDate,
     startTime: session.startTime,
     endTime: session.endTime,
+    isRosterInitialized: session.isRosterInitialized,
     records,
     savedRecords: cloneAttendanceRecords(records),
   };

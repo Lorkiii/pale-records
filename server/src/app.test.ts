@@ -85,6 +85,9 @@ test("Attendance endpoints require an authenticated session", async () => {
   const createResponse = await request(app)
     .post("/api/attendance/classes/2c6e62cc-584d-4faf-90f6-fdb50b27c9d0/sessions")
     .send({ sessionDate: "2026-08-25" });
+  const monthResponse = await request(app)
+    .post("/api/attendance/classes/2c6e62cc-584d-4faf-90f6-fdb50b27c9d0/session-months")
+    .send({ year: 2026, month: 8 });
   const listResponse = await request(app)
     .get("/api/attendance/classes/2c6e62cc-584d-4faf-90f6-fdb50b27c9d0/sessions");
   const loadResponse = await request(app)
@@ -97,6 +100,7 @@ test("Attendance endpoints require an authenticated session", async () => {
 
   for (const response of [
     createResponse,
+    monthResponse,
     listResponse,
     loadResponse,
     deleteResponse,

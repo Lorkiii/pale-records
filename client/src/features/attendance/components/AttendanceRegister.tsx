@@ -1,4 +1,4 @@
-// Renders the responsive persisted Attendance matrix and selected roster snapshot details.
+// Renders the responsive Attendance matrix for saved history and current-roster drafts.
 import {
   cycleAttendanceStatus,
   formatAttendanceDateLong,
@@ -177,7 +177,7 @@ export function AttendanceRegister({
           </h2>
         </div>
         <p className="max-w-lg text-sm leading-6 text-ink-muted">
-          Select a saved date to load its roster snapshot. Only that date can be edited.
+          Select a date to review its saved roster or current-enrollment draft. Only that date can be edited.
         </p>
       </div>
 
@@ -186,7 +186,7 @@ export function AttendanceRegister({
       <div className="max-h-[70vh] max-w-full overflow-auto border border-ink bg-paper-light">
         <table className="w-max min-w-full border-separate border-spacing-0 text-left">
           <caption className="sr-only">
-            Persisted Attendance register with sticky student identity, chronological date columns, selected-date remarks, and an unavailable proof boundary.
+            Attendance register with sticky student identity, chronological date columns, selected-date remarks, and an unavailable proof boundary.
           </caption>
           <thead>
             <tr>

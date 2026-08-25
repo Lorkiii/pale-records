@@ -59,11 +59,12 @@ model Class {
   endDate     DateTime?
   archivedAt  DateTime?
 
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  classSchedules     ClassSchedule[]
-  attendanceSessions AttendanceSession[]
-  enrollments        StudentEnrollment[]
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  classSchedules             ClassSchedule[]
+  attendanceSessions         AttendanceSession[]
+  attendanceMonthGenerations AttendanceMonthGeneration[]
+  enrollments                StudentEnrollment[]
 }
 
 model StudentEnrollment {
@@ -91,12 +92,13 @@ model ClassSchedule {
 }
 
 model AttendanceSession {
-  id              String   @id @default(uuid())
-  classId         String
-  classScheduleId String?
-  sessionDate     DateTime @db.Date
-  startTime       String?
-  endTime         String?
+  id                  String    @id @default(uuid())
+  classId             String
+  classScheduleId     String?
+  sessionDate         DateTime  @db.Date
+  startTime           String?
+  endTime             String?
+  rosterInitializedAt DateTime?
 
   class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
 
@@ -109,6 +111,17 @@ model AttendanceSession {
 
   @@unique([classId, sessionDate])
   @@index([classScheduleId])
+}
+
+model AttendanceMonthGeneration {
+  id         String   @id @default(uuid())
+  classId    String
+  monthStart DateTime @db.Date
+  createdAt  DateTime @default(now())
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, monthStart])
 }
 
 model AttendanceRecord {

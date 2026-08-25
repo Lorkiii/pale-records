@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from "express";
 import {
   createAttendanceSession,
   deleteAttendanceSession,
+  ensureAttendanceMonth,
   listAttendanceSessions,
   loadAttendanceSession,
   saveAttendanceRecords,
@@ -12,11 +13,11 @@ import type {
   AttendanceClassIdParams,
   AttendanceSessionIdParams,
   CreateAttendanceSessionInput,
+  EnsureAttendanceMonthInput,
   SaveAttendanceRecordsInput,
 } from "../validations/attendance.schema.js";
 import {
   attendanceClassArchivedResponseSchema,
-  attendanceClassHasNoStudentsResponseSchema,
   attendanceClassNotFoundResponseSchema,
   attendanceRosterMismatchResponseSchema,
   attendanceSessionExistsResponseSchema,
@@ -30,6 +31,7 @@ import {
 export type AttendanceControllerDependencies = {
   createSession: typeof createAttendanceSession;
   deleteSession: typeof deleteAttendanceSession;
+  ensureMonth: typeof ensureAttendanceMonth;
   listSessions: typeof listAttendanceSessions;
   loadSession: typeof loadAttendanceSession;
   saveRecords: typeof saveAttendanceRecords;
@@ -38,12 +40,13 @@ export type AttendanceControllerDependencies = {
 const defaultDependencies: AttendanceControllerDependencies = {
   createSession: createAttendanceSession,
   deleteSession: deleteAttendanceSession,
+  ensureMonth: ensureAttendanceMonth,
   listSessions: listAttendanceSessions,
   loadSession: loadAttendanceSession,
   saveRecords: saveAttendanceRecords,
 };
 
-// Builds the five handlers around replaceable service functions for focused HTTP tests.
+// Builds the Attendance handlers around replaceable service functions for focused HTTP tests.
 export function createAttendanceControllerHandlers(
   dependencies: AttendanceControllerDependencies = defaultDependencies,
 ) {
@@ -76,16 +79,6 @@ export function createAttendanceControllerHandlers(
         }));
       }
 
-      if (result.status === "class_has_no_students") {
-        return res.status(409).json(attendanceClassHasNoStudentsResponseSchema.parse({
-          success: false,
-          error: {
-            code: "CLASS_HAS_NO_STUDENTS",
-            message: "The class has no enrolled students.",
-          },
-        }));
-      }
-
       if (result.status === "session_exists") {
         return res.status(409).json(attendanceSessionExistsResponseSchema.parse({
           success: false,
@@ -99,6 +92,45 @@ export function createAttendanceControllerHandlers(
       return res.status(201).json(attendanceSessionResponseSchema.parse({
         success: true,
         data: { session: result.session },
+      }));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Ensures scheduled dates for one month and returns its current persisted session list.
+  const ensureAttendanceMonthController = async (
+    req: Request<AttendanceClassIdParams, unknown, EnsureAttendanceMonthInput>,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const result = await dependencies.ensureMonth(
+        req.params.classId,
+        req.body.year,
+        req.body.month,
+      );
+
+      if (result.status === "class_not_found") {
+        return res.status(404).json(attendanceClassNotFoundResponseSchema.parse({
+          success: false,
+          error: { code: "CLASS_NOT_FOUND", message: "Class was not found." },
+        }));
+      }
+
+      if (result.status === "class_archived") {
+        return res.status(409).json(attendanceClassArchivedResponseSchema.parse({
+          success: false,
+          error: {
+            code: "CLASS_ARCHIVED",
+            message: "Archived classes cannot create attendance sessions.",
+          },
+        }));
+      }
+
+      return res.status(200).json(attendanceSessionListResponseSchema.parse({
+        success: true,
+        data: { sessions: result.sessions },
       }));
     } catch (error) {
       next(error);
@@ -130,7 +162,7 @@ export function createAttendanceControllerHandlers(
     }
   };
 
-  // Returns one complete persisted Attendance roster or a safe not-found error.
+  // Returns one saved historical roster or response-only current-enrollment draft.
   const loadAttendanceSessionController = async (
     req: Request<AttendanceSessionIdParams>,
     res: Response,
@@ -223,7 +255,7 @@ export function createAttendanceControllerHandlers(
           success: false,
           error: {
             code: "ATTENDANCE_ROSTER_MISMATCH",
-            message: "The submitted roster does not match the saved attendance session.",
+            message: "The submitted roster does not match this attendance session. Reload and review the roster.",
           },
         }));
       }
@@ -240,6 +272,7 @@ export function createAttendanceControllerHandlers(
   return {
     createAttendanceSessionController,
     deleteAttendanceSessionController,
+    ensureAttendanceMonthController,
     listAttendanceSessionsController,
     loadAttendanceSessionController,
     saveAttendanceRecordsController,
@@ -249,6 +282,7 @@ export function createAttendanceControllerHandlers(
 export const {
   createAttendanceSessionController,
   deleteAttendanceSessionController,
+  ensureAttendanceMonthController,
   listAttendanceSessionsController,
   loadAttendanceSessionController,
   saveAttendanceRecordsController,

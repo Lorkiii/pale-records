@@ -1,9 +1,10 @@
-// Defines authenticated Attendance session creation, listing, loading, deletion, and roster saving routes.
+// Defines authenticated Attendance month generation, manual dates, loading, deletion, and roster saving routes.
 import { Router } from "express";
 
 import {
   createAttendanceSessionController,
   deleteAttendanceSessionController,
+  ensureAttendanceMonthController,
   listAttendanceSessionsController,
   loadAttendanceSessionController,
   saveAttendanceRecordsController,
@@ -15,12 +16,19 @@ import {
   attendanceClassIdParamsSchema,
   attendanceSessionIdParamsSchema,
   createAttendanceSessionSchema,
+  ensureAttendanceMonthSchema,
   saveAttendanceRecordsSchema,
 } from "../validations/attendance.schema.js";
 
 const attendanceRouter = Router();
 
 attendanceRouter.use(requireAuthenticatedUser);
+attendanceRouter.post(
+  "/classes/:classId/session-months",
+  validateParams(attendanceClassIdParamsSchema),
+  validateBody(ensureAttendanceMonthSchema),
+  ensureAttendanceMonthController,
+);
 attendanceRouter.post(
   "/classes/:classId/sessions",
   validateParams(attendanceClassIdParamsSchema),
