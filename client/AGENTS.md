@@ -54,8 +54,12 @@ Account, dashboard, management, and other signed-in screens must use the same pa
 
 - Follow YAGNI: implement only the screens, interactions, states, and data flows
   required by the current request.
+- Keep straightforward UI work straightforward. Prefer readable components,
+  explicit data flow, and familiar React patterns over clever or indirect code.
 - Do not create placeholder pages, routes, stores, contexts, hooks, services,
   types, component variants, or permissions for possible future features.
+- Treat every new abstraction, shared state mechanism, and configuration-driven
+  pattern as a maintenance cost. Add it only for a current, demonstrated need.
 - Keep pages focused on composition, feature-specific behavior inside the
   relevant `src/features/` area, generic UI primitives in `src/components/ui/`,
   and shared application layouts in `src/components/layout/`.

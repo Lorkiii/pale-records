@@ -21,6 +21,8 @@ repository.
 - Confirm the current architecture, runtime paths, payloads, and product
   behavior instead of assuming files or features exist.
 - Implement the smallest complete solution that satisfies the current request.
+- Keep straightforward work straightforward. Prefer code whose control flow,
+  data flow, and ownership are easy for the next maintainer to follow.
 - Preserve existing behavior and project structure unless the request requires
   a change.
 - Reuse existing conventions and utilities when they fit. Do not introduce
@@ -34,6 +36,8 @@ repository.
   demonstrated runtime paths.
 - Do not add abstractions, configuration, dependencies, state, or infrastructure
   solely for imagined future requirements.
+- Treat every new layer and indirection as a maintenance cost. Add complexity
+  only when a current, concrete requirement makes the simpler design inadequate.
 - Make the project scalable through clear responsibilities, stable boundaries,
   bounded work, and explicit data flow rather than additional layers by default.
 - Keep modules focused and names explicit. Split code when a distinct current

@@ -16,8 +16,12 @@ instructions first; a more specific nested `AGENTS.md` may override them.
 
 - Follow YAGNI: implement only what the current request requires.
 - Keep simple tasks simple. Choose the smallest clear solution that fully works.
+- Prefer code whose request flow, data flow, and ownership can be understood
+  without tracing unnecessary indirection.
 - Do not add speculative abstractions, wrappers, factories, repositories, base
   classes, configuration systems, or extension points for possible future use.
+- Treat every new layer and infrastructure component as a maintenance cost. Add
+  it only when a current, concrete requirement makes the simpler design inadequate.
 - Add a shared helper or new layer only when it solves a present, demonstrated
   need and makes the code easier to understand.
 - Do not add dependencies when the current stack can solve the task clearly.
