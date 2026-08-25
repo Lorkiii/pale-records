@@ -60,6 +60,30 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
     return () => controller.abort();
   }, [loadAttempt, onSessionExpired]);
 
+  // Updates the active directory with the class returned by a successful save.
+  const handleClassSaved = (savedClass: ClassRecord) => {
+    setClasses((currentClasses) => {
+      const alreadyExists = currentClasses.some(
+        (classRecord) => classRecord.id === savedClass.id,
+      );
+
+      return alreadyExists
+        ? currentClasses.map((classRecord) =>
+          classRecord.id === savedClass.id ? savedClass : classRecord,
+        )
+        : [savedClass, ...currentClasses];
+    });
+    setClassFormTarget(null);
+  };
+
+  // Removes a successfully archived class from the active directory.
+  const handleClassArchived = (classId: string) => {
+    setClasses((currentClasses) => currentClasses.filter(
+      (classRecord) => classRecord.id !== classId,
+    ));
+    setArchiveTarget(null);
+  };
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-paper-border bg-paper-light">
@@ -141,20 +165,7 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
           isOpen
           classRecord={classFormTarget === 'new' ? undefined : classFormTarget}
           onClose={() => setClassFormTarget(null)}
-          onSaved={(savedClass) => {
-            setClasses((currentClasses) => {
-              const alreadyExists = currentClasses.some(
-                (classRecord) => classRecord.id === savedClass.id,
-              );
-
-              return alreadyExists
-                ? currentClasses.map((classRecord) =>
-                  classRecord.id === savedClass.id ? savedClass : classRecord,
-                )
-                : [savedClass, ...currentClasses];
-            });
-            setClassFormTarget(null);
-          }}
+          onSaved={handleClassSaved}
           onSessionExpired={onSessionExpired}
         />
       ) : null}
@@ -164,12 +175,7 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
           key={archiveTarget.id}
           classRecord={archiveTarget}
           onClose={() => setArchiveTarget(null)}
-          onArchived={(classId) => {
-            setClasses((currentClasses) => currentClasses.filter(
-              (classRecord) => classRecord.id !== classId,
-            ));
-            setArchiveTarget(null);
-          }}
+          onArchived={handleClassArchived}
           onSessionExpired={onSessionExpired}
         />
       ) : null}

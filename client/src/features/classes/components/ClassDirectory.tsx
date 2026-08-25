@@ -62,16 +62,27 @@ interface ClassActionsProps {
 function ClassActions({ classRecord, onEdit, onArchive }: ClassActionsProps) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
-  // Closes the menu before forwarding the selected class to its action handler.
-  const runAction = (action: (record: ClassRecord) => void) => {
+  // Prevents the native details menu from remaining open behind a dialog.
+  const closeMenu = () => {
     detailsRef.current?.removeAttribute('open');
-    action(classRecord);
+  };
+
+  // Closes the menu before opening the selected class in the edit form.
+  const handleEdit = () => {
+    closeMenu();
+    onEdit(classRecord);
+  };
+
+  // Closes the menu before opening archive confirmation for the selected class.
+  const handleArchive = () => {
+    closeMenu();
+    onArchive(classRecord);
   };
 
   // Dismisses the native details menu when keyboard focus leaves the menu entirely.
   const handleBlur = (event: FocusEvent<HTMLDetailsElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      event.currentTarget.removeAttribute('open');
+      closeMenu();
     }
   };
 
@@ -85,14 +96,14 @@ function ClassActions({ classRecord, onEdit, onArchive }: ClassActionsProps) {
         <button
           type="button"
           className="flex min-h-10 w-full cursor-pointer items-center px-3 text-left font-mono text-xs font-semibold uppercase tracking-[0.1em] text-ink hover:bg-paper-muted focus:outline-none focus-visible:bg-paper-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"
-          onClick={() => runAction(onEdit)}
+          onClick={handleEdit}
         >
           Edit
         </button>
         <button
           type="button"
           className="flex min-h-10 w-full cursor-pointer items-center px-3 text-left font-mono text-xs font-semibold uppercase tracking-[0.1em] text-signal-red hover:bg-paper-muted focus:outline-none focus-visible:bg-paper-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"
-          onClick={() => runAction(onArchive)}
+          onClick={handleArchive}
         >
           Archive
         </button>
