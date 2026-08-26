@@ -1,21 +1,15 @@
-// Composes persisted students, active class choices, and the multi-class add flow.
-import { useEffect, useState } from 'react';
+// Composes the Students workspace from feature-owned state, actions, and dialogs.
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Notice } from '../components/ui/Notice';
-import { ClassApiError, fetchClasses } from '../features/classes/classes-api';
-import type { ClassRecord } from '../features/classes/class-types';
 import { StudentDirectory } from '../features/students/components/StudentDirectory';
 import { StudentFormDialog } from '../features/students/components/StudentFormDialog';
-import { fetchStudents, StudentApiError } from '../features/students/students-api';
-import type { StudentRecord } from '../features/students/student-types';
+import { useStudentWorkspace } from '../features/students/useStudentWorkspace';
 
 interface StudentPageProps {
   onSessionExpired: () => void;
 }
-
-type LoadStatus = 'loading' | 'ready' | 'error';
 
 // Provides the student symbol used by student directory empty states.
 function StudentIcon() {
@@ -27,49 +21,10 @@ function StudentIcon() {
   );
 }
 
-// Coordinates student/class loading and persisted multi-class additions.
+// Renders Students workspace states and delegates workflow behavior to its feature hook.
 export function StudentPage({ onSessionExpired }: StudentPageProps) {
   const navigate = useNavigate();
-  const [classes, setClasses] = useState<ClassRecord[]>([]);
-  const [students, setStudents] = useState<StudentRecord[]>([]);
-  const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
-  const [loadError, setLoadError] = useState('');
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    Promise.all([
-      fetchClasses(controller.signal),
-      fetchStudents(controller.signal),
-    ])
-      .then(([classRecords, studentRecords]) => {
-        setClasses(classRecords);
-        setStudents(studentRecords);
-        setLoadStatus('ready');
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          return;
-        }
-
-        if (
-          (error instanceof ClassApiError || error instanceof StudentApiError) &&
-          error.status === 401
-        ) {
-          onSessionExpired();
-          return;
-        }
-
-        setLoadError(error instanceof Error ? error.message : 'Unable to load the student workspace.');
-        setLoadStatus('error');
-      });
-
-    return () => controller.abort();
-  }, [loadAttempt, onSessionExpired]);
-
-  const canAddStudent = loadStatus === 'ready' && classes.length > 0;
+  const workspace = useStudentWorkspace(onSessionExpired);
 
   return (
     <div className="min-h-screen">
@@ -86,7 +41,7 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
               Add each student once, assign every class they attend, and review saved identity details.
             </p>
           </div>
-          <Button onClick={() => setIsFormOpen(true)} disabled={!canAddStudent}>
+          <Button onClick={workspace.handleOpenForm} disabled={!workspace.canAddStudent}>
             Add student
           </Button>
         </div>
@@ -94,7 +49,7 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
 
       <div className="archival-grid min-h-[calc(100vh-185px)]">
         <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">
-          {loadStatus === 'loading' ? (
+          {workspace.loadStatus === 'loading' ? (
             <div className="border border-ink bg-paper-light px-5 py-10 text-center">
               <p role="status" className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
                 Loading student workspace…
@@ -102,18 +57,14 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
             </div>
           ) : null}
 
-          {loadStatus === 'error' ? (
+          {workspace.loadStatus === 'error' ? (
             <Notice variant="error" title="Student workspace unavailable">
               <div className="space-y-4">
-                <p>{loadError}</p>
+                <p>{workspace.loadError}</p>
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => {
-                    setLoadStatus('loading');
-                    setLoadError('');
-                    setLoadAttempt((attempt) => attempt + 1);
-                  }}
+                  onClick={workspace.handleRetryLoad}
                 >
                   Try again
                 </Button>
@@ -121,7 +72,9 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
             </Notice>
           ) : null}
 
-          {loadStatus === 'ready' && classes.length === 0 && students.length === 0 ? (
+          {workspace.loadStatus === 'ready' &&
+          workspace.classes.length === 0 &&
+          workspace.students.length === 0 ? (
             <div className="border border-ink bg-paper-light p-5 sm:p-8">
               <EmptyState
                 icon={<StudentIcon />}
@@ -137,21 +90,23 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
             </div>
           ) : null}
 
-          {loadStatus === 'ready' && classes.length > 0 && students.length === 0 ? (
+          {workspace.loadStatus === 'ready' &&
+          workspace.classes.length > 0 &&
+          workspace.students.length === 0 ? (
             <div className="border border-ink bg-paper-light p-5 sm:p-8">
               <EmptyState
                 icon={<StudentIcon />}
                 title="No students added"
                 description="Add the first student and select every class they attend."
-                action={<Button onClick={() => setIsFormOpen(true)}>Add student</Button>}
+                action={<Button onClick={workspace.handleOpenForm}>Add student</Button>}
                 className="min-h-72"
               />
             </div>
           ) : null}
 
-          {loadStatus === 'ready' && students.length > 0 ? (
+          {workspace.loadStatus === 'ready' && workspace.students.length > 0 ? (
             <div className="space-y-8">
-              {classes.length === 0 ? (
+              {workspace.classes.length === 0 ? (
                 <Notice variant="warning" title="No active classes">
                   <div className="space-y-4">
                     <p>Saved students remain available, but a new student cannot be added until an active class exists.</p>
@@ -161,21 +116,18 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
                   </div>
                 </Notice>
               ) : null}
-              <StudentDirectory students={students} />
+              <StudentDirectory students={workspace.students} />
             </div>
           ) : null}
         </div>
       </div>
 
-      {isFormOpen ? (
+      {workspace.isFormOpen ? (
         <StudentFormDialog
           isOpen
-          classes={classes}
-          onClose={() => setIsFormOpen(false)}
-          onSaved={(student) => {
-            setStudents((currentStudents) => [student, ...currentStudents]);
-            setIsFormOpen(false);
-          }}
+          classes={workspace.classes}
+          onClose={workspace.handleCloseForm}
+          onSaved={workspace.handleStudentSaved}
           onSessionExpired={onSessionExpired}
         />
       ) : null}

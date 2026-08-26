@@ -1,21 +1,16 @@
-// Composes the active class directory, add/edit forms, archive confirmation, and request states.
-import { useEffect, useState } from "react";
-import { Button } from "../components/ui/Button";
-import { EmptyState } from "../components/ui/EmptyState";
-import { Notice } from "../components/ui/Notice";
-import { ArchiveClassDialog } from "../features/classes/components/ArchiveClassDialog";
-import { ClassFormDialog } from "../features/classes/components/ClassFormDialog";
-import { ClassDirectory } from "../features/classes/components/ClassDirectory";
-import { ClassApiError, fetchClasses } from "../features/classes/classes-api";
-import type { ClassRecord } from "../features/classes/class-types";
-import { Header } from "../components/ui/Header";
+// Composes the Classes workspace from feature-owned state, actions, and dialogs.
+import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Header } from '../components/ui/Header';
+import { Notice } from '../components/ui/Notice';
+import { ArchiveClassDialog } from '../features/classes/components/ArchiveClassDialog';
+import { ClassDirectory } from '../features/classes/components/ClassDirectory';
+import { ClassFormDialog } from '../features/classes/components/ClassFormDialog';
+import { useClassWorkspace } from '../features/classes/useClassWorkspace';
 
 interface ClassPageProps {
   onSessionExpired: () => void;
 }
-
-type LoadStatus = "loading" | "ready" | "error";
-type ClassFormTarget = "new" | ClassRecord | null;
 
 // Provides the decorative class symbol used by the empty directory state.
 function ClassIcon() {
@@ -26,85 +21,29 @@ function ClassIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.6"
-      aria-hidden="true">
+      aria-hidden="true"
+    >
       <path d="m3 6 9-3 9 3-9 3-9-3Z" />
       <path d="M7 8v5c0 1.7 2.2 3 5 3s5-1.3 5-3V8M21 7v6" />
     </svg>
   );
 }
 
-// Coordinates class loading, add/edit dialogs, archiving, and page-level request states.
+// Renders Classes workspace states and delegates workflow behavior to its feature hook.
 export function ClassPage({ onSessionExpired }: ClassPageProps) {
-  const [classes, setClasses] = useState<ClassRecord[]>([]);
-  const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
-  const [loadError, setLoadError] = useState("");
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  const [classFormTarget, setClassFormTarget] = useState<ClassFormTarget>(null);
-  const [archiveTarget, setArchiveTarget] = useState<ClassRecord | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    fetchClasses(controller.signal)
-      .then((records) => {
-        setClasses(records);
-        setLoadStatus("ready");
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-
-        if (error instanceof ClassApiError && error.status === 401) {
-          onSessionExpired();
-          return;
-        }
-
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load the class directory.",
-        );
-        setLoadStatus("error");
-      });
-
-    return () => controller.abort();
-  }, [loadAttempt, onSessionExpired]);
-
-  // Updates the active directory with the class returned by a successful save.
-  const handleClassSaved = (savedClass: ClassRecord) => {
-    setClasses((currentClasses) => {
-      const alreadyExists = currentClasses.some(
-        (classRecord) => classRecord.id === savedClass.id,
-      );
-
-      return alreadyExists
-        ? currentClasses.map((classRecord) =>
-            classRecord.id === savedClass.id ? savedClass : classRecord,
-          )
-        : [savedClass, ...currentClasses];
-    });
-    setClassFormTarget(null);
-  };
-
-  // Removes a successfully archived class from the active directory.
-  const handleClassArchived = (classId: string) => {
-    setClasses((currentClasses) =>
-      currentClasses.filter((classRecord) => classRecord.id !== classId),
-    );
-    setArchiveTarget(null);
-  };
+  const workspace = useClassWorkspace(onSessionExpired);
 
   return (
     <div className="min-h-screen">
       <Header
-        workspacePath="Workspace"
+        workspacePath="/dashboard/classes"
         workspaceTitle="Class"
         workspaceDescription="Organize subjects, sections, academic terms, teachers, rooms, and class dates."
         actionButton={
           <Button
-            onClick={() => setClassFormTarget("new")}
-            disabled={loadStatus !== "ready"}>
+            onClick={workspace.handleOpenCreate}
+            disabled={workspace.loadStatus !== 'ready'}
+          >
             Add class
           </Button>
         }
@@ -112,42 +51,40 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
 
       <div className="archival-grid min-h-[calc(100vh-185px)]">
         <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">
-          {loadStatus === "loading" ? (
+          {workspace.loadStatus === 'loading' ? (
             <div className="border border-ink bg-paper-light px-5 py-10 text-center">
               <p
                 role="status"
-                className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
+                className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted"
+              >
                 Loading class directory…
               </p>
             </div>
           ) : null}
 
-          {loadStatus === "error" ? (
+          {workspace.loadStatus === 'error' ? (
             <Notice variant="error" title="Class directory unavailable">
               <div className="space-y-4">
-                <p>{loadError}</p>
+                <p>{workspace.loadError}</p>
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => {
-                    setLoadStatus("loading");
-                    setLoadError("");
-                    setLoadAttempt((attempt) => attempt + 1);
-                  }}>
+                  onClick={workspace.handleRetryLoad}
+                >
                   Try again
                 </Button>
               </div>
             </Notice>
           ) : null}
 
-          {loadStatus === "ready" && classes.length === 0 ? (
+          {workspace.loadStatus === 'ready' && workspace.classes.length === 0 ? (
             <div className="border border-ink bg-paper-light p-5 sm:p-8">
               <EmptyState
                 icon={<ClassIcon />}
                 title="No classes available"
                 description="Add the first class to begin organizing its subject and academic details."
                 action={
-                  <Button onClick={() => setClassFormTarget("new")}>
+                  <Button onClick={workspace.handleOpenCreate}>
                     Add class
                   </Button>
                 }
@@ -156,33 +93,33 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
             </div>
           ) : null}
 
-          {loadStatus === "ready" && classes.length > 0 ? (
+          {workspace.loadStatus === 'ready' && workspace.classes.length > 0 ? (
             <ClassDirectory
-              classes={classes}
-              onEdit={setClassFormTarget}
-              onArchive={setArchiveTarget}
+              classes={workspace.classes}
+              onEdit={workspace.handleOpenEdit}
+              onArchive={workspace.handleOpenArchive}
             />
           ) : null}
         </div>
       </div>
 
-      {classFormTarget ? (
+      {workspace.classFormTarget ? (
         <ClassFormDialog
-          key={classFormTarget === "new" ? "new" : classFormTarget.id}
+          key={workspace.classFormTarget === 'new' ? 'new' : workspace.classFormTarget.id}
           isOpen
-          classRecord={classFormTarget === "new" ? undefined : classFormTarget}
-          onClose={() => setClassFormTarget(null)}
-          onSaved={handleClassSaved}
+          classRecord={workspace.classFormTarget === 'new' ? undefined : workspace.classFormTarget}
+          onClose={workspace.handleCloseForm}
+          onSaved={workspace.handleClassSaved}
           onSessionExpired={onSessionExpired}
         />
       ) : null}
 
-      {archiveTarget ? (
+      {workspace.archiveTarget ? (
         <ArchiveClassDialog
-          key={archiveTarget.id}
-          classRecord={archiveTarget}
-          onClose={() => setArchiveTarget(null)}
-          onArchived={handleClassArchived}
+          key={workspace.archiveTarget.id}
+          classRecord={workspace.archiveTarget}
+          onClose={workspace.handleCloseArchive}
+          onArchived={workspace.handleClassArchived}
           onSessionExpired={onSessionExpired}
         />
       ) : null}

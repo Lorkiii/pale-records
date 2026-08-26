@@ -3,6 +3,7 @@ interface HeaderProps {
     workspaceTitle: string; 
     workspaceDescription: string;
     actionButton?: React.ReactNode;
+    children?: React.ReactNode;
 }
 
 export function Header({ workspacePath, workspaceTitle, workspaceDescription, actionButton }: HeaderProps) {
