@@ -12,19 +12,9 @@ import { DashboardPage } from './pages/DashboardPage';
 import { EmptyWorkspacePage } from './pages/EmptyWorkspacePage';
 import { LoginPage } from './pages/LoginPage';
 import { StudentPage } from './pages/StudentPage';
+import SessionLoadingScreen from './components/ui/SessionLoading';
 
 type AuthenticationStatus = 'checking' | 'authenticated' | 'unauthenticated';
-
-// Keeps protected content hidden while the server validates the existing session cookie.
-function SessionLoadingScreen() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-paper px-6 text-ink">
-      <p role="status" className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-        Checking session…
-      </p>
-    </main>
-  );
-}
 
 // Resolves authentication once and routes users through the protected dashboard workspace.
 export default function App() {
