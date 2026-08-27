@@ -1,4 +1,4 @@
-// Defines the safe student records and expected create/list API response contracts.
+// Defines safe student records and expected list, save, and archive API response contracts.
 import { z } from "zod";
 
 export const studentClassRecordSchema = z.strictObject({
@@ -30,6 +30,23 @@ export const studentCreateResponseSchema = z.strictObject({
   success: z.literal(true),
   data: z.strictObject({
     student: studentRecordSchema,
+  }),
+});
+
+export const studentUpdateResponseSchema = studentCreateResponseSchema;
+
+export const studentArchiveResponseSchema = z.strictObject({
+  success: z.literal(true),
+  data: z.strictObject({
+    studentId: z.string().uuid(),
+  }),
+});
+
+export const studentNotFoundResponseSchema = z.strictObject({
+  success: z.literal(false),
+  error: z.strictObject({
+    code: z.literal("STUDENT_NOT_FOUND"),
+    message: z.literal("Student was not found."),
   }),
 });
 

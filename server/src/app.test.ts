@@ -65,7 +65,7 @@ test("class endpoints require an authenticated session", async () => {
   assert.equal(archiveResponse.body.error.code, "UNAUTHENTICATED");
 });
 
-// Confirms both student operations are protected by the shared session middleware.
+// Confirms every student operation is protected by the shared session middleware.
 test("student endpoints require an authenticated session", async () => {
   const listResponse = await request(app).get("/api/students");
   const createResponse = await request(app).post("/api/students").send({
@@ -73,11 +73,24 @@ test("student endpoints require an authenticated session", async () => {
     lastName: "Reyes",
     classIds: ["2c6e62cc-584d-4faf-90f6-fdb50b27c9d0"],
   });
+  const updateResponse = await request(app)
+    .patch("/api/students/a8a5bbc6-bbd1-44f8-9c73-1adbc04ff57c")
+    .send({
+      firstName: "Ana",
+      lastName: "Reyes",
+      classIds: ["2c6e62cc-584d-4faf-90f6-fdb50b27c9d0"],
+    });
+  const archiveResponse = await request(app)
+    .post("/api/students/a8a5bbc6-bbd1-44f8-9c73-1adbc04ff57c/archive");
 
   assert.equal(listResponse.status, 401);
   assert.equal(listResponse.body.error.code, "UNAUTHENTICATED");
   assert.equal(createResponse.status, 401);
   assert.equal(createResponse.body.error.code, "UNAUTHENTICATED");
+  assert.equal(updateResponse.status, 401);
+  assert.equal(updateResponse.body.error.code, "UNAUTHENTICATED");
+  assert.equal(archiveResponse.status, 401);
+  assert.equal(archiveResponse.body.error.code, "UNAUTHENTICATED");
 });
 
 // Confirms the registered Attendance router protects every endpoint before validation or data access.

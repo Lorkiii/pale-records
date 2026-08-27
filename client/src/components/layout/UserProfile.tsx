@@ -1,14 +1,12 @@
 // Presents the current account identity and a data-derived initials avatar in application headers.
-import type { AuthenticatedUser } from '../../features/auth/auth-api';
+import {
+  getAuthenticatedUserDisplayName,
+  type AuthenticatedUser,
+} from '../../features/auth/auth-api';
 
 interface UserProfileProps {
   user: AuthenticatedUser;
   accountLabel: string;
-}
-
-function getDisplayName(user: AuthenticatedUser) {
-  const fullName = `${user.firstName.trim()} ${user.lastName.trim()}`.trim();
-  return fullName || user.username || user.email;
 }
 
 function getInitials(user: AuthenticatedUser) {
@@ -22,7 +20,7 @@ function getInitials(user: AuthenticatedUser) {
 }
 
 export function UserProfile({ user, accountLabel }: UserProfileProps) {
-  const displayName = getDisplayName(user);
+  const displayName = getAuthenticatedUserDisplayName(user);
   const accountIdentifier = user.username ? `@${user.username}` : user.email;
 
   return (

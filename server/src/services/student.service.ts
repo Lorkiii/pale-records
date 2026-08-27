@@ -1,7 +1,10 @@
-// Owns bounded student queries and atomic creation of student-class enrollments.
+// Owns active student queries plus atomic create, edit, and archive operations.
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../lib/db-client.js";
-import type { CreateStudentInput } from "../validations/student.schema.js";
+import type {
+  CreateStudentInput,
+  UpdateStudentInput,
+} from "../validations/student.schema.js";
 import type {
   StudentClassRecord,
   StudentRecord,
@@ -15,7 +18,7 @@ type StudentDatabaseRecord = {
   enrollments: Array<{ class: StudentClassRecord }>;
 };
 
-type CreateStudentData = {
+type SaveStudentData = {
   studentNo: string | null;
   firstName: string;
   lastName: string;
@@ -25,7 +28,15 @@ type CreateStudentData = {
 export type StudentServiceDependencies = {
   findStudents: () => Promise<StudentDatabaseRecord[]>;
   findActiveClassIds: (classIds: string[]) => Promise<string[]>;
-  insertStudent: (data: CreateStudentData) => Promise<StudentDatabaseRecord>;
+  insertStudent: (data: SaveStudentData) => Promise<StudentDatabaseRecord>;
+  updateStudentRecord: (
+    studentId: string,
+    data: SaveStudentData,
+  ) => Promise<StudentDatabaseRecord | null>;
+  markStudentArchived: (
+    studentId: string,
+    archivedAt: Date,
+  ) => Promise<boolean>;
 };
 
 export class StudentNumberConflictError extends Error {
@@ -48,6 +59,9 @@ const studentSelect = {
   firstName: true,
   lastName: true,
   enrollments: {
+    where: {
+      class: { archivedAt: null },
+    },
     select: {
       class: {
         select: studentClassSelect,
@@ -76,6 +90,7 @@ const defaultDependencies: StudentServiceDependencies = {
   // Retrieves a bounded newest-first directory with only public student and class fields.
   findStudents: () =>
     prisma.student.findMany({
+      where: { archivedAt: null },
       take: 100,
       orderBy: [{ createdAt: "desc" }, { id: "asc" }],
       select: studentSelect,
@@ -113,6 +128,56 @@ const defaultDependencies: StudentServiceDependencies = {
 
       throw error;
     }
+  },
+  // Replaces active enrollment links while retaining links to already archived classes.
+  updateStudentRecord: async (studentId, data) => {
+    try {
+      return await prisma.$transaction(async (transaction) => {
+        const result = await transaction.student.updateMany({
+          where: { id: studentId, archivedAt: null },
+          data: {
+            studentNo: data.studentNo,
+            firstName: data.firstName,
+            lastName: data.lastName,
+          },
+        });
+
+        if (result.count === 0) {
+          return null;
+        }
+
+        await transaction.studentEnrollment.deleteMany({
+          where: {
+            studentId,
+            class: { archivedAt: null },
+          },
+        });
+        await transaction.studentEnrollment.createMany({
+          data: data.classIds.map((classId) => ({ studentId, classId })),
+          skipDuplicates: true,
+        });
+
+        return transaction.student.findUnique({
+          where: { id: studentId },
+          select: studentSelect,
+        });
+      });
+    } catch (error) {
+      if (isStudentNumberConflict(error)) {
+        throw new StudentNumberConflictError();
+      }
+
+      throw error;
+    }
+  },
+  // Records a trusted archive time only when the student is still active.
+  markStudentArchived: async (studentId, archivedAt) => {
+    const result = await prisma.student.updateMany({
+      where: { id: studentId, archivedAt: null },
+      data: { archivedAt },
+    });
+
+    return result.count === 1;
   },
 };
 
@@ -178,4 +243,50 @@ export async function createStudent(
 
     throw error;
   }
+}
+
+export type UpdateStudentResult =
+  | { status: "updated"; student: StudentRecord }
+  | { status: "student_not_found" }
+  | { status: "class_selection_unavailable" }
+  | { status: "student_number_exists" };
+
+// Validates active class membership and replaces one active student's editable data.
+export async function updateStudent(
+  studentId: string,
+  input: UpdateStudentInput,
+  dependencies: StudentServiceDependencies = defaultDependencies,
+): Promise<UpdateStudentResult> {
+  const activeClassIds = await dependencies.findActiveClassIds(input.classIds);
+
+  if (activeClassIds.length !== input.classIds.length) {
+    return { status: "class_selection_unavailable" };
+  }
+
+  try {
+    const updatedStudent = await dependencies.updateStudentRecord(studentId, {
+      studentNo: input.studentNo ?? null,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      classIds: input.classIds,
+    });
+
+    return updatedStudent
+      ? { status: "updated", student: toStudentRecord(updatedStudent) }
+      : { status: "student_not_found" };
+  } catch (error) {
+    if (error instanceof StudentNumberConflictError) {
+      return { status: "student_number_exists" };
+    }
+
+    throw error;
+  }
+}
+
+// Supplies a trusted server timestamp to the non-destructive archive operation.
+export function archiveStudent(
+  studentId: string,
+  dependencies: StudentServiceDependencies = defaultDependencies,
+) {
+  return dependencies.markStudentArchived(studentId, new Date());
 }

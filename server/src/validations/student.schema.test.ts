@@ -1,8 +1,12 @@
-// Verifies student input normalization, strictness, and multi-class validation.
+// Verifies student input normalization, strictness, multi-class validation, and route IDs.
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createStudentSchema } from "./student.schema.js";
+import {
+  createStudentSchema,
+  studentIdParamsSchema,
+  updateStudentSchema,
+} from "./student.schema.js";
 
 const firstClassId = "2c6e62cc-584d-4faf-90f6-fdb50b27c9d0";
 const secondClassId = "55458380-0362-46bd-b3bb-cc6e880ab57e";
@@ -69,4 +73,31 @@ test("createStudentSchema rejects duplicate classes and unknown fields", () => {
     assert.match(issues, /Select each class only once/);
     assert.match(issues, /Unrecognized key/);
   }
+});
+
+// Confirms edit accepts the same normalized complete student contract as creation.
+test("updateStudentSchema normalizes the complete editable student record", () => {
+  const result = updateStudentSchema.parse({
+    studentNo: "  ab-123  ",
+    firstName: "  Ana  ",
+    lastName: "  Reyes  ",
+    classIds: [firstClassId],
+  });
+
+  assert.deepEqual(result, {
+    studentNo: "AB-123",
+    firstName: "Ana",
+    lastName: "Reyes",
+    classIds: [firstClassId],
+  });
+});
+
+// Confirms student routes accept only the named UUID parameter.
+test("studentIdParamsSchema rejects malformed student IDs", () => {
+  assert.equal(studentIdParamsSchema.safeParse({ studentId: firstClassId }).success, true);
+  assert.equal(studentIdParamsSchema.safeParse({ studentId: "not-a-uuid" }).success, false);
+  assert.equal(
+    studentIdParamsSchema.safeParse({ studentId: firstClassId, role: "ADMIN" }).success,
+    false,
+  );
 });

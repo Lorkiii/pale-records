@@ -148,6 +148,9 @@ const attendanceSessionSelect = {
   class: {
     select: {
       enrollments: {
+        where: {
+          student: { archivedAt: null },
+        },
         select: {
           student: { select: attendanceStudentSelect },
         },
@@ -428,7 +431,10 @@ const defaultDependencies: AttendanceServiceDependencies = {
         const submittedStudentIds = records.map((record) => record.studentId);
         if (isInitializing) {
           const enrollments = await transaction.studentEnrollment.findMany({
-            where: { classId: session.classId },
+            where: {
+              classId: session.classId,
+              student: { archivedAt: null },
+            },
             select: { studentId: true },
             orderBy: { studentId: "asc" },
           });

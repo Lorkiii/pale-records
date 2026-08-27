@@ -13,6 +13,12 @@ export interface AuthenticatedUser {
   email: string;
 }
 
+// Resolves the truthful display name shared by account UI and generated reports.
+export function getAuthenticatedUserDisplayName(user: AuthenticatedUser) {
+  const fullName = `${user.firstName.trim()} ${user.lastName.trim()}`.trim();
+  return fullName || user.username || user.email;
+}
+
 // Narrows untrusted JSON to an object before reading authentication response fields.
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

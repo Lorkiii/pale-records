@@ -1,12 +1,14 @@
-// Verifies student service mapping and multi-class creation without a live database.
+// Verifies student service mapping, enrollment saves, and archiving without a live database.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  archiveStudent,
   createStudent,
   listStudents,
   StudentNumberConflictError,
   type StudentServiceDependencies,
+  updateStudent,
 } from "./student.service.js";
 
 const firstClass = {
@@ -39,6 +41,8 @@ function createDependencies(
     findStudents: async () => [],
     findActiveClassIds: async (classIds) => classIds,
     insertStudent: async () => storedStudent,
+    updateStudentRecord: async () => storedStudent,
+    markStudentArchived: async () => true,
     ...overrides,
   };
 }
@@ -130,4 +134,120 @@ test("createStudent reports an existing student number", async () => {
   );
 
   assert.deepEqual(result, { status: "student_number_exists" });
+});
+
+// Confirms edit maps identity and replacement enrollment fields explicitly.
+test("updateStudent replaces one active student's editable data", async () => {
+  let receivedStudentId: string | undefined;
+  let receivedData:
+    | Parameters<StudentServiceDependencies["updateStudentRecord"]>[1]
+    | undefined;
+  const dependencies = createDependencies({
+    updateStudentRecord: async (studentId, data) => {
+      receivedStudentId = studentId;
+      receivedData = data;
+      return storedStudent;
+    },
+  });
+
+  const result = await updateStudent(
+    storedStudent.id,
+    {
+      studentNo: "AB-123",
+      firstName: "Ana",
+      lastName: "Reyes",
+      classIds: [firstClass.id, secondClass.id],
+    },
+    dependencies,
+  );
+
+  assert.equal(receivedStudentId, storedStudent.id);
+  assert.deepEqual(receivedData, {
+    studentNo: "AB-123",
+    firstName: "Ana",
+    lastName: "Reyes",
+    classIds: [firstClass.id, secondClass.id],
+  });
+  assert.equal(result.status, "updated");
+});
+
+// Confirms an archived or missing student is reported without fabricating a record.
+test("updateStudent reports a missing active student", async () => {
+  const result = await updateStudent(
+    storedStudent.id,
+    {
+      firstName: "Ana",
+      lastName: "Reyes",
+      classIds: [firstClass.id],
+    },
+    createDependencies({ updateStudentRecord: async () => null }),
+  );
+
+  assert.deepEqual(result, { status: "student_not_found" });
+});
+
+// Confirms edit rejects unavailable classes before changing the student.
+test("updateStudent rejects unavailable class selections before update", async () => {
+  let updateWasCalled = false;
+  const result = await updateStudent(
+    storedStudent.id,
+    {
+      firstName: "Ana",
+      lastName: "Reyes",
+      classIds: [firstClass.id, secondClass.id],
+    },
+    createDependencies({
+      findActiveClassIds: async () => [firstClass.id],
+      updateStudentRecord: async () => {
+        updateWasCalled = true;
+        return storedStudent;
+      },
+    }),
+  );
+
+  assert.deepEqual(result, { status: "class_selection_unavailable" });
+  assert.equal(updateWasCalled, false);
+});
+
+// Confirms edit returns the same safe uniqueness outcome as creation.
+test("updateStudent reports an existing student number", async () => {
+  const result = await updateStudent(
+    storedStudent.id,
+    {
+      studentNo: "AB-123",
+      firstName: "Ana",
+      lastName: "Reyes",
+      classIds: [firstClass.id],
+    },
+    createDependencies({
+      updateStudentRecord: async () => {
+        throw new StudentNumberConflictError();
+      },
+    }),
+  );
+
+  assert.deepEqual(result, { status: "student_number_exists" });
+});
+
+// Confirms archive supplies a trusted current timestamp to the persistence boundary.
+test("archiveStudent supplies the archive timestamp", async () => {
+  let receivedStudentId: string | undefined;
+  let receivedArchivedAt: Date | undefined;
+  const beforeArchive = Date.now();
+  const result = await archiveStudent(
+    storedStudent.id,
+    createDependencies({
+      markStudentArchived: async (studentId, archivedAt) => {
+        receivedStudentId = studentId;
+        receivedArchivedAt = archivedAt;
+        return true;
+      },
+    }),
+  );
+
+  assert.equal(result, true);
+  assert.equal(receivedStudentId, storedStudent.id);
+  assert.ok(receivedArchivedAt);
+  assert.ok(receivedArchivedAt.getTime() >= beforeArchive);
+  assert.ok(receivedArchivedAt.getTime() <= Date.now());
 });

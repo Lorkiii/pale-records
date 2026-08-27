@@ -3,6 +3,7 @@ import type {
   CreateStudentInput,
   StudentClassRecord,
   StudentRecord,
+  UpdateStudentInput,
 } from './student-types';
 
 interface ErrorDetails {
@@ -133,6 +134,11 @@ function readStudent(data: Record<string, unknown>) {
   return isStudentRecord(data.student) ? data.student : undefined;
 }
 
+// Selects the archived student identifier confirmed by the server.
+function readArchivedStudentId(data: Record<string, unknown>) {
+  return typeof data.studentId === 'string' ? data.studentId : undefined;
+}
+
 // Loads the bounded saved student directory.
 export async function fetchStudents(signal: AbortSignal) {
   let response: Response;
@@ -177,4 +183,50 @@ export async function createStudent(input: CreateStudentInput) {
   }
 
   return readSuccessData(response, 'Unable to read the created student.', readStudent);
+}
+
+// Replaces one active student's identity and active class assignments.
+export async function updateStudent(studentId: string, input: UpdateStudentInput) {
+  let response: Response;
+
+  try {
+    response = await fetch(`/api/students/${encodeURIComponent(studentId)}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    throw new StudentApiError('Unable to reach PALE Records.', 0);
+  }
+
+  if (!response.ok) {
+    throw await readApiError(response);
+  }
+
+  return readSuccessData(response, 'Unable to read the updated student.', readStudent);
+}
+
+// Soft-archives one active student and returns the confirmed identifier.
+export async function archiveStudent(studentId: string) {
+  let response: Response;
+
+  try {
+    response = await fetch(`/api/students/${encodeURIComponent(studentId)}/archive`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    throw new StudentApiError('Unable to reach PALE Records.', 0);
+  }
+
+  if (!response.ok) {
+    throw await readApiError(response);
+  }
+
+  return readSuccessData(
+    response,
+    'Unable to confirm the archived student.',
+    readArchivedStudentId,
+  );
 }

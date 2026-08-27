@@ -32,10 +32,11 @@ model User {
 }
 
 model Student {
-  id        String  @id @default(uuid())
-  studentNo String? @unique
-  firstName String
-  lastName  String
+  id         String    @id @default(uuid())
+  studentNo  String?   @unique
+  firstName  String
+  lastName   String
+  archivedAt DateTime?
 
   enrollments       StudentEnrollment[]
   attendanceRecords AttendanceRecord[]

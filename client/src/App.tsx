@@ -84,7 +84,15 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="classes" element={<ClassPage onSessionExpired={handleSessionExpired} />} />
         <Route path="students" element={<StudentPage onSessionExpired={handleSessionExpired} />} />
-        <Route path="attendance" element={<AttendancePage onSessionExpired={handleSessionExpired} />} />
+        <Route
+          path="attendance"
+          element={
+            <AttendancePage
+              currentUser={authenticatedUser!}
+              onSessionExpired={handleSessionExpired}
+            />
+          }
+        />
         <Route path="activity" element={<EmptyWorkspacePage section="activity" />} />
         <Route path="agenda" element={<EmptyWorkspacePage section="agenda" />} />
       </Route>

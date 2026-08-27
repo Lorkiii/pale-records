@@ -1,11 +1,11 @@
-// Owns multi-class student validation, persistence, and accessible modal composition.
+// Owns multi-class student create/edit validation, persistence, and modal composition.
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Dialog } from '../../../components/ui/Dialog';
 import { Input } from '../../../components/ui/Input';
 import { Notice } from '../../../components/ui/Notice';
 import type { ClassRecord } from '../../classes/class-types';
-import { createStudent, StudentApiError } from '../students-api';
+import { createStudent, StudentApiError, updateStudent } from '../students-api';
 import type {
   CreateStudentInput,
   StudentRecord,
@@ -15,6 +15,7 @@ import type {
 interface StudentFormDialogProps {
   isOpen: boolean;
   classes: ClassRecord[];
+  studentRecord?: StudentRecord;
   onClose: () => void;
   onSaved: (student: StudentRecord) => void;
   onSessionExpired: () => void;
@@ -40,6 +41,20 @@ const STUDENT_TEXT_FIELDS: StudentTextFieldName[] = [
   'firstName',
   'lastName',
 ];
+
+// Initializes a blank add form or the complete active record selected for editing.
+function getInitialValues(studentRecord?: StudentRecord): StudentFormValues {
+  if (!studentRecord) {
+    return EMPTY_FORM;
+  }
+
+  return {
+    classIds: studentRecord.classes.map((classRecord) => classRecord.id),
+    studentNo: studentRecord.studentNo ?? '',
+    firstName: studentRecord.firstName,
+    lastName: studentRecord.lastName,
+  };
+}
 
 // Builds a concise label from real class fields already available to the form.
 function getClassLabel(classRecord: ClassRecord) {
@@ -110,11 +125,13 @@ function readApiFieldErrors(error: StudentApiError) {
 export function StudentFormDialog({
   isOpen,
   classes,
+  studentRecord,
   onClose,
   onSaved,
   onSessionExpired,
 }: StudentFormDialogProps) {
-  const [values, setValues] = useState<StudentFormValues>(EMPTY_FORM);
+  const isEditing = Boolean(studentRecord);
+  const [values, setValues] = useState<StudentFormValues>(() => getInitialValues(studentRecord));
   const [errors, setErrors] = useState<StudentFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -168,7 +185,10 @@ export function StudentFormDialog({
     setIsSubmitting(true);
 
     try {
-      const student = await createStudent(toCreateStudentInput(values));
+      const input = toCreateStudentInput(values);
+      const student = studentRecord
+        ? await updateStudent(studentRecord.id, input)
+        : await createStudent(input);
       onSaved(student);
     } catch (error) {
       if (error instanceof StudentApiError && error.status === 401) {
@@ -180,7 +200,7 @@ export function StudentFormDialog({
         ...(error instanceof StudentApiError ? readApiFieldErrors(error) : {}),
         form: error instanceof Error
           ? error.message
-          : 'Unable to add the student. Please try again.',
+          : `Unable to ${isEditing ? 'update' : 'add'} the student. Please try again.`,
       });
     } finally {
       setIsSubmitting(false);
@@ -191,8 +211,10 @@ export function StudentFormDialog({
     <Dialog
       isOpen={isOpen}
       onClose={resetAndClose}
-      title="Add student"
-      description="Enter the student identity and select every active class they attend."
+      title={isEditing ? 'Edit student' : 'Add student'}
+      description={isEditing
+        ? 'Update the student identity and active classes they attend.'
+        : 'Enter the student identity and select every active class they attend.'}
       isDismissDisabled={isSubmitting}
       footer={
         <>
@@ -200,14 +222,20 @@ export function StudentFormDialog({
             Cancel
           </Button>
           <Button type="submit" form="student-form" isLoading={isSubmitting}>
-            {isSubmitting ? 'Adding student' : 'Add student'}
+            {isSubmitting
+              ? `${isEditing ? 'Saving' : 'Adding'} student`
+              : isEditing ? 'Save changes' : 'Add student'}
           </Button>
         </>
       }
     >
       <form id="student-form" onSubmit={handleSubmit} noValidate>
         {errors.form ? (
-          <Notice variant="error" title="Student not added" className="mb-5">
+          <Notice
+            variant="error"
+            title={isEditing ? 'Student not updated' : 'Student not added'}
+            className="mb-5"
+          >
             {errors.form}
           </Notice>
         ) : null}

@@ -1,4 +1,4 @@
-// Validates and normalizes student creation input at the HTTP boundary.
+// Validates and normalizes student identity, enrollment, and route input at the HTTP boundary.
 import { z } from "zod";
 
 const optionalStudentNumber = z.preprocess(
@@ -19,7 +19,7 @@ const requiredName = (label: string) =>
     .min(1, `${label} is required`)
     .max(120, `${label} must be at most 120 characters`);
 
-export const createStudentSchema = z.strictObject({
+const studentInputShape = {
   studentNo: optionalStudentNumber,
   firstName: requiredName("First name"),
   lastName: requiredName("Last name"),
@@ -31,6 +31,15 @@ export const createStudentSchema = z.strictObject({
       (classIds) => new Set(classIds).size === classIds.length,
       "Select each class only once",
     ),
+};
+
+export const createStudentSchema = z.strictObject(studentInputShape);
+export const updateStudentSchema = z.strictObject(studentInputShape);
+
+export const studentIdParamsSchema = z.strictObject({
+  studentId: z.string().uuid("Student ID must be a valid UUID"),
 });
 
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;
+export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
+export type StudentIdParams = z.infer<typeof studentIdParamsSchema>;

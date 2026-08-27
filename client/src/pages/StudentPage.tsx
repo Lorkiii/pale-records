@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Notice } from '../components/ui/Notice';
+import { ArchiveStudentDialog } from '../features/students/components/ArchiveStudentDialog';
 import { StudentDirectory } from '../features/students/components/StudentDirectory';
 import { StudentFormDialog } from '../features/students/components/StudentFormDialog';
 import { useStudentWorkspace } from '../features/students/useStudentWorkspace';
@@ -109,25 +110,46 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
               {workspace.classes.length === 0 ? (
                 <Notice variant="warning" title="No active classes">
                   <div className="space-y-4">
-                    <p>Saved students remain available, but a new student cannot be added until an active class exists.</p>
+                    <p>Saved students remain available, but students cannot be added or edited until an active class exists.</p>
                     <Button size="sm" variant="secondary" onClick={() => navigate('/dashboard/classes')}>
                       Go to classes
                     </Button>
                   </div>
                 </Notice>
               ) : null}
-              <StudentDirectory students={workspace.students} />
+              <StudentDirectory
+                students={workspace.students}
+                canEdit={workspace.classes.length > 0}
+                onEdit={workspace.handleOpenEdit}
+                onArchive={workspace.handleOpenArchive}
+              />
             </div>
           ) : null}
         </div>
       </div>
 
-      {workspace.isFormOpen ? (
+      {workspace.studentFormTarget ? (
         <StudentFormDialog
+          key={workspace.studentFormTarget === 'new'
+            ? 'new'
+            : workspace.studentFormTarget.id}
           isOpen
           classes={workspace.classes}
+          studentRecord={workspace.studentFormTarget === 'new'
+            ? undefined
+            : workspace.studentFormTarget}
           onClose={workspace.handleCloseForm}
           onSaved={workspace.handleStudentSaved}
+          onSessionExpired={onSessionExpired}
+        />
+      ) : null}
+
+      {workspace.archiveTarget ? (
+        <ArchiveStudentDialog
+          key={workspace.archiveTarget.id}
+          studentRecord={workspace.archiveTarget}
+          onClose={workspace.handleCloseArchive}
+          onArchived={workspace.handleStudentArchived}
           onSessionExpired={onSessionExpired}
         />
       ) : null}

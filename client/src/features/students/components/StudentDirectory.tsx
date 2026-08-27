@@ -1,12 +1,79 @@
-// Renders each persisted student once with every enrolled class.
+// Renders active students with their enrolled classes and edit/archive actions.
+import { useRef, type FocusEvent } from 'react';
 import type { StudentRecord } from '../student-types';
 
 interface StudentDirectoryProps {
   students: StudentRecord[];
+  canEdit: boolean;
+  onEdit: (student: StudentRecord) => void;
+  onArchive: (student: StudentRecord) => void;
+}
+
+interface StudentActionsProps {
+  student: StudentRecord;
+  canEdit: boolean;
+  onEdit: (student: StudentRecord) => void;
+  onArchive: (student: StudentRecord) => void;
+}
+
+// Renders one native action menu and closes it after selection or lost focus.
+function StudentActions({ student, canEdit, onEdit, onArchive }: StudentActionsProps) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  const closeMenu = () => {
+    detailsRef.current?.removeAttribute('open');
+  };
+
+  const handleEdit = () => {
+    closeMenu();
+    onEdit(student);
+  };
+
+  const handleArchive = () => {
+    closeMenu();
+    onArchive(student);
+  };
+
+  const handleBlur = (event: FocusEvent<HTMLDetailsElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      closeMenu();
+    }
+  };
+
+  return (
+    <details ref={detailsRef} className="relative" onBlur={handleBlur}>
+      <summary className="flex h-10 cursor-pointer list-none items-center gap-2 border border-ink bg-paper-light px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+        Actions
+        <span aria-hidden="true">⌄</span>
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-36 border border-ink bg-paper-light p-1">
+        <button
+          type="button"
+          className="flex min-h-10 w-full cursor-pointer items-center px-3 text-left font-mono text-xs font-semibold uppercase tracking-[0.1em] text-ink hover:bg-paper-muted focus:outline-none focus-visible:bg-paper-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:bg-paper-light"
+          onClick={handleEdit}
+          disabled={!canEdit}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          className="flex min-h-10 w-full cursor-pointer items-center px-3 text-left font-mono text-xs font-semibold uppercase tracking-[0.1em] text-signal-red hover:bg-paper-muted focus:outline-none focus-visible:bg-paper-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink"
+          onClick={handleArchive}
+        >
+          Archive
+        </button>
+      </div>
+    </details>
+  );
 }
 
 // Presents students as responsive rows that remain readable without horizontal scrolling.
-export function StudentDirectory({ students }: StudentDirectoryProps) {
+export function StudentDirectory({
+  students,
+  canEdit,
+  onEdit,
+  onArchive,
+}: StudentDirectoryProps) {
   return (
     <section aria-labelledby="student-directory-heading">
       <div className="mb-5 flex items-end gap-4">
@@ -28,7 +95,7 @@ export function StudentDirectory({ students }: StudentDirectoryProps) {
         {students.map((student, index) => (
           <li
             key={student.id}
-            className="grid gap-5 border-b border-paper-border p-5 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,1.4fr)] sm:items-start sm:gap-6"
+            className="grid gap-5 border-b border-paper-border p-5 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,1.4fr)_auto] sm:items-start sm:gap-6"
           >
             <span className="w-fit bg-ink px-2 py-1 font-mono text-[11px] font-bold text-paper-light">
               {String(index + 1).padStart(2, '0')}
@@ -77,6 +144,13 @@ export function StudentDirectory({ students }: StudentDirectoryProps) {
                 })}
               </ul>
             </div>
+
+            <StudentActions
+              student={student}
+              canEdit={canEdit}
+              onEdit={onEdit}
+              onArchive={onArchive}
+            />
           </li>
         ))}
       </ol>

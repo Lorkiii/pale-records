@@ -1,25 +1,40 @@
 // Composes the Attendance workspace from feature-owned state, actions, and UI components.
-import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/Button';
-import { EmptyState } from '../components/ui/EmptyState';
-import { Notice } from '../components/ui/Notice';
-import { AttendanceDetailsDialog } from '../features/attendance/components/AttendanceDetailsDialog';
-import { AttendanceRegister } from '../features/attendance/components/AttendanceRegister';
-import { DeleteAttendanceSessionDialog } from '../features/attendance/components/DeleteAttendanceSessionDialog';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "../components/ui/Button";
+import { EmptyState } from "../components/ui/EmptyState";
+import { Notice } from "../components/ui/Notice";
+import { Header } from "../components/ui/Header";
+
+import {
+  getAuthenticatedUserDisplayName,
+  type AuthenticatedUser,
+} from "../features/auth/auth-api";
+import { AttendanceDetailsDialog } from "../features/attendance/components/AttendanceDetailsDialog";
+import { AttendanceRegister } from "../features/attendance/components/AttendanceRegister";
+import { DeleteAttendanceSessionDialog } from "../features/attendance/components/DeleteAttendanceSessionDialog";
+import { ExportAttendancePdfDialog } from "../features/attendance/components/ExportAttendancePdfDialog";
 import {
   AttendanceToolbar,
   type AttendanceToolbarFeedback,
-} from '../features/attendance/components/AttendanceToolbar';
-import { useAttendanceWorkspace } from '../features/attendance/useAttendanceWorkspace';
+} from "../features/attendance/components/AttendanceToolbar";
+import { useAttendanceWorkspace } from "../features/attendance/useAttendanceWorkspace";
 
 interface AttendancePageProps {
+  currentUser: AuthenticatedUser;
   onSessionExpired: () => void;
 }
 
 // Provides the Attendance symbol used by honest empty workspace states.
 function AttendanceIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true">
       <rect x="4" y="3" width="16" height="18" />
       <path d="M8 3v4M16 3v4M4 9h16M8 15l2 2 5-5" />
     </svg>
@@ -27,71 +42,92 @@ function AttendanceIcon() {
 }
 
 // Renders Attendance workspace states and delegates workflow behavior to its feature hook.
-export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
+export function AttendancePage({ currentUser, onSessionExpired }: AttendancePageProps) {
   const navigate = useNavigate();
   const attendance = useAttendanceWorkspace(onSessionExpired);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const canExportPdf = Boolean(
+    attendance.selectedClass &&
+    attendance.sessionLoadStatus === "ready" &&
+    attendance.selectedClassSessions.length > 0 &&
+    !attendance.isBusy,
+  );
 
   const toolbarFeedback: AttendanceToolbarFeedback | null = attendance.feedback
     ? {
-      variant: attendance.feedback.variant,
-      title: attendance.feedback.title,
-      content: attendance.feedback.messages.length === 1
-        ? attendance.feedback.messages[0]
-        : (
-          <ul className="list-disc space-y-1 pl-4">
-            {attendance.feedback.messages.map((message, index) => (
-              <li key={`${message}-${index}`}>{message}</li>
-            ))}
-          </ul>
-        ),
-    }
+        variant: attendance.feedback.variant,
+        title: attendance.feedback.title,
+        content:
+          attendance.feedback.messages.length === 1 ? (
+            attendance.feedback.messages[0]
+          ) : (
+            <ul className="list-disc space-y-1 pl-4">
+              {attendance.feedback.messages.map((message, index) => (
+                <li key={`${message}-${index}`}>{message}</li>
+              ))}
+            </ul>
+          ),
+      }
     : null;
 
   return (
     <div className="min-h-screen min-w-0 overflow-x-hidden">
-      <header className="border-b border-paper-border bg-paper-light">
-        <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12">
-          <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-            Workspace / Attendance
-          </p>
-          <h1 className="mt-3 font-display text-4xl font-bold tracking-[-0.05em] text-ink sm:text-5xl">
-            Attendance
-          </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-ink-secondary">
-            Open a class month to create scheduled dates, then save each date’s roster deliberately.
-          </p>
-        </div>
-      </header>
+      <Header
+        workspacePath="Workspace"
+        workspaceTitle="Attendance"
+        workspaceDescription="Open a class month to create scheduled dates, then save each date’s roster deliberately."
+        actionButton={
+          <Button
+            variant="secondary"
+            aria-haspopup="dialog"
+            disabled={!canExportPdf}
+            title={canExportPdf
+              ? "Export the selected class month as PDF"
+              : "Select and load a class month with attendance dates before exporting"}
+            onClick={() => setIsExportDialogOpen(true)}
+          >
+            Export PDF
+          </Button>
+        }
+      />
 
       <div className="archival-grid min-h-[calc(100vh-185px)] min-w-0">
         <div className="mx-auto min-w-0 max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">
-          {attendance.loadStatus === 'loading' ? (
+          {attendance.loadStatus === "loading" ? (
             <div className="border border-ink bg-paper-light px-5 py-10 text-center">
-              <p role="status" className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
+              <p
+                role="status"
+                className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
                 Loading attendance workspace…
               </p>
             </div>
           ) : null}
 
-          {attendance.loadStatus === 'error' ? (
+          {attendance.loadStatus === "error" ? (
             <Notice variant="error" title="Attendance workspace unavailable">
               <div className="space-y-4">
                 <p>{attendance.loadError}</p>
-                <Button size="sm" variant="secondary" onClick={attendance.handleRetryLoad}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={attendance.handleRetryLoad}>
                   Try again
                 </Button>
               </div>
             </Notice>
           ) : null}
 
-          {attendance.loadStatus === 'ready' && attendance.classes.length === 0 ? (
+          {attendance.loadStatus === "ready" &&
+          attendance.classes.length === 0 ? (
             <div className="border border-ink bg-paper-light p-5 sm:p-8">
               <EmptyState
                 icon={<AttendanceIcon />}
                 title="No classes available"
                 description="Add an active class before opening an attendance register."
                 action={
-                  <Button variant="secondary" onClick={() => navigate('/dashboard/classes')}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate("/dashboard/classes")}>
                     Go to classes
                   </Button>
                 }
@@ -100,7 +136,8 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
             </div>
           ) : null}
 
-          {attendance.loadStatus === 'ready' && attendance.classes.length > 0 ? (
+          {attendance.loadStatus === "ready" &&
+          attendance.classes.length > 0 ? (
             <div className="min-w-0 space-y-8">
               <AttendanceToolbar
                 classes={attendance.classes}
@@ -142,23 +179,26 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
                 </div>
               ) : null}
 
-              {attendance.selectedClass && attendance.sessionLoadStatus === 'loading' ? (
+              {attendance.selectedClass &&
+              attendance.sessionLoadStatus === "loading" ? (
                 <div className="border border-ink bg-paper-light px-5 py-10 text-center">
-                  <p role="status" className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
+                  <p
+                    role="status"
+                    className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
                     Generating and loading attendance dates…
                   </p>
                 </div>
               ) : null}
 
-              {attendance.selectedClass && attendance.sessionLoadStatus === 'error' ? (
+              {attendance.selectedClass &&
+              attendance.sessionLoadStatus === "error" ? (
                 <Notice variant="error" title="Attendance month unavailable">
                   <div className="space-y-4">
                     <p>{attendance.sessionLoadError}</p>
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={attendance.handleRetrySessionLoad}
-                    >
+                      onClick={attendance.handleRetrySessionLoad}>
                       Try again
                     </Button>
                   </div>
@@ -166,7 +206,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
               ) : null}
 
               {attendance.selectedClass &&
-              attendance.sessionLoadStatus === 'ready' &&
+              attendance.sessionLoadStatus === "ready" &&
               attendance.selectedClassSessions.length === 0 ? (
                 <div className="border border-ink bg-paper-light p-5 sm:p-8">
                   <EmptyState
@@ -179,7 +219,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
               ) : null}
 
               {attendance.selectedClass &&
-              attendance.sessionLoadStatus === 'ready' &&
+              attendance.sessionLoadStatus === "ready" &&
               attendance.selectedClassSessions.length > 0 &&
               attendance.selectedSessionId &&
               attendance.selectedRoster.length === 0 ? (
@@ -187,21 +227,27 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
                   <EmptyState
                     icon={<AttendanceIcon />}
                     title="No students in this roster"
-                    description={attendance.selectedSessionDraft?.isRosterInitialized
-                      ? 'This saved historical roster contains no students.'
-                      : 'This attendance date has no currently enrolled students. Viewing it has not created attendance records.'}
-                    action={!attendance.selectedSessionDraft?.isRosterInitialized ? (
-                      <Button variant="secondary" onClick={() => navigate('/dashboard/students')}>
-                        Go to students
-                      </Button>
-                    ) : undefined}
+                    description={
+                      attendance.selectedSessionDraft?.isRosterInitialized
+                        ? "This saved historical roster contains no students."
+                        : "This attendance date has no currently enrolled students. Viewing it has not created attendance records."
+                    }
+                    action={
+                      !attendance.selectedSessionDraft?.isRosterInitialized ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => navigate("/dashboard/students")}>
+                          Go to students
+                        </Button>
+                      ) : undefined
+                    }
                     className="min-h-56"
                   />
                 </div>
               ) : null}
 
               {attendance.selectedClass &&
-              attendance.sessionLoadStatus === 'ready' &&
+              attendance.sessionLoadStatus === "ready" &&
               attendance.selectedClassSessions.length > 0 &&
               attendance.selectedSessionId &&
               attendance.selectedRoster.length > 0 ? (
@@ -226,7 +272,7 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
       attendance.selectedSessionDraft &&
       attendance.detailsRecord ? (
         <AttendanceDetailsDialog
-          key={`${attendance.selectedClass.id}-${attendance.selectedSessionDraft.id}-${attendance.detailsTarget.id}-${attendance.isEditing ? 'edit' : 'review'}`}
+          key={`${attendance.selectedClass.id}-${attendance.selectedSessionDraft.id}-${attendance.detailsTarget.id}-${attendance.isEditing ? "edit" : "review"}`}
           student={attendance.detailsTarget}
           classRecord={attendance.selectedClass}
           date={attendance.selectedSessionDraft.sessionDate}
@@ -244,6 +290,18 @@ export function AttendancePage({ onSessionExpired }: AttendancePageProps) {
           onClose={attendance.handleCloseDelete}
           onDeleted={attendance.handleDeletedSession}
           onSessionExpired={onSessionExpired}
+        />
+      ) : null}
+
+      {isExportDialogOpen && attendance.selectedClass ? (
+        <ExportAttendancePdfDialog
+          key={`${attendance.selectedClass.id}-${attendance.monthInput}`}
+          classRecord={attendance.selectedClass}
+          monthInput={attendance.monthInput}
+          sessions={attendance.selectedClassSessions}
+          createdBy={getAuthenticatedUserDisplayName(currentUser)}
+          hasUnsavedChanges={attendance.hasUnsavedChanges}
+          onClose={() => setIsExportDialogOpen(false)}
         />
       ) : null}
     </div>
