@@ -124,6 +124,30 @@ test("Attendance endpoints require an authenticated session", async () => {
   }
 });
 
+// Confirms the registered Recitation router protects every endpoint before validation or data access.
+test("Recitation endpoints require an authenticated session", async () => {
+  const createResponse = await request(app)
+    .post("/api/recitations/classes/2c6e62cc-584d-4faf-90f6-fdb50b27c9d0/sessions")
+    .send({ sessionDate: "2026-08-27" });
+  const listResponse = await request(app)
+    .get("/api/recitations/classes/2c6e62cc-584d-4faf-90f6-fdb50b27c9d0/sessions?year=2026&month=8");
+  const loadResponse = await request(app)
+    .get("/api/recitations/sessions/099aa026-ef03-4ab6-92ee-68fa37fb6523");
+  const saveResponse = await request(app)
+    .put("/api/recitations/sessions/099aa026-ef03-4ab6-92ee-68fa37fb6523/records")
+    .send({ records: [] });
+
+  for (const response of [
+    createResponse,
+    listResponse,
+    loadResponse,
+    saveResponse,
+  ]) {
+    assert.equal(response.status, 401);
+    assert.equal(response.body.error.code, "UNAUTHENTICATED");
+  }
+});
+
 // Confirms Express syntax failures are converted into the safe API error contract.
 test("malformed JSON uses the safe API error response", async () => {
   const response = await request(app)

@@ -1,7 +1,7 @@
-// Renders honest no-content pages for workspace modules without active data flows.
+// Renders the honest Agenda placeholder until that workspace has an active data flow.
 import { EmptyState } from '../components/ui/EmptyState';
 
-type EmptyWorkspaceSection = 'activity' | 'agenda';
+type EmptyWorkspaceSection = 'agenda';
 
 interface EmptyWorkspacePageProps {
   section: EmptyWorkspaceSection;
@@ -14,13 +14,6 @@ const SECTION_CONTENT: Record<EmptyWorkspaceSection, {
   emptyTitle: string;
   emptyDescription: string;
 }> = {
-  activity: {
-    number: '04',
-    title: 'Activity',
-    description: 'Review changes made across academic records.',
-    emptyTitle: 'No recent activity available',
-    emptyDescription: 'Record changes will appear here when activity data is available.',
-  },
   agenda: {
     number: '05',
     title: 'Agenda',
@@ -30,15 +23,7 @@ const SECTION_CONTENT: Record<EmptyWorkspaceSection, {
   },
 };
 
-function SectionIcon({ section }: { section: EmptyWorkspaceSection }) {
-  if (section === 'activity') {
-    return (
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-        <path d="M3 12h4l2.5-5 4 10 2.5-5h5" />
-      </svg>
-    );
-  }
-
+function SectionIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
       <rect x="4" y="3" width="16" height="18" />
@@ -71,7 +56,7 @@ export function EmptyWorkspacePage({ section }: EmptyWorkspacePageProps) {
               {content.number} / {content.title}
             </p>
             <EmptyState
-              icon={<SectionIcon section={section} />}
+              icon={<SectionIcon />}
               title={content.emptyTitle}
               titleId={`${section}-empty-heading`}
               description={content.emptyDescription}

@@ -1,7 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Defines PALE's persisted users, classes, students, Attendance, and Recitation data.
 
 generator client {
   provider = "prisma-client"
@@ -17,6 +14,11 @@ enum AttendanceStatus {
   ABSENT
   LATE
   EXCUSED
+}
+
+enum RecitationMark {
+  CHECK
+  X
 }
 
 model User {
@@ -40,6 +42,7 @@ model Student {
 
   enrollments       StudentEnrollment[]
   attendanceRecords AttendanceRecord[]
+  recitationRecords RecitationRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -65,6 +68,7 @@ model Class {
   classSchedules             ClassSchedule[]
   attendanceSessions         AttendanceSession[]
   attendanceMonthGenerations AttendanceMonthGeneration[]
+  recitationSessions         RecitationSession[]
   enrollments                StudentEnrollment[]
 }
 
@@ -135,6 +139,37 @@ model AttendanceRecord {
   attendanceSession AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+}
+
+model RecitationSession {
+  id                  String    @id @default(uuid())
+  classId             String
+  sessionDate         DateTime  @db.Date
+  rosterInitializedAt DateTime?
+
+  class             Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
+  recitationRecords RecitationRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([classId, sessionDate])
+}
+
+model RecitationRecord {
+  id        String          @id @default(uuid())
+  sessionId String
+  studentId String
+  mark      RecitationMark?
+
+  recitationSession RecitationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student           Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
