@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Header } from '../components/ui/Header';
 import { Notice } from '../components/ui/Notice';
+import PageLoad from '../components/ui/PageLoad';
 import { RecitationRegister } from '../features/activity/recitation/components/RecitationRegister';
 import {
   RecitationToolbar,
@@ -67,14 +68,7 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
       <div className="archival-grid min-h-[calc(100vh-185px)] min-w-0">
         <div className="mx-auto min-w-0 max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">
           {recitation.loadStatus === 'loading' ? (
-            <div className="border border-ink bg-paper-light px-5 py-10 text-center">
-              <p
-                role="status"
-                className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted"
-              >
-                Loading Activity workspace…
-              </p>
-            </div>
+            <PageLoad message="Loading Activity workspace…" />
           ) : null}
 
           {recitation.loadStatus === 'error' ? (
