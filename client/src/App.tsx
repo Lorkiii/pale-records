@@ -7,10 +7,10 @@ import {
   type AuthenticatedUser,
 } from './features/auth/auth-api';
 import { ActivityPage } from './pages/ActivityPage';
+import { AgendaPage } from './pages/AgendaPage';
 import { AttendancePage } from './pages/AttendancePage';
 import { ClassPage } from './pages/ClassPage';
 import { DashboardPage } from './pages/DashboardPage';
-import { EmptyWorkspacePage } from './pages/EmptyWorkspacePage';
 import { LoginPage } from './pages/LoginPage';
 import { StudentPage } from './pages/StudentPage';
 import SessionLoadingScreen from './components/ui/SessionLoading';
@@ -98,7 +98,10 @@ export default function App() {
           path="activity"
           element={<ActivityPage onSessionExpired={handleSessionExpired} />}
         />
-        <Route path="agenda" element={<EmptyWorkspacePage section="agenda" />} />
+        <Route
+          path="agenda"
+          element={<AgendaPage onSessionExpired={handleSessionExpired} />}
+        />
       </Route>
       <Route path="*" element={<Navigate to={defaultPath} replace />} />
     </Routes>
