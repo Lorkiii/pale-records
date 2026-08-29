@@ -1,7 +1,14 @@
-// Owns Agenda workspace state, calendar navigation, local persistence, and synced class projections.
+// Owns Agenda API loading, calendar navigation, filters, class projections, and confirmed writes.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ClassRecord } from '../classes/class-types';
 import { fetchClasses, ClassApiError } from '../classes/classes-api';
+import {
+  AgendaApiError,
+  createAgendaEvent,
+  deleteAgendaEvent,
+  listAgendaEvents,
+  updateAgendaEvent,
+} from './agenda-api';
 import type {
   AgendaEvent,
   AgendaTypeFilter,
@@ -9,17 +16,30 @@ import type {
   SyncedClassSession,
   UpdateAgendaEventInput,
 } from './agenda-types';
-import { generateEventId, loadPersistedEvents, savePersistedEvents } from './agenda-storage';
 import {
   buildMonthMatrix,
   formatDateKey,
+  getVisibleAgendaRange,
   projectClassSchedulesForMonth,
 } from './agenda-utils';
+
+type LoadStatus = 'loading' | 'ready' | 'error';
 
 export interface AgendaFeedback {
   variant: 'info' | 'success' | 'warning' | 'error';
   title: string;
   message: string;
+}
+
+// Replaces one confirmed server event or adds it when it is newly created.
+function replaceAgendaEvent(events: AgendaEvent[], nextEvent: AgendaEvent) {
+  const remainingEvents = events.filter((event) => event.id !== nextEvent.id);
+  return [nextEvent, ...remainingEvents];
+}
+
+// Detects an intentionally canceled fetch without surfacing a user-facing error.
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
 export function useAgendaWorkspace(onSessionExpired?: () => void) {
@@ -29,59 +49,106 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
   const [selectedDateKey, setSelectedDateKey] = useState<string>(() => formatDateKey(new Date()));
 
   const [classes, setClasses] = useState<ClassRecord[]>([]);
-  const [classLoadStatus, setClassLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [events, setEvents] = useState<AgendaEvent[]>(() => loadPersistedEvents());
+  const [classLoadStatus, setClassLoadStatus] = useState<LoadStatus>('loading');
+  const [classLoadError, setClassLoadError] = useState('');
+  const [classLoadAttempt, setClassLoadAttempt] = useState(0);
+
+  const [events, setEvents] = useState<AgendaEvent[]>([]);
+  const [eventLoadStatus, setEventLoadStatus] = useState<LoadStatus>('loading');
+  const [eventLoadError, setEventLoadError] = useState('');
+  const [eventLoadAttempt, setEventLoadAttempt] = useState(0);
 
   const [selectedClassId, setSelectedClassId] = useState<string>('ALL');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<AgendaTypeFilter>('ALL');
   const [feedback, setFeedback] = useState<AgendaFeedback | null>(null);
 
-  // Auto-clear feedback after 5 seconds
+  // Keeps normal confirmed mutation feedback visible for five seconds.
   useEffect(() => {
-    if (!feedback) return;
-    const timer = setTimeout(() => setFeedback(null), 5000);
-    return () => clearTimeout(timer);
+    if (!feedback) return undefined;
+    const timer = window.setTimeout(() => setFeedback(null), 5000);
+    return () => window.clearTimeout(timer);
   }, [feedback]);
 
-  // Fetches live classes to derive recurring schedules
+  // Loads Classes independently so failures never block general Agenda events.
   useEffect(() => {
     const controller = new AbortController();
+    let isCurrentRequest = true;
 
     fetchClasses(controller.signal)
       .then((loadedClasses) => {
+        if (!isCurrentRequest) return;
         setClasses(loadedClasses);
+        setClassLoadError('');
         setClassLoadStatus('ready');
       })
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (isAbortError(error) || !isCurrentRequest) return;
 
         if (error instanceof ClassApiError && error.status === 401) {
           onSessionExpired?.();
           return;
         }
 
+        setClassLoadError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to load Classes for Agenda associations and recurring schedules.',
+        );
+        setSelectedClassId('ALL');
         setClassLoadStatus('error');
       });
 
-    return () => controller.abort();
-  }, [onSessionExpired]);
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [classLoadAttempt, onSessionExpired]);
 
-  // Saves events to storage whenever the event list updates
-  const updateEventsAndPersist = useCallback((updater: (prev: AgendaEvent[]) => AgendaEvent[]) => {
-    setEvents((prev) => {
-      const next = updater(prev);
-      savePersistedEvents(next);
-      return next;
-    });
-  }, []);
+  // Loads the exact visible 35- or 42-cell range and ignores obsolete month responses.
+  useEffect(() => {
+    const controller = new AbortController();
+    const range = getVisibleAgendaRange(viewYear, viewMonth);
+    let isCurrentRequest = true;
 
-  // Filtered classes based on selectedClassId
+    listAgendaEvents(range.from, range.to, controller.signal)
+      .then((loadedEvents) => {
+        if (!isCurrentRequest) return;
+        setEvents(loadedEvents);
+        setEventLoadStatus('ready');
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error) || !isCurrentRequest) return;
+
+        if (error instanceof AgendaApiError && error.status === 401) {
+          onSessionExpired?.();
+          return;
+        }
+
+        setEventLoadError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to load Agenda events for this calendar range.',
+        );
+        setEventLoadStatus('error');
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [eventLoadAttempt, onSessionExpired, viewMonth, viewYear]);
+
+  const availableClasses = useMemo(
+    () => classLoadStatus === 'ready' ? classes : [],
+    [classLoadStatus, classes],
+  );
+
   const activeClasses = useMemo(() => {
-    if (selectedClassId === 'ALL') return classes;
-    return classes.filter((c) => c.id === selectedClassId);
-  }, [classes, selectedClassId]);
+    if (selectedClassId === 'ALL') return availableClasses;
+    return availableClasses.filter((classRecord) => classRecord.id === selectedClassId);
+  }, [availableClasses, selectedClassId]);
 
-  // Projects class schedules for the currently displayed month
+  // Preserves the existing recurring Class projection without coupling it to event loading.
   const projectedSessionsMap = useMemo(() => {
     if (selectedTypeFilter === 'CUSTOM_EVENTS') {
       return new Map<string, SyncedClassSession[]>();
@@ -89,7 +156,7 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
     return projectClassSchedulesForMonth(activeClasses, viewYear, viewMonth);
   }, [activeClasses, viewYear, viewMonth, selectedTypeFilter]);
 
-  // Groups and filters custom events by date
+  // Groups the current server range using the existing filters and event ordering.
   const eventsByDateMap = useMemo(() => {
     if (selectedTypeFilter === 'CLASS_SESSIONS') {
       return new Map<string, AgendaEvent[]>();
@@ -97,177 +164,206 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
 
     const map = new Map<string, AgendaEvent[]>();
 
-    for (const evt of events) {
-      // Filter by class if selected
-      if (selectedClassId !== 'ALL') {
-        if (evt.classId !== selectedClassId) continue;
+    for (const event of events) {
+      if (selectedClassId !== 'ALL' && event.classId !== selectedClassId) {
+        continue;
       }
 
-      // Filter by specific event type
       if (
         selectedTypeFilter !== 'ALL' &&
         selectedTypeFilter !== 'CUSTOM_EVENTS' &&
-        evt.eventType !== selectedTypeFilter
+        event.eventType !== selectedTypeFilter
       ) {
         continue;
       }
 
-      const existing = map.get(evt.eventDate) || [];
-      existing.push(evt);
-      map.set(evt.eventDate, existing);
+      const existing = map.get(event.eventDate) ?? [];
+      existing.push(event);
+      map.set(event.eventDate, existing);
     }
 
-    // Sort events within each date
-    for (const [key, list] of map.entries()) {
-      list.sort((a, b) => {
-        if (a.isAllDay && !b.isAllDay) return -1;
-        if (!a.isAllDay && b.isAllDay) return 1;
-        const timeA = a.startTime || '00:00';
-        const timeB = b.startTime || '00:00';
-        return timeA.localeCompare(timeB);
+    for (const [dateKey, dateEvents] of map.entries()) {
+      dateEvents.sort((first, second) => {
+        if (first.isAllDay && !second.isAllDay) return -1;
+        if (!first.isAllDay && second.isAllDay) return 1;
+        return (first.startTime ?? '00:00').localeCompare(second.startTime ?? '00:00');
       });
-      map.set(key, list);
+      map.set(dateKey, dateEvents);
     }
 
     return map;
   }, [events, selectedClassId, selectedTypeFilter]);
 
-  // Builds the calendar day cells for the current view
-  const calendarCells = useMemo(() => {
-    return buildMonthMatrix(
-      viewYear,
-      viewMonth,
-      selectedDateKey,
-      eventsByDateMap,
-      projectedSessionsMap,
+  const calendarCells = useMemo(() => buildMonthMatrix(
+    viewYear,
+    viewMonth,
+    selectedDateKey,
+    eventsByDateMap,
+    projectedSessionsMap,
+  ), [viewYear, viewMonth, selectedDateKey, eventsByDateMap, projectedSessionsMap]);
+
+  const selectedDateEvents = useMemo(
+    () => eventsByDateMap.get(selectedDateKey) ?? [],
+    [eventsByDateMap, selectedDateKey],
+  );
+
+  const selectedDateSessions = useMemo(
+    () => projectedSessionsMap.get(selectedDateKey) ?? [],
+    [projectedSessionsMap, selectedDateKey],
+  );
+
+  // Moves one month while clamping the selected day into the destination month.
+  const moveDisplayedMonth = useCallback((monthOffset: number) => {
+    const destination = new Date(viewYear, viewMonth + monthOffset, 1);
+    const selectedDay = Number(selectedDateKey.split('-')[2]) || 1;
+    const destinationLastDay = new Date(
+      destination.getFullYear(),
+      destination.getMonth() + 1,
+      0,
+    ).getDate();
+    const clampedDate = new Date(
+      destination.getFullYear(),
+      destination.getMonth(),
+      Math.min(selectedDay, destinationLastDay),
     );
-  }, [viewYear, viewMonth, selectedDateKey, eventsByDateMap, projectedSessionsMap]);
 
-  // Selected date's events and sessions
-  const selectedDateEvents = useMemo(() => {
-    return eventsByDateMap.get(selectedDateKey) || [];
-  }, [eventsByDateMap, selectedDateKey]);
+    setEventLoadStatus('loading');
+    setEventLoadError('');
+    setViewYear(destination.getFullYear());
+    setViewMonth(destination.getMonth());
+    setSelectedDateKey(formatDateKey(clampedDate));
+  }, [selectedDateKey, viewMonth, viewYear]);
 
-  const selectedDateSessions = useMemo(() => {
-    return projectedSessionsMap.get(selectedDateKey) || [];
-  }, [projectedSessionsMap, selectedDateKey]);
-
-  // Calendar Navigation Handlers
-  const goToNextMonth = useCallback(() => {
-    if (viewMonth === 11) {
-      setViewYear((y) => y + 1);
-      setViewMonth(0);
-    } else {
-      setViewMonth((m) => m + 1);
-    }
-  }, [viewMonth]);
-
-  const goToPrevMonth = useCallback(() => {
-    if (viewMonth === 0) {
-      setViewYear((y) => y - 1);
-      setViewMonth(11);
-    } else {
-      setViewMonth((m) => m - 1);
-    }
-  }, [viewMonth]);
+  const goToNextMonth = useCallback(() => moveDisplayedMonth(1), [moveDisplayedMonth]);
+  const goToPrevMonth = useCallback(() => moveDisplayedMonth(-1), [moveDisplayedMonth]);
 
   const goToToday = useCallback(() => {
     const today = new Date();
+    if (today.getFullYear() !== viewYear || today.getMonth() !== viewMonth) {
+      setEventLoadStatus('loading');
+      setEventLoadError('');
+    }
     setViewYear(today.getFullYear());
     setViewMonth(today.getMonth());
     setSelectedDateKey(formatDateKey(today));
-  }, []);
+  }, [viewMonth, viewYear]);
 
   const selectDate = useCallback((dateKey: string) => {
     setSelectedDateKey(dateKey);
-    const [y, m] = dateKey.split('-').map(Number);
-    if (y !== viewYear || m - 1 !== viewMonth) {
-      setViewYear(y);
-      setViewMonth(m - 1);
+    const [year, month] = dateKey.split('-').map(Number);
+    if (year !== viewYear || month - 1 !== viewMonth) {
+      setEventLoadStatus('loading');
+      setEventLoadError('');
+      setViewYear(year);
+      setViewMonth(month - 1);
     }
   }, [viewYear, viewMonth]);
 
-  // Event Mutations
-  const createEvent = useCallback((input: CreateAgendaEventInput) => {
-    const timestamp = new Date().toISOString();
-    const newEvent: AgendaEvent = {
-      id: generateEventId(),
-      title: input.title.trim(),
-      description: input.description?.trim() || null,
-      eventDate: input.eventDate,
-      startTime: input.isAllDay ? null : input.startTime || null,
-      endTime: input.isAllDay ? null : input.endTime || null,
-      isAllDay: input.isAllDay,
-      eventType: input.eventType,
-      classId: input.classId || null,
-      location: input.location?.trim() || null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
+  // Keeps selection and display aligned with a confirmed server event date.
+  const selectEventDate = useCallback((dateKey: string) => {
+    const [year, month] = dateKey.split('-').map(Number);
+    setSelectedDateKey(dateKey);
+    if (year !== viewYear || month - 1 !== viewMonth) {
+      setEventLoadStatus('loading');
+      setEventLoadError('');
+      setViewYear(year);
+      setViewMonth(month - 1);
+    }
+  }, [viewMonth, viewYear]);
 
-    updateEventsAndPersist((prev) => [newEvent, ...prev]);
-    setSelectedDateKey(newEvent.eventDate);
+  const retryEventLoad = useCallback(() => {
+    setEventLoadStatus('loading');
+    setEventLoadError('');
+    setEventLoadAttempt((attempt) => attempt + 1);
+  }, []);
 
-    setFeedback({
-      variant: 'success',
-      title: 'Event Scheduled',
-      message: `"${newEvent.title}" was saved to your agenda.`,
-    });
+  const retryClassLoad = useCallback(() => {
+    setClassLoadStatus('loading');
+    setClassLoadError('');
+    setSelectedClassId('ALL');
+    setClassLoadAttempt((attempt) => attempt + 1);
+  }, []);
 
-    return newEvent;
-  }, [updateEventsAndPersist]);
+  // Creates only after the server confirms the canonical UUID and timestamps.
+  const createEvent = useCallback(async (input: CreateAgendaEventInput) => {
+    try {
+      const createdEvent = await createAgendaEvent(input);
+      setEvents((currentEvents) => replaceAgendaEvent(currentEvents, createdEvent));
+      selectEventDate(createdEvent.eventDate);
+      setFeedback({
+        variant: 'success',
+        title: 'Event Scheduled',
+        message: `"${createdEvent.title}" was saved to your Agenda.`,
+      });
+      return createdEvent;
+    } catch (error: unknown) {
+      if (error instanceof AgendaApiError && error.status === 401) {
+        onSessionExpired?.();
+      }
+      throw error;
+    }
+  }, [onSessionExpired, selectEventDate]);
 
-  const updateEvent = useCallback((id: string, input: UpdateAgendaEventInput) => {
-    let updatedTitle = '';
+  // Replaces only the confirmed server event and follows any returned date change.
+  const updateEvent = useCallback(async (
+    eventId: string,
+    input: UpdateAgendaEventInput,
+  ) => {
+    try {
+      const updatedEvent = await updateAgendaEvent(eventId, input);
+      setEvents((currentEvents) => replaceAgendaEvent(currentEvents, updatedEvent));
+      selectEventDate(updatedEvent.eventDate);
+      setFeedback({
+        variant: 'success',
+        title: 'Event Updated',
+        message: `"${updatedEvent.title}" changes were saved.`,
+      });
+      return updatedEvent;
+    } catch (error: unknown) {
+      if (error instanceof AgendaApiError && error.status === 401) {
+        onSessionExpired?.();
+      }
+      throw error;
+    }
+  }, [onSessionExpired, selectEventDate]);
 
-    updateEventsAndPersist((prev) =>
-      prev.map((evt) => {
-        if (evt.id !== id) return evt;
-        updatedTitle = input.title.trim();
-        return {
-          ...evt,
-          title: input.title.trim(),
-          description: input.description?.trim() || null,
-          eventDate: input.eventDate,
-          startTime: input.isAllDay ? null : input.startTime || null,
-          endTime: input.isAllDay ? null : input.endTime || null,
-          isAllDay: input.isAllDay,
-          eventType: input.eventType,
-          classId: input.classId || null,
-          location: input.location?.trim() || null,
-          updatedAt: new Date().toISOString(),
-        };
-      }),
-    );
+  // Removes an event only after the API confirms the exact requested UUID.
+  const deleteEvent = useCallback(async (eventId: string) => {
+    const eventTitle = events.find((event) => event.id === eventId)?.title;
 
-    setFeedback({
-      variant: 'success',
-      title: 'Event Updated',
-      message: `"${updatedTitle}" changes were saved.`,
-    });
-  }, [updateEventsAndPersist]);
+    try {
+      const deletedEventId = await deleteAgendaEvent(eventId);
+      if (deletedEventId !== eventId) {
+        throw new AgendaApiError(
+          'The deleted Agenda event did not match the request.',
+          200,
+        );
+      }
 
-  const deleteEvent = useCallback((id: string) => {
-    let removedTitle = '';
-    updateEventsAndPersist((prev) => {
-      const target = prev.find((e) => e.id === id);
-      if (target) removedTitle = target.title;
-      return prev.filter((e) => e.id !== id);
-    });
-
-    setFeedback({
-      variant: 'info',
-      title: 'Event Removed',
-      message: removedTitle ? `"${removedTitle}" was removed.` : 'Event was removed.',
-    });
-  }, [updateEventsAndPersist]);
+      setEvents((currentEvents) => currentEvents.filter((event) => event.id !== eventId));
+      setFeedback({
+        variant: 'info',
+        title: 'Event Removed',
+        message: eventTitle ? `"${eventTitle}" was removed.` : 'Event was removed.',
+      });
+    } catch (error: unknown) {
+      if (error instanceof AgendaApiError && error.status === 401) {
+        onSessionExpired?.();
+      }
+      throw error;
+    }
+  }, [events, onSessionExpired]);
 
   return {
     viewYear,
     viewMonth,
     selectedDateKey,
-    classes,
+    classes: availableClasses,
     classLoadStatus,
+    classLoadError,
+    eventLoadStatus,
+    eventLoadError,
+    canManageEvents: eventLoadStatus === 'ready',
     events,
     selectedClassId,
     selectedTypeFilter,
@@ -281,6 +377,8 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
     goToPrevMonth,
     goToToday,
     selectDate,
+    retryEventLoad,
+    retryClassLoad,
     createEvent,
     updateEvent,
     deleteEvent,

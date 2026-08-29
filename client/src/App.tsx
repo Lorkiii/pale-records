@@ -100,7 +100,12 @@ export default function App() {
         />
         <Route
           path="agenda"
-          element={<AgendaPage onSessionExpired={handleSessionExpired} />}
+          element={
+            <AgendaPage
+              currentUser={authenticatedUser!}
+              onSessionExpired={handleSessionExpired}
+            />
+          }
         />
       </Route>
       <Route path="*" element={<Navigate to={defaultPath} replace />} />

@@ -64,6 +64,30 @@ export function isTodayKey(dateKey: string): boolean {
   return dateKey === formatDateKey(new Date());
 }
 
+// Calculates the shared local-date boundaries used by the visible matrix and API range.
+function getMonthMatrixBoundaries(year: number, monthIndex: number) {
+  const firstDayOfMonth = new Date(year, monthIndex, 1);
+  const leadingDaysCount = getIsoDayOfWeek(firstDayOfMonth) - 1;
+  const totalDaysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const occupiedCells = leadingDaysCount + totalDaysInMonth;
+  const totalCells = Math.max(35, Math.ceil(occupiedCells / 7) * 7);
+
+  return {
+    startDate: new Date(year, monthIndex, 1 - leadingDaysCount),
+    endDate: new Date(year, monthIndex, totalCells - leadingDaysCount),
+    totalCells,
+  };
+}
+
+// Returns the exact inclusive date range rendered by the 35- or 42-cell matrix.
+export function getVisibleAgendaRange(year: number, monthIndex: number) {
+  const { startDate, endDate } = getMonthMatrixBoundaries(year, monthIndex);
+  return {
+    from: formatDateKey(startDate),
+    to: formatDateKey(endDate),
+  };
+}
+
 // Generates the full 35- or 42-day calendar matrix for a specified month and year.
 export function buildMonthMatrix(
   year: number,
@@ -73,63 +97,21 @@ export function buildMonthMatrix(
   sessionsByDate: Map<string, SyncedClassSession[]>,
 ): CalendarDayCell[] {
   const todayKey = formatDateKey(new Date());
-  const firstDayOfMonth = new Date(year, monthIndex, 1);
-  const lastDayOfMonth = new Date(year, monthIndex + 1, 0);
-
-  const startIsoDay = getIsoDayOfWeek(firstDayOfMonth); // 1 to 7
-  const totalDaysInMonth = lastDayOfMonth.getDate();
-
+  const { startDate, totalCells } = getMonthMatrixBoundaries(year, monthIndex);
   const cells: CalendarDayCell[] = [];
 
-  // 1. Fill leading days from previous month
-  const prevMonthLastDay = new Date(year, monthIndex, 0).getDate();
-  const leadingDaysCount = startIsoDay - 1; // e.g. Mon=0, Tue=1, Sun=6
-  for (let i = leadingDaysCount - 1; i >= 0; i--) {
-    const dayNum = prevMonthLastDay - i;
-    const date = new Date(year, monthIndex - 1, dayNum);
+  for (let cellIndex = 0; cellIndex < totalCells; cellIndex++) {
+    const date = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth(),
+      startDate.getDate() + cellIndex,
+    );
     const dateKey = formatDateKey(date);
     cells.push({
       date,
       dateKey,
-      dayNumber: dayNum,
-      isCurrentMonth: false,
-      isToday: dateKey === todayKey,
-      isSelected: dateKey === selectedDateKey,
-      events: eventsByDate.get(dateKey) || [],
-      syncedSessions: sessionsByDate.get(dateKey) || [],
-    });
-  }
-
-  // 2. Fill current month days
-  for (let dayNum = 1; dayNum <= totalDaysInMonth; dayNum++) {
-    const date = new Date(year, monthIndex, dayNum);
-    const dateKey = formatDateKey(date);
-    cells.push({
-      date,
-      dateKey,
-      dayNumber: dayNum,
-      isCurrentMonth: true,
-      isToday: dateKey === todayKey,
-      isSelected: dateKey === selectedDateKey,
-      events: eventsByDate.get(dateKey) || [],
-      syncedSessions: sessionsByDate.get(dateKey) || [],
-    });
-  }
-
-  // 3. Fill trailing days from next month to complete standard weeks (multiple of 7)
-  const remainingCells = (7 - (cells.length % 7)) % 7;
-  // Ensure at least 5 weeks (35 cells) or 6 weeks (42 cells)
-  const targetTotal = cells.length + remainingCells < 35 ? 35 : cells.length + remainingCells;
-  const trailingDaysNeeded = targetTotal - cells.length;
-
-  for (let dayNum = 1; dayNum <= trailingDaysNeeded; dayNum++) {
-    const date = new Date(year, monthIndex + 1, dayNum);
-    const dateKey = formatDateKey(date);
-    cells.push({
-      date,
-      dateKey,
-      dayNumber: dayNum,
-      isCurrentMonth: false,
+      dayNumber: date.getDate(),
+      isCurrentMonth: date.getFullYear() === year && date.getMonth() === monthIndex,
       isToday: dateKey === todayKey,
       isSelected: dateKey === selectedDateKey,
       events: eventsByDate.get(dateKey) || [],

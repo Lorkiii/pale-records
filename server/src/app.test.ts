@@ -151,6 +151,50 @@ test("Recitation endpoints require an authenticated session", async () => {
   }
 });
 
+// Confirms the registered Agenda router protects every endpoint before validation or data access.
+test("Agenda endpoints require an authenticated session", async () => {
+  const listResponse = await request(app)
+    .get("/api/agenda/events?from=2026-09-01&to=2026-09-30");
+  const createResponse = await request(app)
+    .post("/api/agenda/events")
+    .send({
+      title: "Final examination",
+      eventDate: "2026-09-15",
+      isAllDay: true,
+      eventType: "EXAM",
+    });
+  const importResponse = await request(app)
+    .post("/api/agenda/events/import")
+    .send({
+      legacyEventId: "evt_1724900000000_ab12cd3",
+      title: "Final examination",
+      eventDate: "2026-09-15",
+      isAllDay: true,
+      eventType: "EXAM",
+    });
+  const updateResponse = await request(app)
+    .patch("/api/agenda/events/099aa026-ef03-4ab6-92ee-68fa37fb6523")
+    .send({
+      title: "Updated examination",
+      eventDate: "2026-09-15",
+      isAllDay: true,
+      eventType: "EXAM",
+    });
+  const deleteResponse = await request(app)
+    .delete("/api/agenda/events/099aa026-ef03-4ab6-92ee-68fa37fb6523");
+
+  for (const response of [
+    listResponse,
+    createResponse,
+    importResponse,
+    updateResponse,
+    deleteResponse,
+  ]) {
+    assert.equal(response.status, 401);
+    assert.equal(response.body.error.code, "UNAUTHENTICATED");
+  }
+});
+
 // Confirms Express syntax failures are converted into the safe API error contract.
 test("malformed JSON uses the safe API error response", async () => {
   const response = await request(app)

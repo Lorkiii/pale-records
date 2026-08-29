@@ -1,4 +1,4 @@
-// Defines PALE's persisted users, classes, students, Attendance, and Recitation data.
+// Defines PALE's persisted users, classes, students, Attendance, Recitation, and Agenda data.
 
 generator client {
   provider = "prisma-client"
@@ -21,6 +21,15 @@ enum RecitationMark {
   X
 }
 
+enum AgendaEventType {
+  EXAM
+  ASSIGNMENT
+  ACTIVITY
+  HOLIDAY
+  MEETING
+  NOTE
+}
+
 model User {
   id           String   @id @default(uuid())
   firstName    String
@@ -31,6 +40,8 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  agendaEvents AgendaEvent[]
 }
 
 model Student {
@@ -69,7 +80,32 @@ model Class {
   attendanceSessions         AttendanceSession[]
   attendanceMonthGenerations AttendanceMonthGeneration[]
   recitationSessions         RecitationSession[]
+  agendaEvents               AgendaEvent[]
   enrollments                StudentEnrollment[]
+}
+
+model AgendaEvent {
+  id          String          @id @default(uuid())
+  userId      String
+  classId     String?
+  title       String          @db.VarChar(160)
+  description String?         @db.VarChar(2000)
+  eventDate   DateTime        @db.Date
+  startTime   String?         @db.VarChar(5)
+  endTime     String?         @db.VarChar(5)
+  isAllDay    Boolean
+  eventType   AgendaEventType
+  location    String?         @db.VarChar(160)
+  legacyImportKey String?      @unique @db.VarChar(200)
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class Class? @relation(fields: [classId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, eventDate])
+  @@index([classId])
 }
 
 model StudentEnrollment {

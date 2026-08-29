@@ -1,4 +1,4 @@
-// Defines data models, event categories, and calendar structures for the Agenda workspace.
+// Defines Agenda records, editable inputs, legacy import contracts, and calendar structures.
 export type AgendaEventType =
   | 'EXAM'
   | 'ASSIGNMENT'
@@ -97,6 +97,25 @@ export interface UpdateAgendaEventInput {
   eventType: AgendaEventType;
   classId?: string;
   location?: string;
+}
+
+export interface LegacyAgendaEventInput {
+  legacyEventId: string;
+  title: string;
+  description: string | null;
+  eventDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  isAllDay: boolean;
+  eventType: AgendaEventType;
+  classId: string | null;
+  location: string | null;
+}
+
+export interface AgendaLegacyImportAcknowledgement {
+  event: AgendaEvent;
+  imported: boolean;
+  classAssociationRemoved: boolean;
 }
 
 export interface SyncedClassSession {

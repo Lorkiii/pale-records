@@ -5,6 +5,7 @@ import helmet from "helmet";
 
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/error-handler.js";
+import agendaRouter from "./routes/agenda.route.js";
 import attendanceRouter from "./routes/attendance.route.js";
 import authRouter from "./routes/auth.route.js";
 import classRouter from "./routes/class.route.js";
@@ -33,6 +34,7 @@ app.use(
 );
 app.use(express.json({ limit: "16kb" }));
 
+app.use("/api/agenda", agendaRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/classes", classRouter);
 app.use("/api/students", studentRouter);
