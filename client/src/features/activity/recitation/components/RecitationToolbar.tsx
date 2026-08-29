@@ -1,5 +1,6 @@
-// Renders Recitation selectors, a manual multi-date queue, edit actions, and feedback.
+// Renders Recitation selectors, local date selection, edit actions, and feedback.
 import type { ReactNode } from 'react';
+import { ActionIconButton } from '../../../../components/ui/ActionIconButton';
 import { Button } from '../../../../components/ui/Button';
 import { Input } from '../../../../components/ui/Input';
 import { Notice } from '../../../../components/ui/Notice';
@@ -10,6 +11,7 @@ import {
   type RecitationMarkCounts,
 } from '../recitation-draft';
 import type { RecitationSessionDraft } from '../recitation-types';
+import { RecitationDateSelector } from './RecitationDateSelector';
 
 export interface RecitationToolbarFeedback {
   variant: 'info' | 'warning' | 'error' | 'success';
@@ -21,9 +23,9 @@ interface RecitationToolbarProps {
   classes: ClassRecord[];
   selectedClassId: string;
   monthInput: string;
-  dateInput: string;
-  queuedDates: string[];
+  selectedDates: string[];
   pendingDateCount: number;
+  existingDates: string[];
   selectedDate: string | null;
   selectedSession: RecitationSessionDraft | null;
   isEditing: boolean;
@@ -32,19 +34,18 @@ interface RecitationToolbarProps {
   isCreating: boolean;
   isSaving: boolean;
   canUndo: boolean;
-  canQueueDate: boolean;
+  canSelectDates: boolean;
   canAddDates: boolean;
-  dateHint: string;
   markCounts: RecitationMarkCounts;
   feedback: RecitationToolbarFeedback | null;
   onClassChange: (classId: string) => void;
   onMonthInputChange: (month: string) => void;
-  onDateInputChange: (date: string) => void;
-  onQueueDate: () => void;
-  onRemoveQueuedDate: (date: string) => void;
-  onClearQueuedDates: () => void;
+  onToggleSelectedDate: (date: string) => void;
+  onRemoveSelectedDate: (date: string) => void;
+  onClearSelectedDates: () => void;
   onAddDates: () => void;
   onEdit: () => void;
+  onDelete: () => void;
   onUndo: () => void;
   onCancel: () => void;
   onSave: () => void;
@@ -89,9 +90,9 @@ export function RecitationToolbar({
   classes,
   selectedClassId,
   monthInput,
-  dateInput,
-  queuedDates,
+  selectedDates,
   pendingDateCount,
+  existingDates,
   selectedDate,
   selectedSession,
   isEditing,
@@ -100,19 +101,18 @@ export function RecitationToolbar({
   isCreating,
   isSaving,
   canUndo,
-  canQueueDate,
+  canSelectDates,
   canAddDates,
-  dateHint,
   markCounts,
   feedback,
   onClassChange,
   onMonthInputChange,
-  onDateInputChange,
-  onQueueDate,
-  onRemoveQueuedDate,
-  onClearQueuedDates,
+  onToggleSelectedDate,
+  onRemoveSelectedDate,
+  onClearSelectedDates,
   onAddDates,
   onEdit,
+  onDelete,
   onUndo,
   onCancel,
   onSave,
@@ -131,11 +131,11 @@ export function RecitationToolbar({
             Recitation register
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-ink-secondary">
-            Select a class and month, then add one or more manual Recitation dates.
+            Select a class and month, then choose the Recitation dates to add.
           </p>
         </div>
 
-        <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)_minmax(12rem,0.75fr)_auto] lg:items-end">
+        <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)] lg:items-end">
           <Select
             id="recitation-class"
             label="Class"
@@ -163,93 +163,82 @@ export function RecitationToolbar({
             onChange={(event) => onMonthInputChange(event.target.value)}
             hint="Loads only this class month."
           />
-
-          <Input
-            id="recitation-date"
-            type="date"
-            label="Recitation date"
-            value={dateInput}
-            disabled={isBusy}
-            min="2000-01-01"
-            max="2100-12-31"
-            onChange={(event) => onDateInputChange(event.target.value)}
-            hint={dateHint}
-          />
-
-          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:flex-col xl:flex-row">
-            <Button
-              variant="secondary"
-              onClick={onQueueDate}
-              disabled={!canQueueDate}
-              className="w-full lg:w-auto"
-            >
-              Queue date
-            </Button>
-            <Button
-              onClick={onAddDates}
-              disabled={!canAddDates}
-              className="w-full lg:w-auto"
-            >
-              {isCreating
-                ? 'Adding dates…'
-                : pendingDateCount === 1
-                  ? 'Add date'
-                  : `Add ${pendingDateCount} dates`}
-            </Button>
-          </div>
         </div>
 
-        {queuedDates.length > 0 ? (
-          <div className="border-t border-paper-border px-4 py-4 sm:px-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p
-                  id="queued-recitation-dates-heading"
-                  className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted"
+        <div className="border-t border-paper-border px-4 py-4 sm:px-5">
+          <RecitationDateSelector
+            monthInput={monthInput}
+            selectedDates={selectedDates}
+            existingDates={existingDates}
+            isSelectionAvailable={canSelectDates}
+            isBusy={isBusy}
+            onToggleDate={onToggleSelectedDate}
+          />
+
+          {selectedDates.length > 0 ? (
+            <div className="mt-5 border-t border-paper-border pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p
+                    id="selected-recitation-dates-heading"
+                    className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted"
+                  >
+                    Selected dates / {selectedDates.length}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-ink-secondary">
+                    These dates stay local until you add them.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onClearSelectedDates}
+                  disabled={isBusy}
                 >
-                  Queued dates / {queuedDates.length}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-ink-secondary">
-                  These dates are still local and are saved only when Add dates is selected.
-                </p>
+                  Clear selected dates
+                </Button>
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onClearQueuedDates}
-                disabled={isBusy}
+
+              <ul
+                className="mt-3 flex flex-wrap gap-2"
+                aria-labelledby="selected-recitation-dates-heading"
               >
-                Clear queued dates
+                {selectedDates.map((date) => (
+                  <li
+                    key={date}
+                    className="flex min-h-11 items-center border border-ink bg-paper-muted pl-3"
+                  >
+                    <span className="text-sm font-semibold text-ink">
+                      {formatRecitationDateLong(date)}
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Remove ${formatRecitationDateLong(date)} from selected Recitation dates`}
+                      onClick={() => onRemoveSelectedDate(date)}
+                      disabled={isBusy}
+                      className="ml-2"
+                    >
+                      <span aria-hidden="true">×</span>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+
+              <Button
+                className="mt-4 w-full sm:w-auto"
+                onClick={onAddDates}
+                disabled={!canAddDates}
+              >
+                {isCreating
+                  ? 'Adding dates…'
+                  : pendingDateCount === 1
+                    ? 'Add date'
+                    : `Add ${pendingDateCount} dates`}
               </Button>
             </div>
-
-            <ul
-              className="mt-3 flex flex-wrap gap-2"
-              aria-labelledby="queued-recitation-dates-heading"
-            >
-              {queuedDates.map((date) => (
-                <li
-                  key={date}
-                  className="flex min-h-11 items-center border border-paper-dark bg-paper-muted pl-3"
-                >
-                  <span className="text-sm font-semibold text-ink">
-                    {formatRecitationDateLong(date)}
-                  </span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={`Remove ${formatRecitationDateLong(date)} from queued Recitation dates`}
-                    onClick={() => onRemoveQueuedDate(date)}
-                    disabled={isBusy}
-                    className="ml-2"
-                  >
-                    <span aria-hidden="true">×</span>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
         {selectedDate ? (
           <div className="border-t border-paper-border px-4 py-4 sm:px-5">
@@ -280,20 +269,43 @@ export function RecitationToolbar({
 
               {isEditing ? (
                 <div className="flex flex-wrap gap-2">
+                  <ActionIconButton
+                    icon="delete"
+                    label="Delete Recitation"
+                    tooltip="Delete Recitation"
+                    variant="destructive"
+                    onClick={onDelete}
+                    disabled={isBusy}
+                  />
                   <Button variant="ghost" onClick={onUndo} disabled={!canUndo || isBusy}>
                     Undo last change
                   </Button>
-                  <Button variant="secondary" onClick={onCancel} disabled={isBusy}>
-                    Cancel changes
-                  </Button>
-                  <Button onClick={onSave} disabled={isBusy}>
-                    {isSaving ? 'Saving…' : 'Save Recitation'}
-                  </Button>
+                  <ActionIconButton
+                    icon="cancel"
+                    label="Cancel changes"
+                    tooltip="Cancel changes"
+                    variant="secondary"
+                    onClick={onCancel}
+                    disabled={isBusy}
+                  />
+                  <ActionIconButton
+                    icon="save"
+                    label={isSaving ? 'Saving Recitation' : 'Save Recitation'}
+                    tooltip={isSaving ? 'Saving Recitation' : 'Save Recitation'}
+                    isLoading={isSaving}
+                    onClick={onSave}
+                    disabled={isBusy}
+                  />
                 </div>
               ) : (
-                <Button variant="secondary" onClick={onEdit} disabled={isBusy}>
-                  Edit Recitation
-                </Button>
+                <ActionIconButton
+                  icon="edit"
+                  label="Edit Recitation"
+                  tooltip="Edit Recitation"
+                  variant="secondary"
+                  onClick={onEdit}
+                  disabled={isBusy}
+                />
               )}
             </div>
           </div>
@@ -301,7 +313,7 @@ export function RecitationToolbar({
       </div>
 
       <Notice variant="info" title="Recitation storage">
-        Queued dates remain local until Add dates is selected. Created dates use an unpersisted Unmarked roster until the first Save Recitation captures the complete historical roster; later enrollment changes do not rewrite it.
+        Selected dates remain local until Add dates is selected. Created dates use an unpersisted Unmarked roster until the first Save Recitation captures the complete historical roster; later enrollment changes do not rewrite it.
       </Notice>
 
       {feedback ? (

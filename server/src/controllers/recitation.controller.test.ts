@@ -58,6 +58,7 @@ function createTestApp(
 ) {
   const dependencies: RecitationControllerDependencies = {
     createSession: async () => ({ status: "created", session: publicDraftSession }),
+    deleteSession: async () => true,
     listSessions: async () => ({ status: "found", sessions: [publicDraftSession] }),
     loadSession: async () => publicSession,
     saveRecords: async () => ({ status: "saved", session: publicSession }),
@@ -83,6 +84,11 @@ function createTestApp(
     validateParams(recitationSessionIdParamsSchema),
     handlers.loadRecitationSessionController,
   );
+  testApp.delete(
+    "/sessions/:sessionId",
+    validateParams(recitationSessionIdParamsSchema),
+    handlers.deleteRecitationSessionController,
+  );
   testApp.put(
     "/sessions/:sessionId/records",
     validateParams(recitationSessionIdParamsSchema),
@@ -107,6 +113,7 @@ test("Recitation controllers return safe success statuses and envelopes", async 
   const listResponse = await request(testApp)
     .get(`/classes/${classId}/sessions?year=2026&month=8`);
   const loadResponse = await request(testApp).get(`/sessions/${sessionId}`);
+  const deleteResponse = await request(testApp).delete(`/sessions/${sessionId}`);
   const saveResponse = await request(testApp)
     .put(`/sessions/${sessionId}/records`)
     .send({ records: [{ studentId, mark: null }] });
@@ -118,6 +125,8 @@ test("Recitation controllers return safe success statuses and envelopes", async 
   assert.deepEqual(receivedMonth, [2026, 8]);
   assert.equal(loadResponse.status, 200);
   assert.equal(loadResponse.body.data.session.sessionDate, "2026-08-27");
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deleteResponse.body.data.sessionId, sessionId);
   assert.equal(saveResponse.status, 200);
   assert.equal(saveResponse.body.data.session.records[0].student.id, studentId);
 });
@@ -175,10 +184,13 @@ test("Recitation monthly listing validates query values before the service", asy
   assert.equal(missingResponse.body.error.code, "CLASS_NOT_FOUND");
 });
 
-test("Recitation load and save controllers return safe expected errors", async () => {
+test("Recitation load, delete, and save controllers return safe expected errors", async () => {
   const missingLoad = await request(createTestApp({
     loadSession: async () => null,
   })).get(`/sessions/${sessionId}`);
+  const missingDelete = await request(createTestApp({
+    deleteSession: async () => false,
+  })).delete(`/sessions/${sessionId}`);
   const saveCases: Array<{
     serviceStatus: "session_not_found" | "student_duplicate" | "roster_mismatch";
     httpStatus: number;
@@ -203,6 +215,8 @@ test("Recitation load and save controllers return safe expected errors", async (
 
   assert.equal(missingLoad.status, 404);
   assert.equal(missingLoad.body.error.code, "RECITATION_SESSION_NOT_FOUND");
+  assert.equal(missingDelete.status, 404);
+  assert.equal(missingDelete.body.error.code, "RECITATION_SESSION_NOT_FOUND");
 
   for (const currentCase of saveCases) {
     const response = await request(createTestApp({
@@ -217,10 +231,15 @@ test("Recitation load and save controllers return safe expected errors", async (
 
 test("invalid Recitation bodies and params are rejected before service access", async () => {
   let createWasCalled = false;
+  let deleteWasCalled = false;
   const testApp = createTestApp({
     createSession: async () => {
       createWasCalled = true;
       return { status: "created", session: publicDraftSession };
+    },
+    deleteSession: async () => {
+      deleteWasCalled = true;
+      return true;
     },
   });
   const dateResponse = await request(testApp)
@@ -228,28 +247,40 @@ test("invalid Recitation bodies and params are rejected before service access", 
     .send({ sessionDate: "2026-02-30", extra: true });
   const paramResponse = await request(testApp)
     .get("/sessions/not-a-uuid");
+  const deleteParamResponse = await request(testApp)
+    .delete("/sessions/not-a-uuid");
 
   assert.equal(dateResponse.status, 400);
   assert.equal(dateResponse.body.error.code, "VALIDATION_ERROR");
   assert.equal(paramResponse.status, 400);
   assert.equal(paramResponse.body.error.code, "VALIDATION_ERROR");
+  assert.equal(deleteParamResponse.status, 400);
+  assert.equal(deleteParamResponse.body.error.code, "VALIDATION_ERROR");
   assert.equal(createWasCalled, false);
+  assert.equal(deleteWasCalled, false);
 });
 
 test("unexpected Recitation errors reach the centralized safe error handler", async (t) => {
   t.mock.method(console, "error", () => undefined);
-  const response = await request(createTestApp({
+  const listResponse = await request(createTestApp({
     listSessions: async () => {
       throw new Error("private database detail");
     },
   })).get(`/classes/${classId}/sessions?year=2026&month=8`);
-
-  assert.equal(response.status, 500);
-  assert.deepEqual(response.body, {
-    success: false,
-    error: {
-      code: "INTERNAL_SERVER_ERROR",
-      message: "An unexpected server error occurred.",
+  const deleteResponse = await request(createTestApp({
+    deleteSession: async () => {
+      throw new Error("private database detail");
     },
-  });
+  })).delete(`/sessions/${sessionId}`);
+
+  for (const response of [listResponse, deleteResponse]) {
+    assert.equal(response.status, 500);
+    assert.deepEqual(response.body, {
+      success: false,
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "An unexpected server error occurred.",
+      },
+    });
+  }
 });

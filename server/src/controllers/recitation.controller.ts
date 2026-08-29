@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 
 import {
   createRecitationSession,
+  deleteRecitationSession,
   listRecitationSessions,
   loadRecitationSession,
   saveRecitationRecords,
@@ -18,6 +19,7 @@ import {
   recitationClassArchivedResponseSchema,
   recitationClassNotFoundResponseSchema,
   recitationRosterMismatchResponseSchema,
+  recitationSessionDeleteResponseSchema,
   recitationSessionExistsResponseSchema,
   recitationSessionListResponseSchema,
   recitationSessionNotFoundResponseSchema,
@@ -27,6 +29,7 @@ import {
 
 export type RecitationControllerDependencies = {
   createSession: typeof createRecitationSession;
+  deleteSession: typeof deleteRecitationSession;
   listSessions: typeof listRecitationSessions;
   loadSession: typeof loadRecitationSession;
   saveRecords: typeof saveRecitationRecords;
@@ -34,6 +37,7 @@ export type RecitationControllerDependencies = {
 
 const defaultDependencies: RecitationControllerDependencies = {
   createSession: createRecitationSession,
+  deleteSession: deleteRecitationSession,
   listSessions: listRecitationSessions,
   loadSession: loadRecitationSession,
   saveRecords: saveRecitationRecords,
@@ -149,6 +153,34 @@ export function createRecitationControllerHandlers(
     }
   };
 
+  // Permanently removes one Recitation date and confirms the deleted identifier.
+  const deleteRecitationSessionController = async (
+    req: Request<RecitationSessionIdParams>,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const wasDeleted = await dependencies.deleteSession(req.params.sessionId);
+
+      if (!wasDeleted) {
+        return res.status(404).json(recitationSessionNotFoundResponseSchema.parse({
+          success: false,
+          error: {
+            code: "RECITATION_SESSION_NOT_FOUND",
+            message: "Recitation session was not found.",
+          },
+        }));
+      }
+
+      return res.status(200).json(recitationSessionDeleteResponseSchema.parse({
+        success: true,
+        data: { sessionId: req.params.sessionId },
+      }));
+    } catch (error) {
+      next(error);
+    }
+  };
+
   // Saves the exact roster or reports expected session and roster conflicts.
   const saveRecitationRecordsController = async (
     req: Request<RecitationSessionIdParams, unknown, SaveRecitationRecordsInput>,
@@ -202,6 +234,7 @@ export function createRecitationControllerHandlers(
 
   return {
     createRecitationSessionController,
+    deleteRecitationSessionController,
     listRecitationSessionsController,
     loadRecitationSessionController,
     saveRecitationRecordsController,
@@ -210,6 +243,7 @@ export function createRecitationControllerHandlers(
 
 export const {
   createRecitationSessionController,
+  deleteRecitationSessionController,
   listRecitationSessionsController,
   loadRecitationSessionController,
   saveRecitationRecordsController,

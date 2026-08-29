@@ -5,6 +5,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Header } from '../components/ui/Header';
 import { Notice } from '../components/ui/Notice';
 import PageLoad from '../components/ui/PageLoad';
+import { DeleteRecitationSessionDialog } from '../features/activity/recitation/components/DeleteRecitationSessionDialog';
 import { RecitationRegister } from '../features/activity/recitation/components/RecitationRegister';
 import {
   RecitationToolbar,
@@ -104,9 +105,9 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
                 classes={recitation.classes}
                 selectedClassId={recitation.selectedClassId}
                 monthInput={recitation.monthInput}
-                dateInput={recitation.dateInput}
-                queuedDates={recitation.queuedDates}
+                selectedDates={recitation.selectedDates}
                 pendingDateCount={recitation.pendingDateCount}
+                existingDates={recitation.existingDates}
                 selectedDate={recitation.selectedDate}
                 selectedSession={recitation.selectedSessionDraft ?? null}
                 isEditing={recitation.isEditing}
@@ -115,19 +116,18 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
                 isCreating={recitation.isCreating}
                 isSaving={recitation.isSaving}
                 canUndo={recitation.canUndo}
-                canQueueDate={recitation.canQueueDate}
+                canSelectDates={recitation.canSelectDates}
                 canAddDates={recitation.canAddDates}
-                dateHint={recitation.dateHint}
                 markCounts={recitation.markCounts}
                 feedback={toolbarFeedback}
                 onClassChange={recitation.handleClassChange}
                 onMonthInputChange={recitation.handleMonthChange}
-                onDateInputChange={recitation.handleDateInputChange}
-                onQueueDate={recitation.handleQueueDate}
-                onRemoveQueuedDate={recitation.handleRemoveQueuedDate}
-                onClearQueuedDates={recitation.handleClearQueuedDates}
+                onToggleSelectedDate={recitation.handleToggleSelectedDate}
+                onRemoveSelectedDate={recitation.handleRemoveSelectedDate}
+                onClearSelectedDates={recitation.handleClearSelectedDates}
                 onAddDates={recitation.handleAddDates}
                 onEdit={recitation.handleEdit}
+                onDelete={recitation.handleOpenDelete}
                 onUndo={recitation.handleUndo}
                 onCancel={recitation.handleCancel}
                 onSave={recitation.handleSave}
@@ -177,7 +177,7 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
                   <EmptyState
                     icon={<RecitationIcon />}
                     title="No Recitation dates this month"
-                    description="No Recitation sessions have been created for this class month. Manual Add date remains available above."
+                    description="No Recitation sessions have been created for this class month. Select available dates above to add them."
                     className="min-h-56"
                   />
                 </div>
@@ -241,6 +241,17 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
           ) : null}
         </div>
       </div>
+
+      {recitation.deleteTarget ? (
+        <DeleteRecitationSessionDialog
+          key={recitation.deleteTarget.id}
+          session={recitation.deleteTarget}
+          hasUnsavedChanges={recitation.hasUnsavedChanges}
+          onClose={recitation.handleCloseDelete}
+          onDeleted={recitation.handleDeletedSession}
+          onSessionExpired={onSessionExpired}
+        />
+      ) : null}
     </div>
   );
 }

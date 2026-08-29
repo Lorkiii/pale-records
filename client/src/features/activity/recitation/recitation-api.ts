@@ -264,6 +264,15 @@ function readSessions(data: Record<string, unknown>) {
     : undefined;
 }
 
+// Selects the exact identifier confirmed after deleting one complete date.
+function readDeletedSessionId(data: Record<string, unknown>) {
+  return hasExactKeys(data, ['sessionId']) &&
+    typeof data.sessionId === 'string' &&
+    UUID_PATTERN.test(data.sessionId)
+    ? data.sessionId
+    : undefined;
+}
+
 // Preserves AbortError while converting other network failures to a feature error.
 function handleNetworkError(error: unknown): never {
   if (error instanceof DOMException && error.name === 'AbortError') {
@@ -376,6 +385,49 @@ export async function listRecitationSessions(
   }
 
   return sessions;
+}
+
+// Deletes one persisted Recitation date and every roster record owned by it.
+export async function deleteRecitationSession(sessionId: string) {
+  if (!UUID_PATTERN.test(sessionId)) {
+    throw new RecitationApiError(
+      'Choose a valid Recitation date to delete.',
+      400,
+      'RECITATION_CLIENT_INPUT_INVALID',
+    );
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `/api/recitations/sessions/${encodeURIComponent(sessionId)}`,
+      {
+        method: 'DELETE',
+        credentials: 'include',
+      },
+    );
+  } catch (error) {
+    handleNetworkError(error);
+  }
+
+  if (!response.ok) {
+    throw await readApiError(response);
+  }
+
+  const deletedSessionId = await readSuccessData(
+    response,
+    'Unable to confirm the deleted Recitation date.',
+    readDeletedSessionId,
+  );
+  if (deletedSessionId !== sessionId) {
+    throw new RecitationApiError(
+      'The deleted Recitation date did not match the request.',
+      response.status,
+    );
+  }
+
+  return deletedSessionId;
 }
 
 // Saves every selected roster student once and returns the validated server snapshot.

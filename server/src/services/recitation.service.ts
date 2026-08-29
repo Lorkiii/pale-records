@@ -1,4 +1,4 @@
-// Owns manual Recitation sessions, response-only draft rosters, and atomic historical saves.
+// Owns Recitation sessions, deletion, response-only drafts, and atomic historical saves.
 import {
   Prisma,
   RecitationMark,
@@ -67,6 +67,7 @@ export type RecitationServiceDependencies = {
   findSession: (
     sessionId: string,
   ) => Promise<RecitationSessionDatabaseRecord | null>;
+  deleteSession: (sessionId: string) => Promise<boolean>;
   saveSessionRecords: (
     sessionId: string,
     records: SaveRecitationRecordData[],
@@ -225,6 +226,13 @@ const defaultDependencies: RecitationServiceDependencies = {
       where: { id: sessionId },
       select: recitationSessionSelect,
     }),
+  // Deletes the session and relies on the database cascade for its roster records.
+  deleteSession: async (sessionId) => {
+    const result = await prisma.recitationSession.deleteMany({
+      where: { id: sessionId },
+    });
+    return result.count === 1;
+  },
   // Claims first initialization before reading enrollment, then writes the exact roster atomically.
   saveSessionRecords: async (sessionId, records) => {
     try {
@@ -476,6 +484,14 @@ export async function loadRecitationSession(
 ) {
   const session = await dependencies.findSession(sessionId);
   return session ? toRecitationSessionRecord(session) : null;
+}
+
+// Removes one complete persisted date and its cascading Recitation records.
+export function deleteRecitationSession(
+  sessionId: string,
+  dependencies: RecitationServiceDependencies = defaultDependencies,
+) {
+  return dependencies.deleteSession(sessionId);
 }
 
 export type SaveRecitationRecordsResult =

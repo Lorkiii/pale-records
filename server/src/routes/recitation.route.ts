@@ -1,8 +1,9 @@
-// Defines authenticated manual Recitation session, monthly listing, loading, and roster routes.
+// Defines authenticated Recitation creation, listing, loading, deletion, and roster routes.
 import { Router } from "express";
 
 import {
   createRecitationSessionController,
+  deleteRecitationSessionController,
   listRecitationSessionsController,
   loadRecitationSessionController,
   saveRecitationRecordsController,
@@ -38,6 +39,11 @@ recitationRouter.get(
   "/sessions/:sessionId",
   validateParams(recitationSessionIdParamsSchema),
   loadRecitationSessionController,
+);
+recitationRouter.delete(
+  "/sessions/:sessionId",
+  validateParams(recitationSessionIdParamsSchema),
+  deleteRecitationSessionController,
 );
 recitationRouter.put(
   "/sessions/:sessionId/records",

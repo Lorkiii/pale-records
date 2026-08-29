@@ -1,5 +1,6 @@
 // Renders Attendance class/month selection, manual dates, edit actions, totals, and draft feedback.
 import type { ReactNode } from 'react';
+import { ActionIconButton } from '../../../components/ui/ActionIconButton';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Notice } from '../../../components/ui/Notice';
@@ -197,21 +198,41 @@ export function AttendanceToolbar({
                   <Button variant="ghost" onClick={onUndo} disabled={!canUndo || isBusy}>
                     Undo last change
                   </Button>
-                  <Button variant="secondary" onClick={onCancel} disabled={isBusy}>
-                    Cancel changes
-                  </Button>
-                  <Button onClick={onSave} disabled={isBusy}>
-                    {isSaving ? 'Saving…' : 'Save attendance'}
-                  </Button>
+                  <ActionIconButton
+                    icon="cancel"
+                    label="Cancel changes"
+                    tooltip="Cancel changes"
+                    variant="secondary"
+                    onClick={onCancel}
+                    disabled={isBusy}
+                  />
+                  <ActionIconButton
+                    icon="save"
+                    label={isSaving ? 'Saving attendance' : 'Save attendance'}
+                    tooltip={isSaving ? 'Saving attendance' : 'Save attendance'}
+                    isLoading={isSaving}
+                    onClick={onSave}
+                    disabled={isBusy}
+                  />
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="destructive" onClick={onDelete} disabled={isBusy}>
-                    Delete date
-                  </Button>
-                  <Button variant="secondary" onClick={onEdit} disabled={isBusy}>
-                    Edit attendance
-                  </Button>
+                  <ActionIconButton
+                    icon="delete"
+                    label="Delete date"
+                    tooltip="Delete date"
+                    variant="destructive"
+                    onClick={onDelete}
+                    disabled={isBusy}
+                  />
+                  <ActionIconButton
+                    icon="edit"
+                    label="Edit attendance"
+                    tooltip="Edit attendance"
+                    variant="secondary"
+                    onClick={onEdit}
+                    disabled={isBusy}
+                  />
                 </div>
               )}
             </div>

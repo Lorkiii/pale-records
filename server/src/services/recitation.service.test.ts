@@ -5,6 +5,7 @@ import test from "node:test";
 import { RecitationMark } from "../generated/prisma/client.js";
 import {
   createRecitationSession,
+  deleteRecitationSession,
   hasExactRecitationStudentSet,
   listRecitationSessions,
   loadRecitationSession,
@@ -81,6 +82,7 @@ function createDependencies(
     insertSession: async () => draftSession,
     findClassSessions: async () => ({ recitationSessions: [] }),
     findSession: async () => storedSession,
+    deleteSession: async () => true,
     saveSessionRecords: async () => ({ status: "saved", session: storedSession }),
     ...overrides,
   };
@@ -169,6 +171,16 @@ test("loading an uninitialized session returns current enrollment as an unpersis
     { id: null, studentId: firstStudentId, mark: null },
   ]);
   assert.equal(source.recitationRecords.length, 0);
+});
+
+test("Recitation deletion returns the exact persisted-session outcome", async () => {
+  const deleted = await deleteRecitationSession(sessionId, createDependencies());
+  const missing = await deleteRecitationSession(sessionId, createDependencies({
+    deleteSession: async () => false,
+  }));
+
+  assert.equal(deleted, true);
+  assert.equal(missing, false);
 });
 
 test("first save writes the complete roster including null marks", async () => {

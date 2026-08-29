@@ -1,4 +1,4 @@
-// Owns Activity Recitation loading, queued dates, deliberate edits, and actions.
+// Owns Activity Recitation loading, local date selection, deliberate edits, and actions.
 import { useEffect, useMemo, useState } from "react";
 import { ClassApiError, fetchClasses } from "../../classes/classes-api";
 import type { ClassRecord } from "../../classes/class-types";
@@ -78,8 +78,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [monthInput, setMonthInput] = useState(getCurrentRecitationMonth);
-  const [dateInput, setDateInput] = useState("");
-  const [queuedDates, setQueuedDates] = useState<string[]>([]);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [sessionLoadStatus, setSessionLoadStatus] =
     useState<SessionLoadStatus>("idle");
   const [sessionLoadError, setSessionLoadError] = useState("");
@@ -97,6 +96,8 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
   const [feedback, setFeedback] = useState<RecitationFeedbackState | null>(
     null,
   );
+  const [deleteTarget, setDeleteTarget] =
+    useState<RecitationSessionDraft | null>(null);
   const [liveMessage, setLiveMessage] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -197,38 +198,27 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     isEditing && isRecitationSessionDirty(selectedSessionDraft);
   const markCounts = countRecitationMarks(selectedSessionDraft);
   const isBusy = sessionLoadStatus === "loading" || isCreating || isSaving;
-  const pendingDates = useMemo(() => {
-    const dates = new Set(queuedDates);
-    if (
-      isRecitationDateValue(dateInput) &&
-      dateInput.slice(0, 7) === monthInput
-    ) {
-      dates.add(dateInput);
-    }
-    return [...dates].sort();
-  }, [dateInput, monthInput, queuedDates]);
-  const canQueueDate = Boolean(
+  const existingDates = useMemo(
+    () => sessionDrafts.map((session) => session.sessionDate),
+    [sessionDrafts],
+  );
+  const canSelectDates = Boolean(
     selectedClass &&
     sessionLoadStatus === "ready" &&
-    isRecitationDateValue(dateInput) &&
-    dateInput.slice(0, 7) === monthInput &&
-    !queuedDates.includes(dateInput) &&
-    !sessionDrafts.some((session) => session.sessionDate === dateInput) &&
-    queuedDates.length < 31 &&
     !hasUnsavedChanges &&
     !isBusy,
   );
   const canAddDates = Boolean(
     selectedClass &&
     sessionLoadStatus === "ready" &&
-    pendingDates.length > 0 &&
+    selectedDates.length > 0 &&
     !hasUnsavedChanges &&
     !isBusy,
   );
-  const hasQueuedDates = queuedDates.length > 0;
+  const hasSelectedDates = selectedDates.length > 0;
 
   useEffect(() => {
-    if (!hasUnsavedChanges && !hasQueuedDates) {
+    if (!hasUnsavedChanges && !hasSelectedDates) {
       return undefined;
     }
 
@@ -240,15 +230,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasQueuedDates, hasUnsavedChanges]);
-
-  const dateHint = !selectedClass
-    ? "Select a class before adding a Recitation date."
-    : sessionLoadStatus === "loading"
-      ? "Loading the selected month before date creation is available…"
-      : hasQueuedDates
-        ? `${queuedDates.length} ${queuedDates.length === 1 ? "date" : "dates"} queued for this month.`
-        : "Choose a date to add now, or queue several dates from this month.";
+  }, [hasSelectedDates, hasUnsavedChanges]);
 
   // Clears selected-date editing state when the current class or month changes.
   const resetSelectedSession = () => {
@@ -272,6 +254,26 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     setLoadAttempt((attempt) => attempt + 1);
   };
 
+  // Confirms a selection loss before moving the calendar to another class or month.
+  const confirmSelectedDateDiscard = (destination: "class" | "month") => {
+    if (!hasSelectedDates) {
+      return true;
+    }
+
+    const confirmed = window.confirm(
+      `Discard ${selectedDates.length} selected Recitation ${selectedDates.length === 1 ? "date" : "dates"} before changing ${destination}?`,
+    );
+    if (!confirmed) {
+      setFeedback({
+        variant: "info",
+        title: "Selected dates kept",
+        messages: ["The calendar selection was not changed."],
+      });
+      setLiveMessage("Class or month change canceled. Selected Recitation dates were kept.");
+    }
+    return confirmed;
+  };
+
   // Refuses a dirty class switch and otherwise starts the selected month request.
   const handleClassChange = (classId: string) => {
     if (classId === selectedClassId) {
@@ -292,20 +294,12 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
       return;
     }
 
-    if (hasQueuedDates) {
-      setFeedback({
-        variant: "warning",
-        title: "Queued Recitation dates",
-        messages: ["Add or clear the queued dates before switching classes."],
-      });
-      setLiveMessage(
-        "Class switch blocked because Recitation dates are still queued.",
-      );
+    if (!confirmSelectedDateDiscard("class")) {
       return;
     }
 
     setSelectedClassId(classId);
-    setDateInput("");
+    setSelectedDates([]);
     setSessionLoadStatus(classId ? "loading" : "idle");
     setSessionLoadError("");
     resetSelectedSession();
@@ -337,15 +331,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
       return;
     }
 
-    if (hasQueuedDates) {
-      setFeedback({
-        variant: "warning",
-        title: "Queued Recitation dates",
-        messages: ["Add or clear the queued dates before switching months."],
-      });
-      setLiveMessage(
-        "Month switch blocked because Recitation dates are still queued.",
-      );
+    if (!confirmSelectedDateDiscard("month")) {
       return;
     }
 
@@ -360,7 +346,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     }
 
     setMonthInput(month);
-    setDateInput("");
+    setSelectedDates([]);
     setSessionLoadStatus(selectedClassId ? "loading" : "idle");
     setSessionLoadError("");
     resetSelectedSession();
@@ -368,120 +354,82 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     setLiveMessage("Calendar month changed. Loading Recitation dates.");
   };
 
-  // Keeps a valid manual date visible by moving the workspace to its month first.
-  const handleDateInputChange = (date: string) => {
-    if (date === dateInput) {
-      return;
-    }
-
-    if (hasUnsavedChanges) {
-      setFeedback({
-        variant: "warning",
-        title: "Unsaved Recitation changes",
-        messages: [
-          "Save Recitation or cancel changes before switching the manual date.",
-        ],
-      });
-      setLiveMessage(
-        "Date switch blocked because the selected Recitation date has unsaved changes.",
-      );
-      return;
-    }
-
-    const dateMonth = date.slice(0, 7);
+  // Toggles one available date in the local selection without writing records.
+  const handleToggleSelectedDate = (date: string) => {
     if (
-      hasQueuedDates &&
-      isRecitationDateValue(date) &&
-      dateMonth !== monthInput
+      !canSelectDates ||
+      !isRecitationDateValue(date) ||
+      date.slice(0, 7) !== monthInput
     ) {
+      return;
+    }
+
+    if (existingDates.includes(date)) {
+      return;
+    }
+
+    if (selectedDates.includes(date)) {
+      setSelectedDates((currentDates) =>
+        currentDates.filter((currentDate) => currentDate !== date),
+      );
+      setFeedback(null);
+      setLiveMessage(
+        `${formatRecitationDateLong(date)} removed from selected Recitation dates.`,
+      );
+      return;
+    }
+
+    if (selectedDates.length >= 31) {
       setFeedback({
         variant: "warning",
-        title: "Queued Recitation dates",
-        messages: [
-          "Add or clear the queued dates before choosing a date from another month.",
-        ],
+        title: "Date selection limit reached",
+        messages: ["Select at most 31 Recitation dates at a time."],
       });
-      setLiveMessage(
-        "Date change blocked because the queued Recitation dates belong to this month.",
-      );
+      setLiveMessage("Recitation date selection is limited to 31 dates.");
       return;
     }
 
-    setDateInput(date);
-    if (isRecitationDateValue(date) && dateMonth !== monthInput) {
-      setMonthInput(dateMonth);
-      setSessionLoadStatus(selectedClassId ? "loading" : "idle");
-      setSessionLoadError("");
-      resetSelectedSession();
-      setFeedback({
-        variant: "info",
-        title: "Recitation month changed",
-        messages: [
-          "The workspace is loading the selected date’s month before creation is available.",
-        ],
-      });
-      setLiveMessage(
-        "The Recitation workspace moved to the selected date’s month and is loading it.",
-      );
-    }
+    setSelectedDates((currentDates) => [...currentDates, date].sort());
+    setFeedback(null);
+    setLiveMessage(`${formatRecitationDateLong(date)} selected for Recitation.`);
   };
 
-  // Adds the current valid date to the local month queue without writing records.
-  const handleQueueDate = () => {
-    if (!canQueueDate) {
-      return;
-    }
-
-    setQueuedDates((currentDates) => [...currentDates, dateInput].sort());
-    setDateInput("");
-    setFeedback({
-      variant: "info",
-      title: "Recitation date queued",
-      messages: [
-        `${formatRecitationDateLong(dateInput)} will be created when Add dates is selected.`,
-      ],
-    });
-    setLiveMessage(
-      `${formatRecitationDateLong(dateInput)} added to the Recitation date queue.`,
-    );
-  };
-
-  // Removes one unsaved date from the local queue.
-  const handleRemoveQueuedDate = (date: string) => {
+  // Removes one local date selection and leaves persisted sessions unchanged.
+  const handleRemoveSelectedDate = (date: string) => {
     if (isBusy) {
       return;
     }
 
-    setQueuedDates((currentDates) =>
-      currentDates.filter((queuedDate) => queuedDate !== date),
+    setSelectedDates((currentDates) =>
+      currentDates.filter((currentDate) => currentDate !== date),
     );
     setFeedback(null);
     setLiveMessage(
-      `${formatRecitationDateLong(date)} removed from the Recitation date queue.`,
+      `${formatRecitationDateLong(date)} removed from selected Recitation dates.`,
     );
   };
 
-  // Clears only locally queued dates and leaves persisted sessions unchanged.
-  const handleClearQueuedDates = () => {
-    if (isBusy || queuedDates.length === 0) {
+  // Clears only local date selections and leaves persisted sessions unchanged.
+  const handleClearSelectedDates = () => {
+    if (isBusy || selectedDates.length === 0) {
       return;
     }
 
-    setQueuedDates([]);
+    setSelectedDates([]);
     setFeedback(null);
     setLiveMessage(
-      "Queued Recitation dates cleared. No saved dates were changed.",
+      "Selected Recitation dates cleared. No saved dates were changed.",
     );
   };
 
   // Creates each requested manual date, then reconciles any concurrent duplicates once.
   const handleAddDates = async () => {
-    if (!selectedClass || pendingDates.length === 0) {
+    if (!selectedClass || selectedDates.length === 0) {
       setFeedback({
         variant: "error",
         title: "Recitation date required",
         messages: [
-          "Choose an active class and at least one valid calendar date.",
+          "Choose an active class and at least one Recitation date.",
         ],
       });
       setLiveMessage(
@@ -519,13 +467,13 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     const month = getRecitationMonthParts(monthInput);
     if (
       !month ||
-      pendingDates.some((date) => date.slice(0, 7) !== monthInput)
+      selectedDates.some((date) => date.slice(0, 7) !== monthInput)
     ) {
       setFeedback({
         variant: "error",
         title: "One calendar month required",
         messages: [
-          "Queue Recitation dates from the currently selected month only.",
+          "Select Recitation dates from the currently selected month only.",
         ],
       });
       setLiveMessage(
@@ -534,7 +482,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
       return;
     }
 
-    const requestedDates = [...pendingDates];
+    const requestedDates = [...selectedDates];
     const knownSessionsByDate = new Map(
       sessionDrafts.map((session) => [session.sessionDate, session]),
     );
@@ -562,6 +510,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
           const sessionDraft = createRecitationSessionDraft(session);
           createdDrafts.push(sessionDraft);
           completedDates.add(sessionDate);
+          shouldReloadMonth = true;
         } catch (error: unknown) {
           if (error instanceof RecitationApiError && error.status === 401) {
             onSessionExpired();
@@ -642,12 +591,9 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
       }
 
       setSessionDrafts(nextDrafts);
-      setQueuedDates((currentDates) =>
-        currentDates.filter((queuedDate) => !completedDates.has(queuedDate)),
+      setSelectedDates((currentDates) =>
+        currentDates.filter((selectedDate) => !completedDates.has(selectedDate)),
       );
-      if (completedDates.has(dateInput)) {
-        setDateInput("");
-      }
 
       const createdTarget = sortRecitationSessionDrafts(createdDrafts).at(-1);
       const completedTarget = nextDrafts
@@ -680,7 +626,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
       }
       if (remainingDates.length > 0) {
         outcomeMessages.push(
-          `${remainingDates.length} ${remainingDates.length === 1 ? "date remains" : "dates remain"} queued for another attempt.`,
+          `${remainingDates.length} ${remainingDates.length === 1 ? "date remains" : "dates remain"} selected for another attempt.`,
         );
       }
       outcomeMessages.push(...failureMessages);
@@ -709,7 +655,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
       });
       setLiveMessage(
         hasIncompleteDates
-          ? `${completedDates.size} Recitation dates are available; ${remainingDates.length} remain queued.`
+          ? `${completedDates.size} Recitation dates are available; ${remainingDates.length} remain selected.`
           : `${completedDates.size} Recitation ${completedDates.size === 1 ? "date is" : "dates are"} available.`,
       );
     } finally {
@@ -774,6 +720,41 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     setLiveMessage(
       `${formatRecitationDateLong(selectedSessionDraft.sessionDate)} is now editable.`,
     );
+  };
+
+  // Opens destructive confirmation for the selected date while it is editable.
+  const handleOpenDelete = () => {
+    if (selectedSessionDraft && isEditing && !isBusy) {
+      setDeleteTarget(selectedSessionDraft);
+    }
+  };
+
+  // Closes deletion confirmation without changing saved or local Recitation data.
+  const handleCloseDelete = () => {
+    setDeleteTarget(null);
+  };
+
+  // Removes the deleted date locally and selects the newest remaining date.
+  const handleDeletedSession = (sessionId: string) => {
+    const remainingSessions = sessionDrafts.filter(
+      (sessionDraft) => sessionDraft.id !== sessionId,
+    );
+
+    setSessionDrafts(remainingSessions);
+    setSelectedSessionId(remainingSessions.at(-1)?.id ?? null);
+    setEditingSessionId(null);
+    setUndoRecords(null);
+    setDeleteTarget(null);
+    setFeedback({
+      variant: "success",
+      title: "Recitation date deleted",
+      messages: [
+        hasUnsavedChanges
+          ? "The complete date and its saved roster marks were deleted. Local unsaved edits were discarded."
+          : "The complete date and its saved roster marks were deleted.",
+      ],
+    });
+    setLiveMessage("The selected Recitation date was deleted.");
   };
 
   // Applies one mark cycle step and captures exactly one Undo snapshot.
@@ -909,9 +890,9 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     loadError,
     selectedClassId,
     monthInput,
-    dateInput,
-    queuedDates,
-    pendingDateCount: pendingDates.length,
+    selectedDates,
+    pendingDateCount: selectedDates.length,
+    existingDates,
     sessionLoadStatus,
     sessionLoadError,
     selectedClass,
@@ -927,22 +908,24 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     isCreating,
     isSaving,
     canUndo: undoRecords !== null,
-    canQueueDate,
+    canSelectDates,
     canAddDates,
-    dateHint,
     feedback,
+    deleteTarget,
     liveMessage,
     handleRetryLoad,
     handleClassChange,
     handleMonthChange,
-    handleDateInputChange,
-    handleQueueDate,
-    handleRemoveQueuedDate,
-    handleClearQueuedDates,
+    handleToggleSelectedDate,
+    handleRemoveSelectedDate,
+    handleClearSelectedDates,
     handleAddDates,
     handleRetrySessionLoad,
     handleSelectSession,
     handleEdit,
+    handleOpenDelete,
+    handleCloseDelete,
+    handleDeletedSession,
     handleCycleMark,
     handleUndo,
     handleCancel,

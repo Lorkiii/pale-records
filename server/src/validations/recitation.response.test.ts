@@ -1,8 +1,9 @@
-// Verifies Recitation responses expose only safe fields and enforce draft and list bounds.
+// Verifies Recitation responses expose only safe session and deletion fields.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  recitationSessionDeleteResponseSchema,
   recitationSessionListResponseSchema,
   recitationSessionResponseSchema,
 } from "./recitation.response.js";
@@ -101,5 +102,19 @@ test("Recitation monthly response rejects more than 31 sessions", () => {
   assert.equal(recitationSessionListResponseSchema.safeParse({
     success: true,
     data: { sessions },
+  }).success, false);
+});
+
+test("Recitation deletion response accepts only the confirmed session identifier", () => {
+  assert.deepEqual(recitationSessionDeleteResponseSchema.parse({
+    success: true,
+    data: { sessionId },
+  }), {
+    success: true,
+    data: { sessionId },
+  });
+  assert.equal(recitationSessionDeleteResponseSchema.safeParse({
+    success: true,
+    data: { sessionId, deletedRecords: 2 },
   }).success, false);
 });

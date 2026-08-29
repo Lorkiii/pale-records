@@ -133,6 +133,8 @@ test("Recitation endpoints require an authenticated session", async () => {
     .get("/api/recitations/classes/2c6e62cc-584d-4faf-90f6-fdb50b27c9d0/sessions?year=2026&month=8");
   const loadResponse = await request(app)
     .get("/api/recitations/sessions/099aa026-ef03-4ab6-92ee-68fa37fb6523");
+  const deleteResponse = await request(app)
+    .delete("/api/recitations/sessions/099aa026-ef03-4ab6-92ee-68fa37fb6523");
   const saveResponse = await request(app)
     .put("/api/recitations/sessions/099aa026-ef03-4ab6-92ee-68fa37fb6523/records")
     .send({ records: [] });
@@ -141,6 +143,7 @@ test("Recitation endpoints require an authenticated session", async () => {
     createResponse,
     listResponse,
     loadResponse,
+    deleteResponse,
     saveResponse,
   ]) {
     assert.equal(response.status, 401);

@@ -84,6 +84,13 @@ export const recitationSessionListResponseSchema = z.strictObject({
   }),
 });
 
+export const recitationSessionDeleteResponseSchema = z.strictObject({
+  success: z.literal(true),
+  data: z.strictObject({
+    sessionId: z.string().uuid(),
+  }),
+});
+
 // Builds strict expected errors without exposing internal exception details.
 function recitationErrorResponseSchema<Code extends string, Message extends string>(
   code: Code,
