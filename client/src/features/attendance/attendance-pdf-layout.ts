@@ -92,11 +92,6 @@ function drawReportHeader(document: jsPDF, report: MonthlyAttendanceReport) {
   drawMetadataLine(document, 'Date Created', report.dateCreated, 190, 25, 97);
 
   const warnings: string[] = [];
-  if (report.unsavedDateLabels.length > 0) {
-    warnings.push(
-      `Unsaved dates included: ${report.unsavedDateLabels.join(', ')}. Their cells display "-".`,
-    );
-  }
   if (report.excludesUnsavedEdits) {
     warnings.push('Unsaved edits were not included; the last saved values were exported.');
   }
