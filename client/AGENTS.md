@@ -15,8 +15,8 @@ Use the existing semantic colors. Prefer their Tailwind utilities or CSS variabl
 
 - Paper surfaces: `paper` `#F4F4F0`, `paper-light` `#FCFCFA`, `paper-muted` `#EAEAE4`, `paper-border` `#D8D8CF`, and `paper-dark` `#CECEC2`.
 - Ink: `ink` `#0A0A0A`, `ink-secondary` `#3D3D38`, `ink-muted` `#66665E`, and `ink-faint` `#96968C`.
-- Signal colors: `signal-red` `#D92D20`, `signal-amber` `#D97706`, `signal-emerald` `#059669`, and `signal-blue` `#1D4ED8`.
-- Reserve signal colors for meaningful validation, warning, status, or informational states. Do not use them as decorative accents.
+- Signal and category accent colors: `signal-red` `#D92D20`, `signal-orange` `#EA580C`, `signal-amber` `#D97706`, `signal-yellow` `#CA8A04`, `signal-gold` `#B45309`, `signal-ochre` `#A16207`, `signal-mustard` `#854D0E`, `signal-emerald` `#059669`, `signal-teal` `#0D9488`, `signal-blue` `#1D4ED8`, `signal-purple` `#7C3AED`, and `signal-rose` `#E11D48`.
+- Reserve signal colors for meaningful validation, warning, status, category accents, or informational states. Do not use them as decorative accents.
 - Do not add new brand colors, gradients, glass effects, colorful shadows, or a separate dark theme unless the user explicitly requests them.
 
 ## Typography and visual language

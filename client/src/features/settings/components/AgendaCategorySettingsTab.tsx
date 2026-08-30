@@ -65,6 +65,16 @@ export function AgendaCategorySettingsTab() {
 
     const cleanShortCode = formShortCode.trim().toUpperCase();
 
+    const isDuplicateCode = categories.some(
+      (cat) =>
+        cat.shortCode.toUpperCase() === cleanShortCode &&
+        (!selectedCategory || cat.id !== selectedCategory.id)
+    );
+    if (isDuplicateCode) {
+      setFormError(`Short code "${cleanShortCode}" is already in use by another category.`);
+      return;
+    }
+
     if (dialogMode === 'new') {
       const newCategory: AgendaCategoryItem = {
         id: `cat-${Date.now()}`,
@@ -114,7 +124,13 @@ export function AgendaCategorySettingsTab() {
     );
   };
 
-  const selectedAccentConfig = CATEGORY_ACCENT_CONFIGS[formAccent];
+  const handleResetDefaults = () => {
+    setCategories(INITIAL_AGENDA_CATEGORIES);
+    setActiveNotice('Restored default category list.');
+    setTimeout(() => setActiveNotice(null), 3000);
+  };
+
+  const selectedAccentConfig = CATEGORY_ACCENT_CONFIGS[formAccent] ?? CATEGORY_ACCENT_CONFIGS['signal-blue'];
 
   return (
     <div className="space-y-8">
@@ -147,18 +163,18 @@ export function AgendaCategorySettingsTab() {
           <table className="w-full text-left font-sans text-xs">
             <thead className="border-b border-ink bg-paper-muted font-mono uppercase tracking-[0.12em] text-ink-muted">
               <tr>
-                <th className="px-4 py-3">Accent</th>
-                <th className="px-4 py-3">Category Name</th>
-                <th className="px-4 py-3">Short Code</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3">Origin</th>
-                <th className="px-4 py-3">Visibility</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th scope="col" className="px-4 py-3">Accent</th>
+                <th scope="col" className="px-4 py-3">Category Name</th>
+                <th scope="col" className="px-4 py-3">Short Code</th>
+                <th scope="col" className="px-4 py-3">Description</th>
+                <th scope="col" className="px-4 py-3">Origin</th>
+                <th scope="col" className="px-4 py-3">Visibility</th>
+                <th scope="col" className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-paper-border bg-paper-light">
               {categories.map((cat) => {
-                const config = CATEGORY_ACCENT_CONFIGS[cat.accent];
+                const config = CATEGORY_ACCENT_CONFIGS[cat.accent] ?? CATEGORY_ACCENT_CONFIGS['signal-blue'];
                 return (
                   <tr key={cat.id} className="transition-colors hover:bg-paper">
                     <td className="px-4 py-3.5">
@@ -203,6 +219,7 @@ export function AgendaCategorySettingsTab() {
                       <button
                         type="button"
                         onClick={() => handleToggleActive(cat)}
+                        aria-label={`Toggle visibility for ${cat.name}`}
                         className={`border px-2 py-1 text-[10px] uppercase font-bold cursor-pointer transition-colors ${
                           cat.isActive
                             ? 'border-ink bg-ink text-paper-light hover:bg-neutral-800'
@@ -217,7 +234,8 @@ export function AgendaCategorySettingsTab() {
                         <button
                           type="button"
                           onClick={() => openEditDialog(cat)}
-                          className="px-2 py-1 border border-paper-dark bg-paper-light text-ink hover:border-ink hover:bg-paper uppercase font-bold text-[10px]"
+                          aria-label={`Edit ${cat.name}`}
+                          className="px-2 py-1 border border-paper-dark bg-paper-light text-ink hover:border-ink hover:bg-paper uppercase font-bold text-[10px] cursor-pointer"
                         >
                           Edit
                         </button>
@@ -225,7 +243,8 @@ export function AgendaCategorySettingsTab() {
                           <button
                             type="button"
                             onClick={() => openDeleteDialog(cat)}
-                            className="px-2 py-1 border border-signal-red/30 bg-red-50/50 text-signal-red hover:border-signal-red hover:bg-red-100 uppercase font-bold text-[10px]"
+                            aria-label={`Delete ${cat.name}`}
+                            className="px-2 py-1 border border-signal-red/30 bg-red-50/50 text-signal-red hover:border-signal-red hover:bg-red-100 uppercase font-bold text-[10px] cursor-pointer"
                           >
                             Del
                           </button>
@@ -235,8 +254,28 @@ export function AgendaCategorySettingsTab() {
                   </tr>
                 );
               })}
+              {categories.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-xs text-ink-muted">
+                    No event categories defined. Click &ldquo;+ New Category&rdquo; to add one.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between border-t border-paper-border pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleResetDefaults}
+          >
+            Restore Default Categories
+          </Button>
+          <p className="font-mono text-xs text-ink-muted">
+            {categories.length} {categories.length === 1 ? 'category' : 'categories'} configured
+          </p>
         </div>
       </Panel>
 
@@ -274,48 +313,48 @@ export function AgendaCategorySettingsTab() {
               hint="Rendered on day docket calendar badges"
             />
 
-            <div>
-              <label className="block font-mono text-xs font-semibold uppercase tracking-wider text-ink mb-1.5">
-                Accent Color
-              </label>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {(
-                  Object.keys(
-                    CATEGORY_ACCENT_CONFIGS
-                  ) as CategoryAccentColor[]
-                ).map((colorKey) => {
-                  const cfg = CATEGORY_ACCENT_CONFIGS[colorKey];
-                  const isSelected = formAccent === colorKey;
-                  return (
-                    <button
-                      key={colorKey}
-                      type="button"
-                      onClick={() => setFormAccent(colorKey)}
-                      aria-label={`Select ${cfg.label}`}
-                      className={`flex items-center gap-1.5 border px-2.5 py-1.5 font-mono text-[11px] uppercase transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-ink bg-ink text-paper-light font-bold ring-1 ring-ink'
-                          : 'border-paper-border bg-paper-light text-ink hover:border-paper-dark'
-                      }`}
-                    >
-                      <span
-                        className={`h-2.5 w-2.5 rounded-full ${cfg.pipColor}`}
-                        aria-hidden="true"
-                      />
-                      <span>{cfg.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <Input
+              label="Description (Optional)"
+              value={formDescription}
+              onChange={(e) => setFormDescription(e.target.value)}
+              placeholder="Brief explanation of event classification"
+            />
           </div>
 
-          <Input
-            label="Description (Optional)"
-            value={formDescription}
-            onChange={(e) => setFormDescription(e.target.value)}
-            placeholder="Brief explanation of when this event category applies"
-          />
+          <div>
+            <label className="block font-mono text-xs font-semibold uppercase tracking-wider text-ink mb-1.5">
+              Accent Color
+            </label>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {(
+                Object.keys(
+                  CATEGORY_ACCENT_CONFIGS
+                ) as CategoryAccentColor[]
+              ).map((colorKey) => {
+                const cfg = CATEGORY_ACCENT_CONFIGS[colorKey];
+                const isSelected = formAccent === colorKey;
+                return (
+                  <button
+                    key={colorKey}
+                    type="button"
+                    onClick={() => setFormAccent(colorKey)}
+                    aria-label={`Select ${cfg.label}`}
+                    className={`flex items-center gap-1.5 border px-2.5 py-1.5 font-mono text-[11px] uppercase transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-ink bg-ink text-paper-light font-bold ring-1 ring-ink'
+                        : 'border-paper-border bg-paper-light text-ink hover:border-paper-dark'
+                    }`}
+                  >
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${cfg.pipColor}`}
+                      aria-hidden="true"
+                    />
+                    <span>{cfg.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Live Badge Preview */}
           <div className="border border-dashed border-paper-dark bg-paper p-4">

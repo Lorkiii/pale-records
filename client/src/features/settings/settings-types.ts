@@ -38,9 +38,17 @@ export interface NotificationSettingsState {
 
 export type CategoryAccentColor =
   | 'signal-red'
+  | 'signal-orange'
   | 'signal-amber'
+  | 'signal-yellow'
+  | 'signal-gold'
+  | 'signal-ochre'
+  | 'signal-mustard'
   | 'signal-emerald'
+  | 'signal-teal'
   | 'signal-blue'
+  | 'signal-purple'
+  | 'signal-rose'
   | 'ink'
   | 'ink-muted';
 
@@ -68,11 +76,41 @@ export const CATEGORY_ACCENT_CONFIGS: Record<CategoryAccentColor, CategoryAccent
     badgeStyle: 'border-signal-red text-signal-red bg-signal-red/10',
     pipColor: 'bg-signal-red',
   },
+  'signal-orange': {
+    color: 'signal-orange',
+    label: 'Signal Orange',
+    badgeStyle: 'border-signal-orange text-signal-orange bg-signal-orange/10',
+    pipColor: 'bg-signal-orange',
+  },
   'signal-amber': {
     color: 'signal-amber',
     label: 'Signal Amber',
     badgeStyle: 'border-signal-amber text-signal-amber bg-signal-amber/10',
     pipColor: 'bg-signal-amber',
+  },
+  'signal-yellow': {
+    color: 'signal-yellow',
+    label: 'Signal Yellow',
+    badgeStyle: 'border-signal-yellow text-signal-yellow bg-signal-yellow/10',
+    pipColor: 'bg-signal-yellow',
+  },
+  'signal-gold': {
+    color: 'signal-gold',
+    label: 'Warm Gold',
+    badgeStyle: 'border-signal-gold text-signal-gold bg-signal-gold/10',
+    pipColor: 'bg-signal-gold',
+  },
+  'signal-ochre': {
+    color: 'signal-ochre',
+    label: 'Archival Ochre',
+    badgeStyle: 'border-signal-ochre text-signal-ochre bg-signal-ochre/10',
+    pipColor: 'bg-signal-ochre',
+  },
+  'signal-mustard': {
+    color: 'signal-mustard',
+    label: 'Signal Mustard',
+    badgeStyle: 'border-signal-mustard text-signal-mustard bg-signal-mustard/10',
+    pipColor: 'bg-signal-mustard',
   },
   'signal-emerald': {
     color: 'signal-emerald',
@@ -80,11 +118,29 @@ export const CATEGORY_ACCENT_CONFIGS: Record<CategoryAccentColor, CategoryAccent
     badgeStyle: 'border-signal-emerald text-signal-emerald bg-signal-emerald/10',
     pipColor: 'bg-signal-emerald',
   },
+  'signal-teal': {
+    color: 'signal-teal',
+    label: 'Signal Teal',
+    badgeStyle: 'border-signal-teal text-signal-teal bg-signal-teal/10',
+    pipColor: 'bg-signal-teal',
+  },
   'signal-blue': {
     color: 'signal-blue',
     label: 'Signal Blue',
     badgeStyle: 'border-signal-blue text-signal-blue bg-signal-blue/10',
     pipColor: 'bg-signal-blue',
+  },
+  'signal-purple': {
+    color: 'signal-purple',
+    label: 'Signal Purple',
+    badgeStyle: 'border-signal-purple text-signal-purple bg-signal-purple/10',
+    pipColor: 'bg-signal-purple',
+  },
+  'signal-rose': {
+    color: 'signal-rose',
+    label: 'Signal Rose',
+    badgeStyle: 'border-signal-rose text-signal-rose bg-signal-rose/10',
+    pipColor: 'bg-signal-rose',
   },
   ink: {
     color: 'ink',
@@ -150,7 +206,7 @@ export const INITIAL_AGENDA_CATEGORIES: AgendaCategoryItem[] = [
     id: 'cat-consultation',
     name: 'Student Consultation',
     shortCode: 'CNSLT',
-    accent: 'signal-blue',
+    accent: 'signal-ochre',
     description: 'One-on-one academic consultations and thesis advising hours.',
     isSystem: false,
     isActive: true,
@@ -159,7 +215,7 @@ export const INITIAL_AGENDA_CATEGORIES: AgendaCategoryItem[] = [
     id: 'cat-remedial',
     name: 'Remedial Session',
     shortCode: 'REMED',
-    accent: 'signal-amber',
+    accent: 'signal-yellow',
     description: 'Make-up classes, tutorials, and supplemental review sessions.',
     isSystem: false,
     isActive: true,
