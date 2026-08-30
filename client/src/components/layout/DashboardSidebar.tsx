@@ -144,14 +144,27 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
         <p className="px-4 pb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
           Account
         </p>
-        <button
-          type="button"
-          disabled
-          className={`${navigationItemStyles} cursor-default border-transparent text-ink-secondary disabled:opacity-100`}
+        <NavLink
+          to="/dashboard/settings"
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            `${navigationItemStyles} ${
+              isActive
+                ? 'border-ink bg-ink text-paper-light'
+                : 'border-transparent text-ink-secondary hover:border-paper-dark hover:bg-paper-light'
+            }`
+          }
         >
-          <NavigationIcon name="settings" className="h-4.5 w-4.5 shrink-0" />
-          <span>Settings</span>
-        </button>
+          {({ isActive }) => (
+            <>
+              <NavigationIcon name="settings" className="h-4.5 w-4.5 shrink-0" />
+              <span>Settings</span>
+              {isActive ? (
+                <span className="ml-auto h-1.5 w-1.5 bg-paper-light" aria-hidden="true" />
+              ) : null}
+            </>
+          )}
+        </NavLink>
         <button
           type="button"
           disabled

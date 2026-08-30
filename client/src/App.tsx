@@ -12,6 +12,7 @@ import { AttendancePage } from './pages/AttendancePage';
 import { ClassPage } from './pages/ClassPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { StudentPage } from './pages/StudentPage';
 import SessionLoadingScreen from './components/ui/SessionLoading';
 
@@ -106,6 +107,10 @@ export default function App() {
               onSessionExpired={handleSessionExpired}
             />
           }
+        />
+        <Route
+          path="settings"
+          element={<SettingsPage currentUser={authenticatedUser} />}
         />
       </Route>
       <Route path="*" element={<Navigate to={defaultPath} replace />} />

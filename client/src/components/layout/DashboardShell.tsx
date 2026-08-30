@@ -14,7 +14,9 @@ interface DashboardShellProps {
 export function DashboardShell({ currentUser }: DashboardShellProps) {
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const location = useLocation();
-  const currentSection = DASHBOARD_NAVIGATION.find((item) => item.to === location.pathname)?.label ?? 'Workspace';
+  const currentSection = location.pathname.startsWith('/dashboard/settings')
+    ? 'Settings'
+    : (DASHBOARD_NAVIGATION.find((item) => item.to === location.pathname)?.label ?? 'Workspace');
 
   useEffect(() => {
     if (!isNavigationOpen) {
