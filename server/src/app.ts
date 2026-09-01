@@ -1,7 +1,7 @@
 // Configures the Express application separately from the process that starts it.
 import cors from "cors";
 import express from "express";
-import helmet from "helmet";
+import * as helmetModule from "helmet";
 
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -16,7 +16,7 @@ import studentRouter from "./routes/student.route.js";
 export const app = express();
 
 app.disable("x-powered-by");
-app.use(helmet());
+app.use(helmetModule.default());
 app.use(
   cors({
     origin: env.CLIENT_ORIGINS,
