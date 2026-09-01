@@ -1,7 +1,7 @@
 // Configures the Express application separately from the process that starts it.
 import cors from "cors";
-import express from "express";
-import * as helmetModule from "helmet";
+import express, {type RequestHandler } from "express";
+import helmetExport from "helmet";
 
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -13,10 +13,15 @@ import recitationRouter from "./routes/recitation.route.js";
 import settingsRouter from "./routes/settings.route.js";
 import studentRouter from "./routes/student.route.js";
 
+const createHelmetMiddleware = 
+  helmetExport as unknown as () => RequestHandler;
+
+
 export const app = express();
 
 app.disable("x-powered-by");
-app.use(helmetModule.default());
+app.use(createHelmetMiddleware());
+
 app.use(
   cors({
     origin: env.CLIENT_ORIGINS,
@@ -47,3 +52,5 @@ app.get("/test", (req, res) => {
 });
 
 app.use(errorHandler);
+
+export default app;
