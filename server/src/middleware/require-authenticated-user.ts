@@ -15,6 +15,18 @@ export type AuthenticatedResponseLocals = {
   authenticatedUser: AuthenticatedUser;
 };
 
+type VerifiedSession = { userId: string; sessionVersion: number };
+
+export type AuthenticationMiddlewareDependencies = {
+  verifyToken: (token: string) => Promise<VerifiedSession>;
+  findUser: (userId: string) => ReturnType<typeof getAuthenticatedUser>;
+};
+
+const defaultDependencies: AuthenticationMiddlewareDependencies = {
+  verifyToken: verifySessionToken,
+  findUser: getAuthenticatedUser,
+};
+
 // Returns the safe authentication failure shape and optionally removes a stale cookie.
 function sendUnauthenticatedResponse(res: Response, clearCookie = false) {
   if (clearCookie) {
@@ -33,7 +45,10 @@ function sendUnauthenticatedResponse(res: Response, clearCookie = false) {
 }
 
 // Resolves a valid session user before allowing a protected request to continue.
-export async function requireAuthenticatedUser(
+export function createRequireAuthenticatedUser(
+  dependencies: AuthenticationMiddlewareDependencies = defaultDependencies,
+) {
+  return async function requireAuthenticatedUser(
   req: Request,
   res: Response<unknown, AuthenticatedResponseLocals>,
   next: NextFunction,
@@ -48,24 +63,29 @@ export async function requireAuthenticatedUser(
 
   try {
     let userId: string;
+    let sessionVersion: number;
 
     try {
-      ({ userId } = await verifySessionToken(sessionToken));
+      ({ userId, sessionVersion } = await dependencies.verifyToken(sessionToken));
     } catch {
       sendUnauthenticatedResponse(res, true);
       return;
     }
 
-    const user = await getAuthenticatedUser(userId);
+    const user = await dependencies.findUser(userId);
 
-    if (!user) {
+    if (!user || user.sessionVersion !== sessionVersion) {
       sendUnauthenticatedResponse(res, true);
       return;
     }
 
-    res.locals.authenticatedUser = user;
+    const { sessionVersion: _sessionVersion, ...authenticatedUser } = user;
+    res.locals.authenticatedUser = authenticatedUser;
     next();
   } catch (error) {
     next(error);
   }
+  };
 }
+
+export const requireAuthenticatedUser = createRequireAuthenticatedUser();

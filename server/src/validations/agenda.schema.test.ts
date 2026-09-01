@@ -12,6 +12,7 @@ import {
 
 const classId = "2c6e62cc-584d-4faf-90f6-fdb50b27c9d0";
 const eventId = "099aa026-ef03-4ab6-92ee-68fa37fb6523";
+const categoryId = "805a2580-d0b5-48a8-8eb3-9356e464b838";
 
 // Builds one valid complete payload while allowing focused fields to vary.
 function agendaEventInput(overrides: Record<string, unknown> = {}) {
@@ -22,7 +23,7 @@ function agendaEventInput(overrides: Record<string, unknown> = {}) {
     startTime: "09:00",
     endTime: "11:00",
     isAllDay: false,
-    eventType: "EXAM",
+    categoryId,
     classId,
     location: "Room 204",
     ...overrides,
@@ -31,9 +32,12 @@ function agendaEventInput(overrides: Record<string, unknown> = {}) {
 
 // Adds the legacy browser identifier required only by the import endpoint.
 function agendaImportInput(overrides: Record<string, unknown> = {}) {
+  const { categoryId: unusedCategoryId, ...eventFields } = agendaEventInput();
+  void unusedCategoryId;
   return {
     legacyEventId: "evt_1724900000000_ab12cd3",
-    ...agendaEventInput(),
+    ...eventFields,
+    eventType: "EXAM",
     ...overrides,
   };
 }
@@ -54,14 +58,14 @@ test("Agenda accepts and normalizes a valid complete event payload", () => {
     startTime: null,
     endTime: null,
     isAllDay: false,
-    eventType: "EXAM",
+    categoryId,
     classId,
     location: null,
   });
   assert.deepEqual(updateAgendaEventSchema.parse(result), result);
 });
 
-test("Agenda accepts all six public event types", () => {
+test("Agenda legacy import accepts all six historical event types", () => {
   for (const eventType of [
     "EXAM",
     "ASSIGNMENT",
@@ -70,8 +74,8 @@ test("Agenda accepts all six public event types", () => {
     "MEETING",
     "NOTE",
   ]) {
-    assert.equal(createAgendaEventSchema.safeParse(
-      agendaEventInput({ eventType }),
+    assert.equal(importAgendaEventSchema.safeParse(
+      agendaImportInput({ eventType }),
     ).success, true);
   }
 });
@@ -128,11 +132,14 @@ test("Agenda rejects oversized optional text", () => {
   ).success, false);
 });
 
-test("Agenda parameter and Class fields accept only UUID identifiers", () => {
+test("Agenda parameter, category, and Class fields accept only UUID identifiers", () => {
   assert.equal(agendaEventIdParamsSchema.safeParse({ eventId }).success, true);
   assert.equal(agendaEventIdParamsSchema.safeParse({ eventId: "event-one" }).success, false);
   assert.equal(createAgendaEventSchema.safeParse(
     agendaEventInput({ classId: "class-one" }),
+  ).success, false);
+  assert.equal(createAgendaEventSchema.safeParse(
+    agendaEventInput({ categoryId: "category-one" }),
   ).success, false);
   assert.equal(createAgendaEventSchema.parse(
     agendaEventInput({ classId: "" }),

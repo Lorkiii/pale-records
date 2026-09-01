@@ -43,6 +43,42 @@ test("session lookup clears an invalid authenticated cookie", async () => {
   assert.equal(response.body.error.code, "UNAUTHENTICATED");
 });
 
+// Confirms all account and preference Settings endpoints require authentication first.
+test("Settings endpoints require an authenticated session", async () => {
+  const profileResponse = await request(app).patch("/api/settings/profile").send({
+    firstName: "Ana",
+    lastName: "Reyes",
+    email: "ana@example.com",
+    username: "ana.reyes",
+  });
+  const passwordResponse = await request(app).post("/api/settings/password").send({
+    currentPassword: "current-password",
+    newPassword: "new-password",
+  });
+  const settingsResponse = await request(app).get("/api/settings");
+  const systemResponse = await request(app).patch("/api/settings/system").send({
+    defaultSchoolYear: null,
+    defaultSemester: null,
+    defaultAttendanceState: "UNRECORDED",
+    tableDensity: "COMFORTABLE",
+    dateFormat: "YYYY-MM-DD",
+    timeFormat: "12H",
+    defaultExportFormat: "PDF",
+  });
+  const resetResponse = await request(app).post("/api/settings/system/reset");
+
+  for (const response of [
+    profileResponse,
+    passwordResponse,
+    settingsResponse,
+    systemResponse,
+    resetResponse,
+  ]) {
+    assert.equal(response.status, 401);
+    assert.equal(response.body.error.code, "UNAUTHENTICATED");
+  }
+});
+
 // Confirms every class operation is protected by the shared session middleware.
 test("class endpoints require an authenticated session", async () => {
   const listResponse = await request(app).get("/api/classes");
@@ -153,6 +189,29 @@ test("Recitation endpoints require an authenticated session", async () => {
 
 // Confirms the registered Agenda router protects every endpoint before validation or data access.
 test("Agenda endpoints require an authenticated session", async () => {
+  const categoryId = "805a2580-d0b5-48a8-8eb3-9356e464b838";
+  const listCategoriesResponse = await request(app).get("/api/agenda/categories");
+  const createCategoryResponse = await request(app)
+    .post("/api/agenda/categories")
+    .send({
+      name: "Consultation",
+      shortCode: "CNSLT",
+      accentKey: "SIGNAL_OCHRE",
+      description: null,
+    });
+  const restoreCategoriesResponse = await request(app)
+    .post("/api/agenda/categories/restore-defaults");
+  const updateCategoryResponse = await request(app)
+    .patch(`/api/agenda/categories/${categoryId}`)
+    .send({
+      name: "Consultation",
+      shortCode: "CNSLT",
+      accentKey: "SIGNAL_OCHRE",
+      description: null,
+      isActive: true,
+    });
+  const deleteCategoryResponse = await request(app)
+    .delete(`/api/agenda/categories/${categoryId}`);
   const listResponse = await request(app)
     .get("/api/agenda/events?from=2026-09-01&to=2026-09-30");
   const createResponse = await request(app)
@@ -161,7 +220,7 @@ test("Agenda endpoints require an authenticated session", async () => {
       title: "Final examination",
       eventDate: "2026-09-15",
       isAllDay: true,
-      eventType: "EXAM",
+      categoryId,
     });
   const importResponse = await request(app)
     .post("/api/agenda/events/import")
@@ -178,17 +237,28 @@ test("Agenda endpoints require an authenticated session", async () => {
       title: "Updated examination",
       eventDate: "2026-09-15",
       isAllDay: true,
-      eventType: "EXAM",
+      categoryId,
     });
   const deleteResponse = await request(app)
     .delete("/api/agenda/events/099aa026-ef03-4ab6-92ee-68fa37fb6523");
+  const completeResponse = await request(app)
+    .post("/api/agenda/events/099aa026-ef03-4ab6-92ee-68fa37fb6523/complete");
+  const reopenResponse = await request(app)
+    .post("/api/agenda/events/099aa026-ef03-4ab6-92ee-68fa37fb6523/reopen");
 
   for (const response of [
+    listCategoriesResponse,
+    createCategoryResponse,
+    restoreCategoriesResponse,
+    updateCategoryResponse,
+    deleteCategoryResponse,
     listResponse,
     createResponse,
     importResponse,
     updateResponse,
     deleteResponse,
+    completeResponse,
+    reopenResponse,
   ]) {
     assert.equal(response.status, 401);
     assert.equal(response.body.error.code, "UNAUTHENTICATED");

@@ -11,6 +11,7 @@ import {
   type RecitationMarkCounts,
 } from '../recitation-draft';
 import type { RecitationSessionDraft } from '../recitation-types';
+import type { DateFormatPreference } from '../../../settings/preference-display';
 import { RecitationDateSelector } from './RecitationDateSelector';
 
 export interface RecitationToolbarFeedback {
@@ -38,6 +39,7 @@ interface RecitationToolbarProps {
   canAddDates: boolean;
   markCounts: RecitationMarkCounts;
   feedback: RecitationToolbarFeedback | null;
+  dateFormat?: DateFormatPreference;
   onClassChange: (classId: string) => void;
   onMonthInputChange: (month: string) => void;
   onToggleSelectedDate: (date: string) => void;
@@ -105,6 +107,7 @@ export function RecitationToolbar({
   canAddDates,
   markCounts,
   feedback,
+  dateFormat,
   onClassChange,
   onMonthInputChange,
   onToggleSelectedDate,
@@ -172,6 +175,7 @@ export function RecitationToolbar({
             existingDates={existingDates}
             isSelectionAvailable={canSelectDates}
             isBusy={isBusy}
+            dateFormat={dateFormat}
             onToggleDate={onToggleSelectedDate}
           />
 
@@ -209,12 +213,12 @@ export function RecitationToolbar({
                     className="flex min-h-11 items-center border border-ink bg-paper-muted pl-3"
                   >
                     <span className="text-sm font-semibold text-ink">
-                      {formatRecitationDateLong(date)}
+                      {formatRecitationDateLong(date, dateFormat)}
                     </span>
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`Remove ${formatRecitationDateLong(date)} from selected Recitation dates`}
+                      aria-label={`Remove ${formatRecitationDateLong(date, dateFormat)} from selected Recitation dates`}
                       onClick={() => onRemoveSelectedDate(date)}
                       disabled={isBusy}
                       className="ml-2"
@@ -249,7 +253,7 @@ export function RecitationToolbar({
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <p className="text-sm font-semibold text-ink">
-                    {formatRecitationDateLong(selectedDate)}
+                    {formatRecitationDateLong(selectedDate, dateFormat)}
                   </p>
                   <span className="border border-ink bg-paper-muted px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink">
                     {isEditing ? 'Editing' : 'Read-only'}

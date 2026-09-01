@@ -10,6 +10,11 @@ import type {
   RecitationStudentRecord,
   WorkingRecitationRecord,
 } from "../recitation-types";
+import {
+  getTableDensityClasses,
+  type DateFormatPreference,
+  type TableDensityPreference,
+} from "../../../settings/preference-display";
 
 interface RecitationRegisterProps {
   roster: RecitationStudentRecord[];
@@ -17,6 +22,8 @@ interface RecitationRegisterProps {
   selectedSessionId: string;
   isEditing: boolean;
   isBusy: boolean;
+  dateFormat?: DateFormatPreference;
+  tableDensity?: TableDensityPreference;
   onSelectSession: (sessionId: string) => void;
   onCycleMark: (studentId: string) => void;
 }
@@ -46,9 +53,10 @@ function getMarkCellLabel(
   isSelected: boolean,
   isEditing: boolean,
   isBusy: boolean,
+  dateFormat?: DateFormatPreference,
 ) {
   const studentName = `${student.lastName}, ${student.firstName}`;
-  const dateLabel = formatRecitationDateLong(sessionDraft.sessionDate);
+  const dateLabel = formatRecitationDateLong(sessionDraft.sessionDate, dateFormat);
   const currentMark = record
     ? getRecitationMarkLabel(record.mark)
     : "Not in roster";
@@ -101,6 +109,8 @@ function RecitationMarkCell({
   isSelected,
   isEditing,
   isBusy,
+  dateFormat,
+  tableInset,
   onSelectSession,
   onCycleMark,
 }: {
@@ -109,6 +119,8 @@ function RecitationMarkCell({
   isSelected: boolean;
   isEditing: boolean;
   isBusy: boolean;
+  dateFormat?: DateFormatPreference;
+  tableInset: string;
   onSelectSession: (sessionId: string) => void;
   onCycleMark: (studentId: string) => void;
 }) {
@@ -122,6 +134,7 @@ function RecitationMarkCell({
     isSelected,
     isEditing,
     isBusy,
+    dateFormat,
   );
   // Builds the content for the mark cell.
   const content = (
@@ -141,7 +154,7 @@ function RecitationMarkCell({
       className={`w-32 min-w-32 border-r border-b border-paper-border align-top ${
         isSelected ? "border-x-2 border-x-ink bg-paper-muted" : "bg-paper-light"
       }`}>
-      <div className="p-1.5">
+      <div className={tableInset}>
         {isEditable ? (
           <button
             type="button"
@@ -177,9 +190,13 @@ export function RecitationRegister({
   selectedSessionId,
   isEditing,
   isBusy,
+  dateFormat,
+  tableDensity,
   onSelectSession,
   onCycleMark,
 }: RecitationRegisterProps) {
+  const density = getTableDensityClasses(tableDensity);
+
   return (
     <section
       className="min-w-0 max-w-full"
@@ -212,13 +229,14 @@ export function RecitationRegister({
             <tr>
               <th
                 scope="col"
-                className="sticky top-0 left-0 z-30 w-48 min-w-48 border-r border-b border-ink bg-paper-muted px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.12em] text-ink sm:w-60 sm:min-w-60 sm:px-4">
+                className={`sticky top-0 left-0 z-30 w-48 min-w-48 border-r border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.12em] text-ink sm:w-60 sm:min-w-60 ${density.tableCell}`}>
                 Student
               </th>
               {sessionDrafts.map((sessionDraft) => {
                 const isSelected = sessionDraft.id === selectedSessionId;
                 const dateLabel = formatRecitationDateLong(
                   sessionDraft.sessionDate,
+                  dateFormat,
                 );
                 return (
                   <th
@@ -232,7 +250,7 @@ export function RecitationRegister({
                         aria-current="date"
                         className="flex min-h-16 w-full flex-col items-center justify-center px-2 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink">
                         <span>
-                          {formatRecitationDateShort(sessionDraft.sessionDate)}
+                          {formatRecitationDateShort(sessionDraft.sessionDate, dateFormat)}
                         </span>
                         <span className="mt-1 border-t border-ink pt-1 text-[11px] tracking-[0.12em]">
                           Selected
@@ -251,7 +269,7 @@ export function RecitationRegister({
                         onClick={() => onSelectSession(sessionDraft.id)}
                         className="flex min-h-16 w-full cursor-pointer flex-col items-center justify-center px-2 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink hover:bg-paper-dark disabled:cursor-not-allowed">
                         <span>
-                          {formatRecitationDateShort(sessionDraft.sessionDate)}
+                          {formatRecitationDateShort(sessionDraft.sessionDate, dateFormat)}
                         </span>
                         <span className="mt-1 text-[11px] tracking-[0.12em] text-ink-muted">
                           Select
@@ -268,7 +286,7 @@ export function RecitationRegister({
               <tr key={student.id}>
                 <th
                   scope="row"
-                  className="sticky left-0 z-10 w-48 min-w-48 border-r border-b border-paper-border bg-paper-light px-3 py-3 align-top sm:w-60 sm:min-w-60 sm:px-4">
+                  className={`sticky left-0 z-10 w-48 min-w-48 border-r border-b border-paper-border bg-paper-light align-top sm:w-60 sm:min-w-60 ${density.tableCell}`}>
                   <span className="block break-words text-sm font-semibold leading-5 text-ink">
                     {student.lastName}, {student.firstName}
                   </span>
@@ -287,6 +305,8 @@ export function RecitationRegister({
                     isSelected={sessionDraft.id === selectedSessionId}
                     isEditing={isEditing}
                     isBusy={isBusy}
+                    dateFormat={dateFormat}
+                    tableInset={density.tableInset}
                     onSelectSession={onSelectSession}
                     onCycleMark={onCycleMark}
                   />

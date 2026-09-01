@@ -5,6 +5,7 @@ import { Dialog } from '../../../components/ui/Dialog';
 import { Label } from '../../../components/ui/Label';
 import { Notice } from '../../../components/ui/Notice';
 import type { ClassRecord } from '../../classes/class-types';
+import type { DateFormatPreference } from '../../settings/preference-display';
 import { formatAttendanceDateLong } from '../attendance-draft';
 import {
   ATTENDANCE_REMARKS_MAX_LENGTH,
@@ -20,6 +21,7 @@ interface AttendanceDetailsDialogProps {
   date: string;
   record: WorkingAttendanceRecord;
   isEditable: boolean;
+  dateFormat?: DateFormatPreference;
   onClose: () => void;
   onApply: (record: WorkingAttendanceRecord) => void;
 }
@@ -46,6 +48,7 @@ export function AttendanceDetailsDialog({
   date,
   record,
   isEditable,
+  dateFormat,
   onClose,
   onApply,
 }: AttendanceDetailsDialogProps) {
@@ -85,7 +88,7 @@ export function AttendanceDetailsDialog({
       isOpen
       onClose={onClose}
       title="Attendance details"
-      description={`${student.lastName}, ${student.firstName} — ${formatAttendanceDateLong(date)}`}
+      description={`${student.lastName}, ${student.firstName} — ${formatAttendanceDateLong(date, dateFormat)}`}
       footer={
         <>
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -118,7 +121,7 @@ export function AttendanceDetailsDialog({
           </div>
           <div className="bg-paper-light px-3 py-3">
             <dt className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">Date</dt>
-            <dd className="mt-1 text-sm text-ink-secondary">{formatAttendanceDateLong(date)}</dd>
+            <dd className="mt-1 text-sm text-ink-secondary">{formatAttendanceDateLong(date, dateFormat)}</dd>
           </div>
           <div className="bg-paper-light px-3 py-3">
             <dt className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">Current status</dt>

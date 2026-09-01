@@ -1,4 +1,5 @@
-import React, { forwardRef, useState } from 'react';
+// Renders a labeled input with connected hint, validation, and password-visibility controls.
+import React, { forwardRef, useId, useState } from 'react';
 import { Label } from './Label';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
@@ -42,7 +43,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     ref
   ) => {
     const [showPassword, setShowPassword] = useState(false);
-    const inputId = id || (label && typeof label === 'string' ? `input-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : undefined);
+    const generatedId = useId().replace(/:/g, '');
+    const inputId = id || `input-${generatedId}`;
 
     const isPassword = type === 'password';
     const computedType = isPassword && showPassword ? 'text' : type;
@@ -67,6 +69,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       : '';
 
     const fontStyle = isMonospace ? 'font-mono' : 'font-sans';
+    const errorId = `${inputId}-error`;
+    const hintId = `${inputId}-hint`;
+    const describedBy = [hint ? hintId : null, error ? errorId : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
     return (
       <div className={`w-full ${wrapperClassName}`}>
@@ -94,8 +101,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             type={computedType}
             disabled={disabled}
+            required={required}
             aria-invalid={Boolean(error)}
-            aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
+            aria-describedby={describedBy}
+            aria-errormessage={error ? errorId : undefined}
             className={`w-full rounded-none text-black placeholder:text-neutral-400 transition-colors focus:outline-none disabled:opacity-50 disabled:bg-neutral-100 disabled:cursor-not-allowed ${sizeStyles} ${variantStyles} ${errorStyles} ${fontStyle} ${leftElement ? 'pl-9' : ''} ${rightElement || (isPassword && allowPasswordToggle) ? 'pr-14' : ''} ${className}`}
             {...props}
           />
@@ -105,7 +114,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-2.5 px-1 py-0.5 text-neutral-500 hover:text-black hover:bg-neutral-100 focus:outline-none cursor-pointer text-[10px] font-mono select-none uppercase border border-neutral-300"
+              className="absolute right-0 flex h-11 min-w-11 cursor-pointer select-none items-center justify-center border-l border-neutral-300 px-2 font-mono text-[10px] uppercase text-neutral-600 hover:bg-neutral-100 hover:text-black focus:outline-none"
             >
               {showPassword ? 'MASK' : 'VIEW'}
             </button>
@@ -118,16 +127,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
 
-        {error && (
-          <p id={inputId ? `${inputId}-error` : undefined} className="mt-1 text-xs font-mono text-red-600 flex items-center gap-1">
-            <span aria-hidden="true">/!/</span>
-            <span>{error}</span>
+        {hint && (
+          <p id={hintId} className="mt-1 text-xs font-mono text-neutral-600">
+            {hint}
           </p>
         )}
 
-        {!error && hint && (
-          <p id={inputId ? `${inputId}-hint` : undefined} className="mt-1 text-xs font-mono text-neutral-500">
-            {hint}
+        {error && (
+          <p id={errorId} className="mt-1 text-xs font-mono text-red-600 flex items-center gap-1">
+            <span aria-hidden="true">/!/</span>
+            <span>{error}</span>
           </p>
         )}
       </div>

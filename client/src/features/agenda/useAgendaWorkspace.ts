@@ -1,15 +1,19 @@
-// Owns Agenda API loading, calendar navigation, filters, class projections, and confirmed writes.
+// Owns Agenda categories/events, navigation, filters, projections, and confirmed writes.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ClassRecord } from '../classes/class-types';
 import { fetchClasses, ClassApiError } from '../classes/classes-api';
 import {
   AgendaApiError,
+  completeAgendaEvent,
   createAgendaEvent,
   deleteAgendaEvent,
   listAgendaEvents,
+  reopenAgendaEvent,
   updateAgendaEvent,
 } from './agenda-api';
+import { fetchAgendaCategories } from './agenda-category-api';
 import type {
+  AgendaCategory,
   AgendaEvent,
   AgendaTypeFilter,
   CreateAgendaEventInput,
@@ -57,6 +61,11 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
   const [eventLoadStatus, setEventLoadStatus] = useState<LoadStatus>('loading');
   const [eventLoadError, setEventLoadError] = useState('');
   const [eventLoadAttempt, setEventLoadAttempt] = useState(0);
+
+  const [categories, setCategories] = useState<AgendaCategory[]>([]);
+  const [categoryLoadStatus, setCategoryLoadStatus] = useState<LoadStatus>('loading');
+  const [categoryLoadError, setCategoryLoadError] = useState('');
+  const [categoryLoadAttempt, setCategoryLoadAttempt] = useState(0);
 
   const [selectedClassId, setSelectedClassId] = useState<string>('ALL');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<AgendaTypeFilter>('ALL');
@@ -138,6 +147,43 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
     };
   }, [eventLoadAttempt, onSessionExpired, viewMonth, viewYear]);
 
+  // Loads all owned categories so inactive event categories remain readable and filterable.
+  useEffect(() => {
+    const controller = new AbortController();
+    let isCurrentRequest = true;
+
+    fetchAgendaCategories(controller.signal)
+      .then((loadedCategories) => {
+        if (!isCurrentRequest) return;
+        setCategories(loadedCategories);
+        setCategoryLoadError('');
+        setCategoryLoadStatus('ready');
+        setSelectedTypeFilter((currentFilter) => {
+          if (currentFilter === 'ALL' || currentFilter === 'CUSTOM_EVENTS' ||
+              currentFilter === 'CLASS_SESSIONS') return currentFilter;
+          return loadedCategories.some((category) => category.id === currentFilter)
+            ? currentFilter
+            : 'ALL';
+        });
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error) || !isCurrentRequest) return;
+        if (error instanceof AgendaApiError && error.status === 401) {
+          onSessionExpired?.();
+          return;
+        }
+        setCategoryLoadError(
+          error instanceof Error ? error.message : 'Unable to load Agenda categories.',
+        );
+        setCategoryLoadStatus('error');
+      });
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+    };
+  }, [categoryLoadAttempt, onSessionExpired]);
+
   const availableClasses = useMemo(
     () => classLoadStatus === 'ready' ? classes : [],
     [classLoadStatus, classes],
@@ -172,7 +218,7 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
       if (
         selectedTypeFilter !== 'ALL' &&
         selectedTypeFilter !== 'CUSTOM_EVENTS' &&
-        event.eventType !== selectedTypeFilter
+        event.categoryId !== selectedTypeFilter
       ) {
         continue;
       }
@@ -284,6 +330,12 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
     setClassLoadAttempt((attempt) => attempt + 1);
   }, []);
 
+  const retryCategoryLoad = useCallback(() => {
+    setCategoryLoadStatus('loading');
+    setCategoryLoadError('');
+    setCategoryLoadAttempt((attempt) => attempt + 1);
+  }, []);
+
   // Creates only after the server confirms the canonical UUID and timestamps.
   const createEvent = useCallback(async (input: CreateAgendaEventInput) => {
     try {
@@ -354,6 +406,28 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
     }
   }, [events, onSessionExpired]);
 
+  const setEventCompletion = useCallback(async (event: AgendaEvent) => {
+    try {
+      const updatedEvent = event.completedAt
+        ? await reopenAgendaEvent(event.id)
+        : await completeAgendaEvent(event.id);
+      setEvents((currentEvents) => replaceAgendaEvent(currentEvents, updatedEvent));
+      setFeedback({
+        variant: 'success',
+        title: updatedEvent.completedAt ? 'Event Completed' : 'Event Reopened',
+        message: updatedEvent.completedAt
+          ? `“${updatedEvent.title}” is marked complete.`
+          : `“${updatedEvent.title}” is active again.`,
+      });
+      return updatedEvent;
+    } catch (error: unknown) {
+      if (error instanceof AgendaApiError && error.status === 401) {
+        onSessionExpired?.();
+      }
+      throw error;
+    }
+  }, [onSessionExpired]);
+
   return {
     viewYear,
     viewMonth,
@@ -363,7 +437,12 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
     classLoadError,
     eventLoadStatus,
     eventLoadError,
-    canManageEvents: eventLoadStatus === 'ready',
+    categories,
+    categoryLoadStatus,
+    categoryLoadError,
+    canManageEvents: eventLoadStatus === 'ready' &&
+      categoryLoadStatus === 'ready' &&
+      categories.some((category) => category.isActive),
     events,
     selectedClassId,
     selectedTypeFilter,
@@ -379,9 +458,11 @@ export function useAgendaWorkspace(onSessionExpired?: () => void) {
     selectDate,
     retryEventLoad,
     retryClassLoad,
+    retryCategoryLoad,
     createEvent,
     updateEvent,
     deleteEvent,
+    setEventCompletion,
     dismissFeedback: () => setFeedback(null),
   };
 }

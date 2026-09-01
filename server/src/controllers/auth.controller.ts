@@ -43,10 +43,11 @@ export async function loginController(
 
     const response = loginSuccessResponseSchema.parse({
       success: true,
-      data: { user },
+      data: { user: user.user },
     });
     const sessionToken = await createSessionToken(
-      user.id,
+      user.user.id,
+      user.sessionVersion,
       req.body.rememberMe,
     );
 

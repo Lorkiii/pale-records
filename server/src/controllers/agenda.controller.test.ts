@@ -24,6 +24,7 @@ import type { AgendaEventRecord } from "../validations/agenda.response.js";
 const userId = "a8a5bbc6-bbd1-44f8-9c73-1adbc04ff57c";
 const eventId = "099aa026-ef03-4ab6-92ee-68fa37fb6523";
 const classId = "2c6e62cc-584d-4faf-90f6-fdb50b27c9d0";
+const categoryId = "805a2580-d0b5-48a8-8eb3-9356e464b838";
 
 const authenticatedUser = {
   id: userId,
@@ -41,9 +42,17 @@ const publicEvent: AgendaEventRecord = {
   startTime: "09:00",
   endTime: "11:00",
   isAllDay: false,
-  eventType: "EXAM",
+  categoryId,
+  category: {
+    id: categoryId,
+    name: "Examination",
+    shortCode: "EXAM",
+    accentKey: "SIGNAL_RED",
+    isActive: true,
+  },
   classId,
   location: "Room 204",
+  completedAt: null,
   createdAt: "2026-08-29T01:02:03.000Z",
   updatedAt: "2026-08-29T04:05:06.000Z",
 };
@@ -57,7 +66,7 @@ function agendaEventBody(overrides: Record<string, unknown> = {}) {
     startTime: "09:00",
     endTime: "11:00",
     isAllDay: false,
-    eventType: "EXAM",
+    categoryId,
     classId,
     location: "Room 204",
     ...overrides,
@@ -66,9 +75,12 @@ function agendaEventBody(overrides: Record<string, unknown> = {}) {
 
 // Adds the browser identifier accepted only by the one-event import route.
 function agendaImportBody(overrides: Record<string, unknown> = {}) {
+  const { categoryId: unusedCategoryId, ...eventFields } = agendaEventBody();
+  void unusedCategoryId;
   return {
     legacyEventId: "evt_1724900000000_ab12cd3",
-    ...agendaEventBody(),
+    ...eventFields,
+    eventType: "EXAM",
     ...overrides,
   };
 }
@@ -87,6 +99,11 @@ function createTestApp(
     }),
     updateEvent: async () => ({ status: "updated", event: publicEvent }),
     deleteEvent: async () => ({ status: "deleted" }),
+    completeEvent: async () => ({
+      status: "updated",
+      event: { ...publicEvent, completedAt: "2026-08-29T05:06:07.000Z" },
+    }),
+    reopenEvent: async () => ({ status: "updated", event: publicEvent }),
     ...overrides,
   };
   const handlers = createAgendaControllerHandlers(dependencies);
@@ -117,6 +134,16 @@ function createTestApp(
     validateBody(updateAgendaEventSchema),
     handlers.updateAgendaEventController,
   );
+  testApp.post(
+    "/events/:eventId/complete",
+    validateParams(agendaEventIdParamsSchema),
+    handlers.completeAgendaEventController,
+  );
+  testApp.post(
+    "/events/:eventId/reopen",
+    validateParams(agendaEventIdParamsSchema),
+    handlers.reopenAgendaEventController,
+  );
   testApp.delete(
     "/events/:eventId",
     validateParams(agendaEventIdParamsSchema),
@@ -140,6 +167,10 @@ test("Agenda controllers return valid CRUD and import envelopes", async () => {
     .send(agendaEventBody({ title: "Updated examination" }));
   const deleteResponse = await request(createTestApp())
     .delete(`/events/${eventId}`);
+  const completeResponse = await request(createTestApp())
+    .post(`/events/${eventId}/complete`);
+  const reopenResponse = await request(createTestApp())
+    .post(`/events/${eventId}/reopen`);
 
   assert.equal(listResponse.status, 200);
   assert.equal(listResponse.body.data.events[0].id, eventId);
@@ -158,6 +189,8 @@ test("Agenda controllers return valid CRUD and import envelopes", async () => {
   assert.equal(updateResponse.body.data.event.id, eventId);
   assert.equal(deleteResponse.status, 200);
   assert.equal(deleteResponse.body.data.eventId, eventId);
+  assert.equal(completeResponse.body.data.event.completedAt, "2026-08-29T05:06:07.000Z");
+  assert.equal(reopenResponse.body.data.event.completedAt, null);
 });
 
 test("Agenda controllers pass only the authenticated user ID to every service", async () => {
@@ -192,6 +225,14 @@ test("Agenda controllers pass only the authenticated user ID to every service", 
       receivedUserIds.push(trustedUserId);
       return { status: "deleted" };
     },
+    completeEvent: async (trustedUserId) => {
+      receivedUserIds.push(trustedUserId);
+      return { status: "updated", event: publicEvent };
+    },
+    reopenEvent: async (trustedUserId) => {
+      receivedUserIds.push(trustedUserId);
+      return { status: "updated", event: publicEvent };
+    },
   });
 
   await request(testApp).get("/events?from=2026-09-01&to=2026-09-30");
@@ -203,8 +244,10 @@ test("Agenda controllers pass only the authenticated user ID to every service", 
   }));
   await request(testApp).patch(`/events/${eventId}`).send(agendaEventBody());
   await request(testApp).delete(`/events/${eventId}`);
+  await request(testApp).post(`/events/${eventId}/complete`);
+  await request(testApp).post(`/events/${eventId}/reopen`);
 
-  assert.deepEqual(receivedUserIds, [userId, userId, userId, userId, userId]);
+  assert.deepEqual(receivedUserIds, [userId, userId, userId, userId, userId, userId, userId]);
   assert.deepEqual(receivedRange, ["2026-09-01", "2026-09-30"]);
   assert.equal(receivedCreateTitle, "Final examination");
 });
@@ -222,8 +265,14 @@ test("Agenda controllers return safe event-not-found and Class-not-found errors"
   const missingUpdateClass = await request(createTestApp({
     updateEvent: async () => ({ status: "class_not_found" }),
   })).patch(`/events/${eventId}`).send(agendaEventBody());
+  const missingCategory = await request(createTestApp({
+    createEvent: async () => ({ status: "category_not_found" }),
+  })).post("/events").send(agendaEventBody());
+  const missingCompletion = await request(createTestApp({
+    completeEvent: async () => ({ status: "event_not_found" }),
+  })).post(`/events/${eventId}/complete`);
 
-  for (const response of [missingUpdate, missingDelete]) {
+  for (const response of [missingUpdate, missingDelete, missingCompletion]) {
     assert.equal(response.status, 404);
     assert.deepEqual(response.body, {
       success: false,
@@ -243,6 +292,8 @@ test("Agenda controllers return safe event-not-found and Class-not-found errors"
       },
     });
   }
+  assert.equal(missingCategory.status, 404);
+  assert.equal(missingCategory.body.error.code, "AGENDA_CATEGORY_NOT_FOUND");
 });
 
 test("Agenda validation middleware rejects malformed inputs before service access", async () => {
@@ -281,6 +332,8 @@ test("Agenda validation middleware rejects malformed inputs before service acces
     })),
     request(testApp).patch("/events/not-a-uuid").send(agendaEventBody()),
     request(testApp).delete("/events/not-a-uuid"),
+    request(testApp).post("/events/not-a-uuid/complete"),
+    request(testApp).post("/events/not-a-uuid/reopen"),
   ]);
 
   for (const response of invalidResponses) {

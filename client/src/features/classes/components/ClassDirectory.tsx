@@ -1,49 +1,39 @@
 // Displays active class records and exposes their edit/archive actions.
 import { useRef, type FocusEvent } from 'react';
+import {
+  formatDateOnly,
+  formatTime,
+  getTableDensityClasses,
+  type DateFormatPreference,
+  type TableDensityPreference,
+  type TimeFormatPreference,
+} from '../../settings/preference-display';
 import { CLASS_WEEKDAYS, type ClassRecord } from '../class-types';
 
 interface ClassDirectoryProps {
   classes: ClassRecord[];
+  dateFormat?: DateFormatPreference;
+  timeFormat?: TimeFormatPreference;
+  tableDensity?: TableDensityPreference;
   onEdit: (classRecord: ClassRecord) => void;
   onArchive: (classRecord: ClassRecord) => void;
 }
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
-
-// Formats a stored date-only value without shifting it across local time zones.
-function formatDate(value: string) {
-  return dateFormatter.format(new Date(`${value}T00:00:00.000Z`));
-}
-
 // Builds the most informative available date label for a class card.
-function getDateRange(classRecord: ClassRecord) {
+function getDateRange(classRecord: ClassRecord, dateFormat?: DateFormatPreference) {
   if (classRecord.startDate && classRecord.endDate) {
-    return `${formatDate(classRecord.startDate)} – ${formatDate(classRecord.endDate)}`;
+    return `${formatDateOnly(classRecord.startDate, dateFormat)} – ${formatDateOnly(classRecord.endDate, dateFormat)}`;
   }
 
   if (classRecord.startDate) {
-    return `Starts ${formatDate(classRecord.startDate)}`;
+    return `Starts ${formatDateOnly(classRecord.startDate, dateFormat)}`;
   }
 
   if (classRecord.endDate) {
-    return `Ends ${formatDate(classRecord.endDate)}`;
+    return `Ends ${formatDateOnly(classRecord.endDate, dateFormat)}`;
   }
 
   return null;
-}
-
-// Formats an already validated HH:mm value without Date or timezone conversion.
-function formatScheduleTime(value: string) {
-  const [hourValue, minute] = value.split(':');
-  const hour = Number(hourValue);
-  const period = hour < 12 ? 'AM' : 'PM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour}:${minute} ${period}`;
 }
 
 // Resolves the short ISO weekday label used by compact schedule lines.
@@ -113,7 +103,16 @@ function ClassActions({ classRecord, onEdit, onArchive }: ClassActionsProps) {
 }
 
 // Renders active class records with their available metadata and management actions.
-export function ClassDirectory({ classes, onEdit, onArchive }: ClassDirectoryProps) {
+export function ClassDirectory({
+  classes,
+  dateFormat,
+  timeFormat,
+  tableDensity,
+  onEdit,
+  onArchive,
+}: ClassDirectoryProps) {
+  const density = getTableDensityClasses(tableDensity);
+
   return (
     <section aria-labelledby="class-directory-heading">
       <div className="mb-5 flex items-end gap-4">
@@ -131,9 +130,9 @@ export function ClassDirectory({ classes, onEdit, onArchive }: ClassDirectoryPro
         </span>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className={`grid md:grid-cols-2 xl:grid-cols-3 ${density.directoryGrid}`}>
         {classes.map((classRecord, index) => {
-          const dateRange = getDateRange(classRecord);
+          const dateRange = getDateRange(classRecord, dateFormat);
           const schedules = [...classRecord.schedules].sort(
             (first, second) => first.dayOfWeek - second.dayOfWeek,
           );
@@ -148,7 +147,7 @@ export function ClassDirectory({ classes, onEdit, onArchive }: ClassDirectoryPro
 
           return (
             <article key={classRecord.id} className="border border-ink bg-paper-light">
-              <header className="flex items-start justify-between gap-4 border-b border-ink bg-paper-muted px-5 py-4">
+              <header className={`flex items-start justify-between gap-4 border-b border-ink bg-paper-muted ${density.surfaceHeader}`}>
                 <div className="min-w-0">
                   <h3 className="font-sans text-lg font-semibold leading-6 text-ink">{classRecord.subjectName}</h3>
                   {classRecord.subjectCode ? (
@@ -169,11 +168,11 @@ export function ClassDirectory({ classes, onEdit, onArchive }: ClassDirectoryPro
                 </div>
               </header>
 
-              <div className="p-5">
+              <div className={density.surface}>
                 {metadata.length > 0 ? (
-                  <dl className="space-y-3">
+                  <dl className={density.stack}>
                     {metadata.map((entry) => (
-                      <div key={entry.label} className="grid grid-cols-[7rem_1fr] gap-3 border-b border-paper-border pb-3 last:border-b-0 last:pb-0">
+                      <div key={entry.label} className={`grid grid-cols-[7rem_1fr] gap-3 border-b border-paper-border last:border-b-0 last:pb-0 ${density.metadataRow}`}>
                         <dt className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
                           {entry.label}
                         </dt>
@@ -190,12 +189,12 @@ export function ClassDirectory({ classes, onEdit, onArchive }: ClassDirectoryPro
                     Weekly schedule
                   </p>
                   {schedules.length > 0 ? (
-                    <ul className="mt-2 space-y-1.5" aria-label={`${classRecord.subjectName} weekly schedule`}>
+                    <ul className={`mt-2 ${density.compactStack}`} aria-label={`${classRecord.subjectName} weekly schedule`}>
                       {schedules.map((schedule) => (
                         <li key={schedule.id} className="font-mono text-xs text-ink-secondary">
                           <span className="font-semibold text-ink">{getWeekdayShortLabel(schedule.dayOfWeek)}</span>
                           {' / '}
-                          {formatScheduleTime(schedule.startTime)}-{formatScheduleTime(schedule.endTime)}
+                          {formatTime(schedule.startTime, timeFormat, '12H')}–{formatTime(schedule.endTime, timeFormat, '12H')}
                         </li>
                       ))}
                     </ul>

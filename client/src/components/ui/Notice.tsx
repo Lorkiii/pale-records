@@ -1,3 +1,4 @@
+// Presents assertive errors and warnings or polite informational and success feedback.
 import React from 'react';
 
 export interface NoticeProps {
@@ -32,10 +33,13 @@ export const Notice: React.FC<NoticeProps> = ({
     success: '[OK]',
     system: '[SYS]',
   }[variant];
+  const isAssertive = variant === 'error' || variant === 'warning';
 
   return (
     <div
-      role="alert"
+      role={isAssertive ? 'alert' : 'status'}
+      aria-live={isAssertive ? 'assertive' : 'polite'}
+      aria-atomic="true"
       className={`border p-3 md:p-4 font-mono text-xs select-none ${styles} ${className}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -51,7 +55,7 @@ export const Notice: React.FC<NoticeProps> = ({
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss notice"
-            className="text-xs font-mono font-bold hover:underline cursor-pointer ml-2"
+            className="ml-2 min-h-11 shrink-0 cursor-pointer px-2 font-mono text-xs font-bold hover:underline"
           >
             [CLOSE]
           </button>

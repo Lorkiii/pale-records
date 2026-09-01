@@ -27,6 +27,7 @@ import type {
   RecitationSessionDraft,
   RecitationUndoSnapshot,
 } from "./recitation-types";
+import type { DateFormatPreference } from "../../settings/preference-display";
 
 type LoadStatus = "loading" | "ready" | "error";
 type SessionLoadStatus = "idle" | "loading" | "ready" | "error";
@@ -71,7 +72,10 @@ function getRecitationApiMessages(error: RecitationApiError) {
 }
 
 // Coordinates one selected class/month with one selected Recitation working copy.
-export function useRecitationWorkspace(onSessionExpired: () => void) {
+export function useRecitationWorkspace(
+  onSessionExpired: () => void,
+  dateFormat?: DateFormatPreference,
+) {
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [loadError, setLoadError] = useState("");
@@ -374,7 +378,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
       );
       setFeedback(null);
       setLiveMessage(
-        `${formatRecitationDateLong(date)} removed from selected Recitation dates.`,
+        `${formatRecitationDateLong(date, dateFormat)} removed from selected Recitation dates.`,
       );
       return;
     }
@@ -391,7 +395,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
 
     setSelectedDates((currentDates) => [...currentDates, date].sort());
     setFeedback(null);
-    setLiveMessage(`${formatRecitationDateLong(date)} selected for Recitation.`);
+    setLiveMessage(`${formatRecitationDateLong(date, dateFormat)} selected for Recitation.`);
   };
 
   // Removes one local date selection and leaves persisted sessions unchanged.
@@ -405,7 +409,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     );
     setFeedback(null);
     setLiveMessage(
-      `${formatRecitationDateLong(date)} removed from selected Recitation dates.`,
+      `${formatRecitationDateLong(date, dateFormat)} removed from selected Recitation dates.`,
     );
   };
 
@@ -536,7 +540,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
                     : "Unable to create this Recitation date.",
                 ]
           ).map(
-            (message) => `${formatRecitationDateLong(sessionDate)}: ${message}`,
+            (message) => `${formatRecitationDateLong(sessionDate, dateFormat)}: ${message}`,
           );
           shouldReloadMonth = true;
           break;
@@ -700,7 +704,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     setUndoRecords(null);
     setFeedback(null);
     setLiveMessage(
-      `${formatRecitationDateLong(nextSession.sessionDate)} selected in read-only mode.`,
+      `${formatRecitationDateLong(nextSession.sessionDate, dateFormat)} selected in read-only mode.`,
     );
   };
 
@@ -718,7 +722,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
     setUndoRecords(null);
     setFeedback(null);
     setLiveMessage(
-      `${formatRecitationDateLong(selectedSessionDraft.sessionDate)} is now editable.`,
+      `${formatRecitationDateLong(selectedSessionDraft.sessionDate, dateFormat)} is now editable.`,
     );
   };
 
@@ -855,7 +859,7 @@ export function useRecitationWorkspace(onSessionExpired: () => void) {
         ],
       });
       setLiveMessage(
-        `${formatRecitationDateLong(savedSession.sessionDate)} Recitation saved.`,
+        `${formatRecitationDateLong(savedSession.sessionDate, dateFormat)} Recitation saved.`,
       );
     } catch (error: unknown) {
       if (error instanceof RecitationApiError && error.status === 401) {

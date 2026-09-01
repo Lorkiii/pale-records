@@ -1,3 +1,4 @@
+// Renders the shared PALE action button variants and protected loading state.
 import React, { forwardRef } from 'react';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -59,6 +60,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         type={type}
         disabled={disabled || isLoading}
+        aria-busy={isLoading || undefined}
         className={`${baseStyles} ${sizeStyles} ${variantStyles} ${widthStyle} ${className}`}
         {...props}
       >

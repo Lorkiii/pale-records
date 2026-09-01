@@ -1,13 +1,32 @@
-// Renders the responsive 7-column calendar matrix with event pips and synced class tags.
-import { AGENDA_EVENT_TYPES, type CalendarDayCell } from '../agenda-types';
+// Renders the calendar matrix with category accents, completion, and synced class tags.
+import { AGENDA_CATEGORY_ACCENTS, type CalendarDayCell } from '../agenda-types';
 import { DAYS_OF_WEEK_SHORT } from '../agenda-utils';
+import {
+  formatDateOnly,
+  formatTime,
+  getTableDensityClasses,
+  type DateFormatPreference,
+  type TableDensityPreference,
+  type TimeFormatPreference,
+} from '../../settings/preference-display';
 
 interface AgendaCalendarGridProps {
   cells: CalendarDayCell[];
+  dateFormat?: DateFormatPreference;
+  timeFormat?: TimeFormatPreference;
+  tableDensity?: TableDensityPreference;
   onSelectDate: (dateKey: string) => void;
 }
 
-export function AgendaCalendarGrid({ cells, onSelectDate }: AgendaCalendarGridProps) {
+export function AgendaCalendarGrid({
+  cells,
+  dateFormat,
+  timeFormat,
+  tableDensity,
+  onSelectDate,
+}: AgendaCalendarGridProps) {
+  const density = getTableDensityClasses(tableDensity);
+
   return (
     <div className="flex flex-col border border-ink bg-paper-light">
       {/* Weekday Column Headers */}
@@ -32,8 +51,8 @@ export function AgendaCalendarGrid({ cells, onSelectDate }: AgendaCalendarGridPr
               key={cell.dateKey}
               type="button"
               onClick={() => onSelectDate(cell.dateKey)}
-              aria-label={`${cell.dateKey}, ${totalItemsCount} scheduled items`}
-              className={`group relative flex min-h-[96px] flex-col justify-between p-1.5 sm:min-h-[112px] sm:p-2 text-left transition-colors cursor-pointer select-none focus:outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ink ${
+              aria-label={`${formatDateOnly(cell.dateKey, dateFormat)}, ${totalItemsCount} scheduled items`}
+              className={`group relative flex flex-col justify-between text-left transition-colors cursor-pointer select-none focus:outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ink ${density.calendarCell} ${
                 !isRightEdge ? 'border-r border-paper-border' : ''
               } ${!isBottomEdge ? 'border-b border-paper-border' : ''} ${
                 cell.isSelected
@@ -71,18 +90,18 @@ export function AgendaCalendarGrid({ cells, onSelectDate }: AgendaCalendarGridPr
               <div className="mt-1 hidden flex-1 flex-col gap-1 overflow-hidden sm:flex">
                 {/* Custom Events */}
                 {cell.events.slice(0, 2).map((evt) => {
-                  const typeConfig = AGENDA_EVENT_TYPES.find((t) => t.type === evt.eventType);
+                  const accent = AGENDA_CATEGORY_ACCENTS[evt.category.accentKey];
                   return (
                     <div
                       key={evt.id}
-                      className={`flex items-center gap-1 truncate border px-1 py-0.5 text-[10px] font-mono leading-tight font-medium ${
-                        typeConfig?.badgeStyle ?? 'border-ink-muted text-ink bg-paper'
+                      className={`flex items-center gap-1 truncate border px-1 py-0.5 text-[10px] font-mono leading-tight font-medium ${accent.badgeStyle} ${
+                        evt.completedAt ? 'opacity-60 line-through' : ''
                       }`}
-                      title={`${evt.title} (${typeConfig?.label})`}
+                      title={`${evt.title} (${evt.category.name})${evt.completedAt ? ' — Completed' : ''}`}
                     >
                       <span
                         className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                          typeConfig?.pipColor ?? 'bg-ink'
+                          accent.pipColor
                         }`}
                       />
                       <span className="truncate">{evt.title}</span>
@@ -95,7 +114,7 @@ export function AgendaCalendarGrid({ cells, onSelectDate }: AgendaCalendarGridPr
                   <div
                     key={session.id}
                     className="flex items-center gap-1 truncate border border-dashed border-ink/40 bg-paper px-1 py-0.5 font-mono text-[10px] text-ink-secondary"
-                    title={`${session.subjectName} (${session.startTime}-${session.endTime})`}
+                    title={`${session.subjectName} (${formatTime(session.startTime, timeFormat)}–${formatTime(session.endTime, timeFormat)})`}
                   >
                     <span className="font-bold text-ink-muted">░</span>
                     <span className="truncate">
@@ -115,11 +134,12 @@ export function AgendaCalendarGrid({ cells, onSelectDate }: AgendaCalendarGridPr
               {/* Mobile pip dots */}
               <div className="mt-1 flex flex-wrap gap-1 sm:hidden">
                 {cell.events.slice(0, 3).map((evt) => {
-                  const typeConfig = AGENDA_EVENT_TYPES.find((t) => t.type === evt.eventType);
+                  const accent = AGENDA_CATEGORY_ACCENTS[evt.category.accentKey];
                   return (
                     <span
                       key={evt.id}
-                      className={`h-1.5 w-1.5 rounded-full ${typeConfig?.pipColor ?? 'bg-ink'}`}
+                      className={`h-1.5 w-1.5 rounded-full ${accent.pipColor} ${evt.completedAt ? 'opacity-40' : ''}`}
+                      aria-label={evt.completedAt ? `${evt.title}, completed` : evt.title}
                     />
                   );
                 })}

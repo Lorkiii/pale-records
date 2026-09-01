@@ -96,4 +96,16 @@ Account, dashboard, management, and other signed-in screens must use the same pa
 
 - Review new screens beside `src/pages/LoginPage.tsx` and `src/index.css` to confirm that they belong to the same visual system.
 - For account screens, also confirm that decoration has not reduced scanability or reading comfort.
-- Run `npm run lint` and `npm run build` from `client/` after code changes when the environment permits.
+- Add or update focused client tests for changed behavior when the existing
+  client test setup supports them. Do not introduce a test framework solely to
+  satisfy this instruction.
+- Run `npm run lint` and `npm run build` from `client/` after client source
+  changes when the environment permits, and wait for both commands to finish.
+- For interaction or UX changes, verify the affected keyboard flow, labels,
+  field errors, focus behavior, loading/saving state, narrow-screen layout, and
+  touch targets as applicable.
+- Perform browser verification only when the required authenticated state and
+  test data are safely available. Do not invent credentials or create
+  persistent data without authorization.
+- Include the exact client checks and any unavailable browser verification in
+  the repository completion report required by the root `AGENTS.md`.

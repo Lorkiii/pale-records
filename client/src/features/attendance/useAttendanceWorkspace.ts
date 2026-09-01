@@ -1,5 +1,5 @@
 // Owns Attendance page state, loading effects, derived values, and workflow handlers.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AttendanceApiError,
   createAttendanceSession,
@@ -28,6 +28,10 @@ import type {
 } from './attendance-types';
 import { ClassApiError, fetchClasses } from '../classes/classes-api';
 import type { ClassRecord } from '../classes/class-types';
+import type {
+  DateFormatPreference,
+} from '../settings/preference-display';
+import type { SystemPreferences } from '../settings/settings-types';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 type SessionLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -94,7 +98,11 @@ function getAttendanceApiMessages(error: AttendanceApiError) {
 }
 
 // Coordinates persisted sessions with one selected session's local working snapshots.
-export function useAttendanceWorkspace(onSessionExpired: () => void) {
+export function useAttendanceWorkspace(
+  onSessionExpired: () => void,
+  defaultAttendanceState?: SystemPreferences['defaultAttendanceState'],
+  dateFormat?: DateFormatPreference,
+) {
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadError, setLoadError] = useState('');
@@ -115,6 +123,11 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
   const [liveMessage, setLiveMessage] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const defaultAttendanceStateRef = useRef(defaultAttendanceState);
+
+  useEffect(() => {
+    defaultAttendanceStateRef.current = defaultAttendanceState;
+  }, [defaultAttendanceState]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -157,7 +170,10 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
     )
       .then((sessions) => {
         const sessionDrafts = sortAttendanceSessionDrafts(
-          sessions.map(createAttendanceSessionDraft),
+          sessions.map((session) => createAttendanceSessionDraft(
+            session,
+            defaultAttendanceStateRef.current,
+          )),
         );
         setDraftsByClassId((currentDrafts) => ({
           ...currentDrafts,
@@ -346,7 +362,7 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
       setFeedback({
         variant: 'info',
         title: 'Date already saved',
-        messages: [`${formatAttendanceDateLong(dateInput)} was selected without creating a duplicate.`],
+        messages: [`${formatAttendanceDateLong(dateInput, dateFormat)} was selected without creating a duplicate.`],
       });
       return;
     }
@@ -355,7 +371,10 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
     setFeedback(null);
     try {
       const session = await createAttendanceSession(selectedClass.id, dateInput);
-      const sessionDraft = createAttendanceSessionDraft(session);
+      const sessionDraft = createAttendanceSessionDraft(
+        session,
+        defaultAttendanceStateRef.current,
+      );
       setDraftsByClassId((currentDrafts) =>
         replaceClassSessionDraft(currentDrafts, selectedClass.id, sessionDraft),
       );
@@ -367,7 +386,7 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
         title: 'Attendance date created',
         messages: ['The date was saved. Its current enrolled roster remains an unsaved draft until Save attendance.'],
       });
-      setLiveMessage(`${formatAttendanceDateLong(session.sessionDate)} created and ready to edit.`);
+      setLiveMessage(`${formatAttendanceDateLong(session.sessionDate, dateFormat)} created and ready to edit.`);
     } catch (error: unknown) {
       if (error instanceof AttendanceApiError && error.status === 401) {
         onSessionExpired();
@@ -395,7 +414,10 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
             new AbortController().signal,
           );
           const sessionDrafts = sortAttendanceSessionDrafts(
-            sessions.map(createAttendanceSessionDraft),
+            sessions.map((session) => createAttendanceSessionDraft(
+              session,
+              defaultAttendanceStateRef.current,
+            )),
           );
           const duplicate = sessions.find((session) => session.sessionDate === dateInput);
           setDraftsByClassId((currentDrafts) => ({
@@ -408,7 +430,7 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
           setFeedback({
             variant: 'info',
             title: 'Date already saved',
-            messages: [`${formatAttendanceDateLong(dateInput)} was reloaded without creating a duplicate.`],
+            messages: [`${formatAttendanceDateLong(dateInput, dateFormat)} was reloaded without creating a duplicate.`],
           });
         } catch (reloadError: unknown) {
           if (reloadError instanceof AttendanceApiError && reloadError.status === 401) {
@@ -469,7 +491,7 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
     setDeleteTarget(null);
     setFeedback(null);
     if (nextSession) {
-      setLiveMessage(`${formatAttendanceDateLong(nextSession.sessionDate)} selected in read-only mode.`);
+      setLiveMessage(`${formatAttendanceDateLong(nextSession.sessionDate, dateFormat)} selected in read-only mode.`);
     }
   };
 
@@ -486,7 +508,7 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
     setEditingSessionId(selectedSessionId);
     setUndoRecords(null);
     setFeedback(null);
-    setLiveMessage(`${formatAttendanceDateLong(selectedSessionDraft.sessionDate)} is now editable.`);
+    setLiveMessage(`${formatAttendanceDateLong(selectedSessionDraft.sessionDate, dateFormat)} is now editable.`);
   };
 
   // Opens destructive confirmation for the currently selected saved session.
@@ -603,7 +625,7 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
       title: 'Changes canceled',
       messages: [selectedSessionDraft.isRosterInitialized
         ? 'The selected date was restored to its last saved server version.'
-        : 'The draft roster was restored to Unmarked without creating attendance records.'],
+        : 'The draft roster was restored to its initial local values without creating attendance records.'],
     });
     setLiveMessage('Local attendance changes canceled.');
   };
@@ -646,7 +668,7 @@ export function useAttendanceWorkspace(onSessionExpired: () => void) {
         title: 'Attendance saved',
         messages: ['The roster became this date’s historical snapshot, and all PALE statuses and Excused remarks were persisted.'],
       });
-      setLiveMessage(`${formatAttendanceDateLong(savedSession.sessionDate)} saved to PALE Records.`);
+      setLiveMessage(`${formatAttendanceDateLong(savedSession.sessionDate, dateFormat)} saved to PALE Records.`);
     } catch (error: unknown) {
       if (error instanceof AttendanceApiError && error.status === 401) {
         onSessionExpired();

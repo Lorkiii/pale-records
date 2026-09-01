@@ -3,10 +3,12 @@ import type { NextFunction, Request, Response } from "express";
 
 import type { AuthenticatedResponseLocals } from "../middleware/require-authenticated-user.js";
 import {
+  completeAgendaEvent,
   createAgendaEvent,
   deleteAgendaEvent,
   importAgendaEvent,
   listAgendaEvents,
+  reopenAgendaEvent,
   updateAgendaEvent,
 } from "../services/agenda.service.js";
 import type {
@@ -18,6 +20,8 @@ import type {
 } from "../validations/agenda.schema.js";
 import {
   agendaClassNotFoundResponseSchema,
+  agendaCategoryUnavailableResponseSchema,
+  agendaEventCompletionResponseSchema,
   agendaEventCreateResponseSchema,
   agendaEventDeleteResponseSchema,
   agendaEventImportResponseSchema,
@@ -32,6 +36,8 @@ export type AgendaControllerDependencies = {
   importEvent: typeof importAgendaEvent;
   updateEvent: typeof updateAgendaEvent;
   deleteEvent: typeof deleteAgendaEvent;
+  completeEvent: typeof completeAgendaEvent;
+  reopenEvent: typeof reopenAgendaEvent;
 };
 
 type AgendaResponseLocals = AuthenticatedResponseLocals & {
@@ -44,6 +50,8 @@ const defaultDependencies: AgendaControllerDependencies = {
   importEvent: importAgendaEvent,
   updateEvent: updateAgendaEvent,
   deleteEvent: deleteAgendaEvent,
+  completeEvent: completeAgendaEvent,
+  reopenEvent: reopenAgendaEvent,
 };
 
 // Returns the same safe event absence for missing and differently owned identifiers.
@@ -68,6 +76,18 @@ function sendAgendaClassNotFoundResponse(
     error: {
       code: "AGENDA_CLASS_NOT_FOUND",
       message: "Associated class was not found.",
+    },
+  }));
+}
+
+function sendAgendaCategoryUnavailableResponse(
+  res: Response<unknown, AgendaResponseLocals>,
+) {
+  return res.status(404).json(agendaCategoryUnavailableResponseSchema.parse({
+    success: false,
+    error: {
+      code: "AGENDA_CATEGORY_NOT_FOUND",
+      message: "Agenda category was not found or is inactive.",
     },
   }));
 }
@@ -111,6 +131,10 @@ export function createAgendaControllerHandlers(
 
       if (result.status === "class_not_found") {
         return sendAgendaClassNotFoundResponse(res);
+      }
+
+      if (result.status === "category_not_found") {
+        return sendAgendaCategoryUnavailableResponse(res);
       }
 
       return res.status(201).json(agendaEventCreateResponseSchema.parse({
@@ -162,6 +186,10 @@ export function createAgendaControllerHandlers(
         return sendAgendaClassNotFoundResponse(res);
       }
 
+      if (result.status === "category_not_found") {
+        return sendAgendaCategoryUnavailableResponse(res);
+      }
+
       return res.status(200).json(agendaEventUpdateResponseSchema.parse({
         success: true,
         data: { event: result.event },
@@ -195,12 +223,54 @@ export function createAgendaControllerHandlers(
     }
   };
 
+  const updateAgendaEventCompletion = async (
+    req: Request<AgendaEventIdParams>,
+    res: Response<unknown, AgendaResponseLocals>,
+    next: NextFunction,
+    operation: "complete" | "reopen",
+  ) => {
+    try {
+      const service = operation === "complete"
+        ? dependencies.completeEvent
+        : dependencies.reopenEvent;
+      const result = await service(
+        res.locals.authenticatedUser.id,
+        req.params.eventId,
+      );
+
+      if (result.status === "event_not_found") {
+        return sendAgendaEventNotFoundResponse(res);
+      }
+
+      return res.status(200).json(agendaEventCompletionResponseSchema.parse({
+        success: true,
+        data: { event: result.event },
+      }));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  const completeAgendaEventController = (
+    req: Request<AgendaEventIdParams>,
+    res: Response<unknown, AgendaResponseLocals>,
+    next: NextFunction,
+  ) => updateAgendaEventCompletion(req, res, next, "complete");
+
+  const reopenAgendaEventController = (
+    req: Request<AgendaEventIdParams>,
+    res: Response<unknown, AgendaResponseLocals>,
+    next: NextFunction,
+  ) => updateAgendaEventCompletion(req, res, next, "reopen");
+
   return {
     listAgendaEventsController,
     createAgendaEventController,
     importAgendaEventController,
     updateAgendaEventController,
     deleteAgendaEventController,
+    completeAgendaEventController,
+    reopenAgendaEventController,
   };
 }
 
@@ -210,4 +280,6 @@ export const {
   importAgendaEventController,
   updateAgendaEventController,
   deleteAgendaEventController,
+  completeAgendaEventController,
+  reopenAgendaEventController,
 } = createAgendaControllerHandlers();

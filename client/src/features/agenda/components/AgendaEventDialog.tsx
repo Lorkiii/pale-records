@@ -10,9 +10,8 @@ import { Select, type SelectOption } from '../../../components/ui/Select';
 import type { ClassRecord } from '../../classes/class-types';
 import { AgendaApiError } from '../agenda-api';
 import {
-  AGENDA_EVENT_TYPES,
+  type AgendaCategory,
   type AgendaEvent,
-  type AgendaEventType,
   type CreateAgendaEventInput,
   type UpdateAgendaEventInput,
 } from '../agenda-types';
@@ -27,6 +26,7 @@ interface SubmissionError {
 
 interface AgendaEventFormProps {
   classes: ClassRecord[];
+  categories: AgendaCategory[];
   isClassSelectionAvailable: boolean;
   isSaving: boolean;
   initialDateKey: string;
@@ -45,6 +45,7 @@ function isRealDateOnly(value: string) {
 
 function AgendaEventForm({
   classes,
+  categories,
   isClassSelectionAvailable,
   isSaving,
   initialDateKey,
@@ -54,8 +55,8 @@ function AgendaEventForm({
   onSave,
 }: AgendaEventFormProps) {
   const [title, setTitle] = useState(() => editingEvent?.title ?? '');
-  const [eventType, setEventType] = useState<AgendaEventType>(
-    () => editingEvent?.eventType ?? 'EXAM',
+  const [categoryId, setCategoryId] = useState(
+    () => editingEvent?.categoryId ?? categories.find((category) => category.isActive)?.id ?? '',
   );
   const [classId, setClassId] = useState<string>(() => editingEvent?.classId ?? 'NONE');
   const [eventDate, setEventDate] = useState(() => editingEvent?.eventDate ?? initialDateKey);
@@ -102,6 +103,12 @@ function AgendaEventForm({
       nextErrors.eventDate = 'Choose a valid event date.';
     }
 
+    if (!categories.some((category) => category.id === categoryId && (
+      category.isActive || editingEvent?.categoryId === category.id
+    ))) {
+      nextErrors.categoryId = 'Choose an available Agenda category.';
+    }
+
     if (!isAllDay && startTime && !TIME_PATTERN.test(startTime)) {
       nextErrors.startTime = 'Start time must use the HH:MM 24-hour format.';
     }
@@ -145,7 +152,7 @@ function AgendaEventForm({
       'startTime',
       'endTime',
       'isAllDay',
-      'eventType',
+      'categoryId',
       'classId',
       'location',
     ]);
@@ -176,7 +183,7 @@ function AgendaEventForm({
     try {
       await onSave({
         title: title.trim(),
-        eventType,
+        categoryId,
         classId: classId === 'NONE' ? undefined : classId,
         eventDate,
         isAllDay,
@@ -192,10 +199,12 @@ function AgendaEventForm({
     }
   };
 
-  const categoryOptions: SelectOption[] = AGENDA_EVENT_TYPES.map((typeConfig) => ({
-    value: typeConfig.type,
-    label: typeConfig.label,
-  }));
+  const categoryOptions: SelectOption[] = categories
+    .filter((category) => category.isActive || category.id === editingEvent?.categoryId)
+    .map((category) => ({
+      value: category.id,
+      label: category.isActive ? category.name : `${category.name} (Current, inactive)`,
+    }));
 
   const hasUnavailableCurrentClass = Boolean(
     editingEvent?.classId && !classes.some((classRecord) => classRecord.id === editingEvent.classId),
@@ -248,11 +257,11 @@ function AgendaEventForm({
           id="event-category"
           label="Category"
           required
-          value={eventType}
+          value={categoryId}
           disabled={isSaving}
-          onChange={(event) => setEventType(event.target.value as AgendaEventType)}
+          onChange={(event) => setCategoryId(event.target.value)}
           options={categoryOptions}
-          error={errors.eventType}
+          error={errors.categoryId}
         />
 
         <Select
@@ -383,6 +392,7 @@ interface AgendaEventDialogProps {
   isOpen: boolean;
   onClose: () => void;
   classes: ClassRecord[];
+  categories: AgendaCategory[];
   isClassSelectionAvailable: boolean;
   initialDateKey: string;
   editingEvent: AgendaEvent | null;
@@ -393,6 +403,7 @@ export function AgendaEventDialog({
   isOpen,
   onClose,
   classes,
+  categories,
   isClassSelectionAvailable,
   initialDateKey,
   editingEvent,
@@ -415,6 +426,7 @@ export function AgendaEventDialog({
       <AgendaEventForm
         key={`${editingEvent?.id ?? 'new'}-${initialDateKey}`}
         classes={classes}
+        categories={categories}
         isClassSelectionAvailable={isClassSelectionAvailable}
         isSaving={isSaving}
         initialDateKey={initialDateKey}

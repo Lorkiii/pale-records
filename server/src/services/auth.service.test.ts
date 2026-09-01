@@ -30,6 +30,7 @@ test("authenticateUser returns only safe fields for valid credentials", async ()
         username: "admin",
         email: "admin@pale.local",
         passwordHash: "stored-password-hash",
+        sessionVersion: 0,
       };
     },
     comparePassword: async (password, passwordHash) => {
@@ -43,13 +44,16 @@ test("authenticateUser returns only safe fields for valid credentials", async ()
   assert.equal(receivedIdentifier, "admin");
   assert.equal(receivedPassword, loginInput.password);
   assert.deepEqual(result, {
-    id: "7d51b6b3-8f2c-4db6-b9eb-f933cd085da3",
-    firstName: "PALE",
-    lastName: "Administrator",
-    username: "admin",
-    email: "admin@pale.local",
+    user: {
+      id: "7d51b6b3-8f2c-4db6-b9eb-f933cd085da3",
+      firstName: "PALE",
+      lastName: "Administrator",
+      username: "admin",
+      email: "admin@pale.local",
+    },
+    sessionVersion: 0,
   });
-  assert.equal("passwordHash" in (result ?? {}), false);
+  assert.equal("passwordHash" in (result?.user ?? {}), false);
 });
 
 test("authenticateUser still compares a password when the account is missing", async () => {
@@ -74,6 +78,7 @@ test("getAuthenticatedUser returns the safe session user selected by ID", async 
     lastName: "Administrator",
     username: "admin",
     email: "admin@pale.local",
+    sessionVersion: 0,
   };
   let receivedUserId = "";
   const dependencies: SessionServiceDependencies = {
@@ -88,4 +93,5 @@ test("getAuthenticatedUser returns the safe session user selected by ID", async 
   assert.equal(receivedUserId, user.id);
   assert.deepEqual(result, user);
   assert.equal("passwordHash" in (result ?? {}), false);
+  assert.equal("sessionVersion" in (result ?? {}), true);
 });

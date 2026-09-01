@@ -1,13 +1,21 @@
-// Defines strict safe Agenda records, bounded success envelopes, and expected error responses.
+// Defines strict safe Agenda event records, success envelopes, and expected errors.
 import { z } from "zod";
 
 import {
   AGENDA_TIME_PATTERN,
   agendaDateSchema,
-  agendaEventTypeSchema,
 } from "./agenda.schema.js";
+import { agendaCategoryAccentKeySchema } from "./agenda-category.schema.js";
 
 export const AGENDA_MAX_EVENTS = 500;
+
+export const agendaEventCategorySchema = z.strictObject({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(120).refine((value) => value.trim().length > 0),
+  shortCode: z.string().min(1).max(12).regex(/^[A-Z0-9_-]+$/),
+  accentKey: agendaCategoryAccentKeySchema,
+  isActive: z.boolean(),
+});
 
 export const agendaEventRecordSchema = z
   .strictObject({
@@ -18,13 +26,23 @@ export const agendaEventRecordSchema = z
     startTime: z.string().regex(AGENDA_TIME_PATTERN).nullable(),
     endTime: z.string().regex(AGENDA_TIME_PATTERN).nullable(),
     isAllDay: z.boolean(),
-    eventType: agendaEventTypeSchema,
+    categoryId: z.string().uuid(),
+    category: agendaEventCategorySchema,
     classId: z.string().uuid().nullable(),
     location: z.string().max(160).nullable(),
+    completedAt: z.iso.datetime().nullable(),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
   })
   .superRefine((event, context) => {
+    if (event.category.id !== event.categoryId) {
+      context.addIssue({
+        code: "custom",
+        path: ["categoryId"],
+        message: "Category summary must match categoryId",
+      });
+    }
+
     if (event.isAllDay && (event.startTime !== null || event.endTime !== null)) {
       context.addIssue({
         code: "custom",
@@ -63,6 +81,7 @@ export const agendaEventCreateResponseSchema = z.strictObject({
 });
 
 export const agendaEventUpdateResponseSchema = agendaEventCreateResponseSchema;
+export const agendaEventCompletionResponseSchema = agendaEventCreateResponseSchema;
 
 export const agendaEventImportResponseSchema = z.strictObject({
   success: z.literal(true),
@@ -102,4 +121,9 @@ export const agendaEventNotFoundResponseSchema = agendaErrorResponseSchema(
 export const agendaClassNotFoundResponseSchema = agendaErrorResponseSchema(
   "AGENDA_CLASS_NOT_FOUND",
   "Associated class was not found.",
+);
+
+export const agendaCategoryUnavailableResponseSchema = agendaErrorResponseSchema(
+  "AGENDA_CATEGORY_NOT_FOUND",
+  "Agenda category was not found or is inactive.",
 );

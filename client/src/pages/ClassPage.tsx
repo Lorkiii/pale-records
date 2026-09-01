@@ -7,6 +7,7 @@ import { ArchiveClassDialog } from '../features/classes/components/ArchiveClassD
 import { ClassDirectory } from '../features/classes/components/ClassDirectory';
 import { ClassFormDialog } from '../features/classes/components/ClassFormDialog';
 import { useClassWorkspace } from '../features/classes/useClassWorkspace';
+import { useSystemPreferences } from '../features/settings/system-preferences-store';
 
 interface ClassPageProps {
   onSessionExpired: () => void;
@@ -32,6 +33,7 @@ function ClassIcon() {
 // Renders Classes workspace states and delegates workflow behavior to its feature hook.
 export function ClassPage({ onSessionExpired }: ClassPageProps) {
   const workspace = useClassWorkspace(onSessionExpired);
+  const { preferences } = useSystemPreferences();
 
   return (
     <div className="min-h-screen">
@@ -96,6 +98,9 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
           {workspace.loadStatus === 'ready' && workspace.classes.length > 0 ? (
             <ClassDirectory
               classes={workspace.classes}
+              dateFormat={preferences?.dateFormat}
+              timeFormat={preferences?.timeFormat}
+              tableDensity={preferences?.tableDensity}
               onEdit={workspace.handleOpenEdit}
               onArchive={workspace.handleOpenArchive}
             />
@@ -108,6 +113,12 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
           key={workspace.classFormTarget === 'new' ? 'new' : workspace.classFormTarget.id}
           isOpen
           classRecord={workspace.classFormTarget === 'new' ? undefined : workspace.classFormTarget}
+          newClassDefaults={workspace.classFormTarget === 'new'
+            ? {
+                schoolYear: preferences?.defaultSchoolYear ?? undefined,
+                semester: preferences?.defaultSemester ?? undefined,
+              }
+            : undefined}
           onClose={workspace.handleCloseForm}
           onSaved={workspace.handleClassSaved}
           onSessionExpired={onSessionExpired}

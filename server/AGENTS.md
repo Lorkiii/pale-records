@@ -106,14 +106,30 @@ instructions first; a more specific nested `AGENTS.md` may override them.
   changing Prisma models.
 - Do not run destructive database commands or rewrite migration history unless
   the user explicitly requests it.
+- Do not run `prisma migrate deploy`, `prisma migrate dev`, `prisma db push`, a
+  database reset, or persistent seed operations unless the user explicitly
+  authorizes the specific action in the current task.
+- Creating or reviewing a migration artifact does not authorize applying it to
+  Neon or any other persistent database.
 - Do not use `npm audit fix --force`; resolve dependency issues deliberately.
 
 ## Verification
 
 - Add focused tests for changed behavior and important failure paths when the
   existing test setup supports them.
-- Run `npm test` and `npm run build` after server code changes.
-- Run `npx prisma validate` when Prisma schema or configuration changes.
+- Run `npm test` and `npm run build` after server source changes, and wait for
+  both commands to finish.
+- Run `npx prisma validate` when Prisma schema, configuration, or migrations
+  change.
+- When migration artifacts change, run
+  `npx --no-install prisma migrate status` as a read-only check when the
+  environment permits. Report every pending migration by exact name.
+- Treat restricted-network `P1001` or schema-engine connection failures as
+  inconclusive connectivity failures, not proof of schema drift.
+- Stop and report drift, failed or unexpected migrations, or reset proposals;
+  do not work around them with deployment, reset, or `db push` commands.
+- Documentation-only changes do not require server application checks unless
+  they also change executable configuration or runtime behavior.
 - If a relevant check cannot run, report the exact reason instead of claiming
   the change is verified.
 
@@ -124,4 +140,6 @@ authorization are attached to the real request path, sensitive data is excluded,
 relevant checks pass, and no unrelated complexity was introduced.
 
 Keep the final report concise: summarize the change, the important safeguards,
-and the verification performed.
+and the verification performed. Include the exact server commands and results,
+the migration artifacts created or pending, whether any database command was
+applied, and any check that could not run.

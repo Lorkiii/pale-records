@@ -9,10 +9,12 @@ import {
 } from '../recitation-api';
 import { formatRecitationDateLong } from '../recitation-draft';
 import type { RecitationSessionDraft } from '../recitation-types';
+import type { DateFormatPreference } from '../../../settings/preference-display';
 
 interface DeleteRecitationSessionDialogProps {
   session: RecitationSessionDraft;
   hasUnsavedChanges: boolean;
+  dateFormat?: DateFormatPreference;
   onClose: () => void;
   onDeleted: (sessionId: string) => void;
   onSessionExpired: () => void;
@@ -22,6 +24,7 @@ interface DeleteRecitationSessionDialogProps {
 export function DeleteRecitationSessionDialog({
   session,
   hasUnsavedChanges,
+  dateFormat,
   onClose,
   onDeleted,
   onSessionExpired,
@@ -93,7 +96,7 @@ export function DeleteRecitationSessionDialog({
       <p className="text-sm leading-6 text-ink-secondary">
         Delete{' '}
         <strong className="font-semibold text-ink">
-          {formatRecitationDateLong(session.sessionDate)}
+          {formatRecitationDateLong(session.sessionDate, dateFormat)}
         </strong>
         ? Every saved Check, X, and Unmarked roster record for this date will
         also be deleted. This action cannot be undone.

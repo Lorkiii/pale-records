@@ -1,5 +1,5 @@
 // Renders an accessible labeled select with shared sizing, validation, and hint styles.
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useId } from 'react';
 import { Label } from './Label';
 
 export interface SelectOption {
@@ -41,7 +41,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     },
     ref
   ) => {
-    const selectId = id || (label && typeof label === 'string' ? `select-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : undefined);
+    const generatedId = useId().replace(/:/g, '');
+    const selectId = id || `select-${generatedId}`;
 
     const sizeStyles = {
       sm: 'h-8 px-2.5 text-xs',
@@ -50,9 +51,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     }[size];
 
     const fontStyle = isMonospace ? 'font-mono' : 'font-sans';
-    const describedBy = selectId
-      ? error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined
-      : undefined;
+    const errorId = `${selectId}-error`;
+    const hintId = `${selectId}-hint`;
+    const describedBy = [hint ? hintId : null, error ? errorId : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
     return (
       <div className={`w-full ${wrapperClassName}`}>
@@ -73,8 +76,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={selectId}
             disabled={disabled}
+            required={required}
             aria-invalid={Boolean(error)}
             aria-describedby={describedBy}
+            aria-errormessage={error ? errorId : undefined}
             className={`w-full appearance-none rounded-none border border-neutral-400 bg-white text-black transition-colors focus:border-black focus:ring-1 focus:ring-black focus:outline-none disabled:opacity-50 disabled:bg-neutral-100 disabled:cursor-not-allowed pr-8 cursor-pointer ${sizeStyles} ${fontStyle} ${error ? 'border-red-600 focus:border-red-600 focus:ring-red-600' : ''} ${className}`}
             {...props}
           >
@@ -89,16 +94,16 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </div>
         </div>
 
-        {error && (
-          <p id={selectId ? `${selectId}-error` : undefined} className="mt-1 text-xs font-mono text-red-600 flex items-center gap-1">
-            <span aria-hidden="true">/!/</span>
-            <span>{error}</span>
+        {hint && (
+          <p id={hintId} className="mt-1 text-xs font-mono text-neutral-600">
+            {hint}
           </p>
         )}
 
-        {!error && hint && (
-          <p id={selectId ? `${selectId}-hint` : undefined} className="mt-1 text-xs font-mono text-neutral-500">
-            {hint}
+        {error && (
+          <p id={errorId} className="mt-1 text-xs font-mono text-red-600 flex items-center gap-1">
+            <span aria-hidden="true">/!/</span>
+            <span>{error}</span>
           </p>
         )}
       </div>

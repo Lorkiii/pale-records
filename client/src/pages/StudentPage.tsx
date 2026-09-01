@@ -7,6 +7,7 @@ import { ArchiveStudentDialog } from '../features/students/components/ArchiveStu
 import { StudentDirectory } from '../features/students/components/StudentDirectory';
 import { StudentFormDialog } from '../features/students/components/StudentFormDialog';
 import { useStudentWorkspace } from '../features/students/useStudentWorkspace';
+import { useSystemPreferences } from '../features/settings/system-preferences-store';
 
 interface StudentPageProps {
   onSessionExpired: () => void;
@@ -26,6 +27,7 @@ function StudentIcon() {
 export function StudentPage({ onSessionExpired }: StudentPageProps) {
   const navigate = useNavigate();
   const workspace = useStudentWorkspace(onSessionExpired);
+  const { preferences } = useSystemPreferences();
 
   return (
     <div className="min-h-screen">
@@ -119,6 +121,7 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
               ) : null}
               <StudentDirectory
                 students={workspace.students}
+                tableDensity={preferences?.tableDensity}
                 canEdit={workspace.classes.length > 0}
                 onEdit={workspace.handleOpenEdit}
                 onArchive={workspace.handleOpenArchive}

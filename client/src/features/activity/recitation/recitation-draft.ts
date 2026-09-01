@@ -7,6 +7,10 @@ import type {
   RecitationUndoSnapshot,
   WorkingRecitationRecordsByStudentId,
 } from './recitation-types';
+import {
+  formatDateOnly,
+  type DateFormatPreference,
+} from '../../settings/preference-display';
 
 export interface RecitationMarkCounts {
   CHECK: number;
@@ -20,16 +24,6 @@ const ROSTER_COLLATOR = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: 'base',
 });
-const LONG_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-});
-
 // Parses a date-only value in local time so display labels never shift calendar days.
 function parseLocalRecitationDate(date: string) {
   const match = DATE_PATTERN.exec(date);
@@ -249,15 +243,13 @@ export function getRecitationMonthParts(value: string) {
 }
 
 // Formats a complete local calendar label for notices and accessible names.
-export function formatRecitationDateLong(date: string) {
-  const parsedDate = parseLocalRecitationDate(date);
-  return parsedDate ? LONG_DATE_FORMATTER.format(parsedDate) : date;
+export function formatRecitationDateLong(date: string, dateFormat?: DateFormatPreference) {
+  return formatDateOnly(date, dateFormat, 'long');
 }
 
 // Formats the compact local label used by register date headers.
-export function formatRecitationDateShort(date: string) {
-  const parsedDate = parseLocalRecitationDate(date);
-  return parsedDate ? SHORT_DATE_FORMATTER.format(parsedDate) : date;
+export function formatRecitationDateShort(date: string, dateFormat?: DateFormatPreference) {
+  return formatDateOnly(date, dateFormat, 'short');
 }
 
 // Returns the human-readable label for a persisted or local Recitation mark.

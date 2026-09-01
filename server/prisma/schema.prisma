@@ -1,4 +1,4 @@
-// Defines PALE's persisted users, classes, students, Attendance, Recitation, and Agenda data.
+// Defines PALE's persisted users, preferences, classes, students, Attendance, Recitation, and Agenda data.
 
 generator client {
   provider = "prisma-client"
@@ -21,13 +21,56 @@ enum RecitationMark {
   X
 }
 
-enum AgendaEventType {
+enum AgendaCategoryDefaultKey {
   EXAM
   ASSIGNMENT
   ACTIVITY
   HOLIDAY
   MEETING
   NOTE
+}
+
+enum AgendaCategoryAccentKey {
+  SIGNAL_RED
+  SIGNAL_ORANGE
+  SIGNAL_AMBER
+  SIGNAL_YELLOW
+  SIGNAL_GOLD
+  SIGNAL_OCHRE
+  SIGNAL_MUSTARD
+  SIGNAL_EMERALD
+  SIGNAL_TEAL
+  SIGNAL_BLUE
+  SIGNAL_PURPLE
+  SIGNAL_ROSE
+  INK
+  INK_MUTED
+}
+
+enum UserPreferenceAttendanceState {
+  PRESENT
+  UNRECORDED
+}
+
+enum UserPreferenceTableDensity {
+  COMFORTABLE
+  COMPACT
+}
+
+enum UserPreferenceDateFormat {
+  YEAR_MONTH_DAY
+  DAY_MONTH_YEAR
+  MONTH_DAY_YEAR
+}
+
+enum UserPreferenceTimeFormat {
+  TWELVE_HOUR
+  TWENTY_FOUR_HOUR
+}
+
+enum UserPreferenceExportFormat {
+  PDF
+  CSV
 }
 
 model User {
@@ -38,10 +81,28 @@ model User {
   username     String?  @unique
   email        String   @unique
   passwordHash String
+  sessionVersion Int    @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  agendaEvents AgendaEvent[]
+  agendaCategories AgendaCategory[]
+  agendaEvents     AgendaEvent[]
+  preference       UserPreference?
+}
+
+model UserPreference {
+  userId                   String                        @id
+  defaultSchoolYear        String?                       @db.VarChar(32)
+  defaultSemester          String?                       @db.VarChar(32)
+  defaultAttendanceState   UserPreferenceAttendanceState @default(UNRECORDED)
+  tableDensity             UserPreferenceTableDensity    @default(COMFORTABLE)
+  dateFormat               UserPreferenceDateFormat      @default(YEAR_MONTH_DAY)
+  timeFormat               UserPreferenceTimeFormat      @default(TWELVE_HOUR)
+  defaultExportFormat      UserPreferenceExportFormat    @default(PDF)
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Student {
@@ -84,28 +145,54 @@ model Class {
   enrollments                StudentEnrollment[]
 }
 
-model AgendaEvent {
-  id          String          @id @default(uuid())
+model AgendaCategory {
+  id          String                    @id @default(uuid())
   userId      String
-  classId     String?
-  title       String          @db.VarChar(160)
-  description String?         @db.VarChar(2000)
-  eventDate   DateTime        @db.Date
-  startTime   String?         @db.VarChar(5)
-  endTime     String?         @db.VarChar(5)
-  isAllDay    Boolean
-  eventType   AgendaEventType
-  location    String?         @db.VarChar(160)
-  legacyImportKey String?      @unique @db.VarChar(200)
+  defaultKey  AgendaCategoryDefaultKey?
+  name        String                    @db.VarChar(120)
+  shortCode   String                    @db.VarChar(12)
+  accentKey   AgendaCategoryAccentKey
+  description String?                   @db.VarChar(500)
+  isDefault   Boolean                   @default(false)
+  isActive    Boolean                   @default(true)
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  class Class? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events AgendaEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, shortCode])
+  @@unique([userId, defaultKey])
+  @@unique([id, userId])
+  @@index([userId, isActive, name])
+}
+
+model AgendaEvent {
+  id              String    @id @default(uuid())
+  userId          String
+  classId         String?
+  categoryId      String
+  title           String    @db.VarChar(160)
+  description     String?   @db.VarChar(2000)
+  eventDate       DateTime  @db.Date
+  startTime       String?   @db.VarChar(5)
+  endTime         String?   @db.VarChar(5)
+  isAllDay        Boolean
+  location        String?   @db.VarChar(160)
+  completedAt     DateTime?
+  legacyImportKey String?   @unique @db.VarChar(200)
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class    Class?         @relation(fields: [classId], references: [id], onDelete: SetNull)
+  category AgendaCategory @relation(fields: [categoryId, userId], references: [id, userId], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId, eventDate])
   @@index([classId])
+  @@index([categoryId])
 }
 
 model StudentEnrollment {

@@ -1,14 +1,16 @@
 // Owns credentialed Agenda requests, exact response parsing, and safe API errors.
 import type {
+  AgendaCategoryAccentKey,
+  AgendaCategorySummary,
   AgendaEvent,
-  AgendaEventType,
   AgendaLegacyImportAcknowledgement,
   CreateAgendaEventInput,
   LegacyAgendaEventInput,
+  LegacyAgendaEventType,
   UpdateAgendaEventInput,
 } from './agenda-types';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
@@ -21,6 +23,9 @@ export type AgendaApiErrorCode =
   | 'UNAUTHENTICATED'
   | 'AGENDA_EVENT_NOT_FOUND'
   | 'AGENDA_CLASS_NOT_FOUND'
+  | 'AGENDA_CATEGORY_NOT_FOUND'
+  | 'AGENDA_CATEGORY_SHORT_CODE_CONFLICT'
+  | 'AGENDA_CATEGORY_LIMIT_REACHED'
   | 'MALFORMED_JSON'
   | 'PAYLOAD_TOO_LARGE'
   | 'INTERNAL_SERVER_ERROR'
@@ -32,16 +37,19 @@ interface ErrorDetails {
   formErrors?: string[];
 }
 
-interface AgendaEventPayload {
+interface AgendaEventBasePayload {
   title: string;
   description: string | null;
   eventDate: string;
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
-  eventType: AgendaEventType;
   classId: string | null;
   location: string | null;
+}
+
+interface AgendaEventPayload extends AgendaEventBasePayload {
+  categoryId: string;
 }
 
 // Carries only safe HTTP, product-code, and validation details to Agenda UI state.
@@ -67,12 +75,12 @@ export class AgendaApiError extends Error {
 }
 
 // Narrows untrusted JSON to a property container before reading any value.
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // Enforces exact keys so internal or additional server fields never enter page state.
-function hasExactKeys(value: Record<string, unknown>, keys: string[]) {
+export function hasExactKeys(value: Record<string, unknown>, keys: string[]) {
   const actualKeys = Object.keys(value).toSorted();
   const expectedKeys = [...keys].sort();
   return actualKeys.length === expectedKeys.length &&
@@ -94,8 +102,8 @@ function getDateOnlyUtcTime(value: string) {
   return new Date(`${value}T00:00:00.000Z`).getTime();
 }
 
-// Narrows the six public Agenda categories without trusting a type assertion.
-function isAgendaEventType(value: unknown): value is AgendaEventType {
+// Narrows the six historical browser codes accepted only by legacy import.
+function isLegacyAgendaEventType(value: unknown): value is LegacyAgendaEventType {
   return value === 'EXAM' ||
     value === 'ASSIGNMENT' ||
     value === 'ACTIVITY' ||
@@ -104,12 +112,41 @@ function isAgendaEventType(value: unknown): value is AgendaEventType {
     value === 'NOTE';
 }
 
+export function isAgendaCategoryAccentKey(
+  value: unknown,
+): value is AgendaCategoryAccentKey {
+  return value === 'SIGNAL_RED' || value === 'SIGNAL_ORANGE' ||
+    value === 'SIGNAL_AMBER' || value === 'SIGNAL_YELLOW' ||
+    value === 'SIGNAL_GOLD' || value === 'SIGNAL_OCHRE' ||
+    value === 'SIGNAL_MUSTARD' || value === 'SIGNAL_EMERALD' ||
+    value === 'SIGNAL_TEAL' || value === 'SIGNAL_BLUE' ||
+    value === 'SIGNAL_PURPLE' || value === 'SIGNAL_ROSE' ||
+    value === 'INK' || value === 'INK_MUTED';
+}
+
+export function isAgendaCategorySummary(
+  value: unknown,
+): value is AgendaCategorySummary {
+  return isRecord(value) && hasExactKeys(value, [
+    'id', 'name', 'shortCode', 'accentKey', 'isActive',
+  ]) &&
+    typeof value.id === 'string' && UUID_PATTERN.test(value.id) &&
+    typeof value.name === 'string' && value.name.trim().length > 0 &&
+    value.name.length <= 120 &&
+    typeof value.shortCode === 'string' && /^[A-Z0-9_-]{1,12}$/.test(value.shortCode) &&
+    isAgendaCategoryAccentKey(value.accentKey) &&
+    typeof value.isActive === 'boolean';
+}
+
 // Accepts only the known safe error codes published by the Agenda API.
 function isAgendaApiErrorCode(value: unknown): value is AgendaApiErrorCode {
   return value === 'VALIDATION_ERROR' ||
     value === 'UNAUTHENTICATED' ||
     value === 'AGENDA_EVENT_NOT_FOUND' ||
     value === 'AGENDA_CLASS_NOT_FOUND' ||
+    value === 'AGENDA_CATEGORY_NOT_FOUND' ||
+    value === 'AGENDA_CATEGORY_SHORT_CODE_CONFLICT' ||
+    value === 'AGENDA_CATEGORY_LIMIT_REACHED' ||
     value === 'MALFORMED_JSON' ||
     value === 'PAYLOAD_TOO_LARGE' ||
     value === 'INTERNAL_SERVER_ERROR';
@@ -125,9 +162,11 @@ function isAgendaEvent(value: unknown): value is AgendaEvent {
     'startTime',
     'endTime',
     'isAllDay',
-    'eventType',
+    'categoryId',
+    'category',
     'classId',
     'location',
+    'completedAt',
     'createdAt',
     'updatedAt',
   ])) {
@@ -154,9 +193,15 @@ function isAgendaEvent(value: unknown): value is AgendaEvent {
     !isDateOnly(value.eventDate) ||
     !hasValidTimes ||
     typeof value.isAllDay !== 'boolean' ||
-    !isAgendaEventType(value.eventType) ||
+    typeof value.categoryId !== 'string' || !UUID_PATTERN.test(value.categoryId) ||
+    !isAgendaCategorySummary(value.category) ||
+    value.category.id !== value.categoryId ||
     !(value.classId === null ||
       typeof value.classId === 'string' && UUID_PATTERN.test(value.classId)) ||
+    !(value.completedAt === null ||
+      typeof value.completedAt === 'string' &&
+      ISO_TIMESTAMP_PATTERN.test(value.completedAt) &&
+      !Number.isNaN(Date.parse(value.completedAt))) ||
     typeof value.createdAt !== 'string' ||
     !ISO_TIMESTAMP_PATTERN.test(value.createdAt) ||
     Number.isNaN(Date.parse(value.createdAt)) ||
@@ -206,7 +251,7 @@ function readErrorDetails(value: unknown): ErrorDetails | undefined {
 }
 
 // Converts an unsuccessful exact envelope into a safe feature error.
-async function readApiError(response: Response) {
+export async function readApiError(response: Response) {
   let payload: unknown;
 
   try {
@@ -255,7 +300,7 @@ async function readApiError(response: Response) {
 }
 
 // Parses an exact success envelope before endpoint-specific data selection.
-async function readSuccessData<Result>(
+export async function readSuccessData<Result>(
   response: Response,
   errorMessage: string,
   readData: (data: Record<string, unknown>) => Result | undefined,
@@ -321,7 +366,7 @@ function readDeletedEventId(data: Record<string, unknown>) {
 }
 
 // Preserves AbortError while converting other network failures to the feature error type.
-function handleNetworkError(error: unknown): never {
+export function handleNetworkError(error: unknown): never {
   if (error instanceof DOMException && error.name === 'AbortError') {
     throw error;
   }
@@ -335,10 +380,10 @@ function toNullableTrimmedString(value: string | null | undefined) {
   return trimmedValue ? trimmedValue : null;
 }
 
-// Builds and validates the complete allowlisted POST/PATCH body.
-function buildAgendaEventPayload(
+// Builds and validates fields shared by normal writes and historical import.
+function buildAgendaEventBasePayload(
   input: CreateAgendaEventInput | UpdateAgendaEventInput | LegacyAgendaEventInput,
-): AgendaEventPayload {
+): AgendaEventBasePayload {
   const title = input.title.trim();
   const description = toNullableTrimmedString(input.description);
   const location = toNullableTrimmedString(input.location);
@@ -368,9 +413,6 @@ function buildAgendaEventPayload(
   if (startTime !== null && endTime !== null && endTime <= startTime) {
     fieldErrors.endTime = ['End time must be later than start time.'];
   }
-  if (!isAgendaEventType(input.eventType)) {
-    fieldErrors.eventType = ['Choose a valid Agenda category.'];
-  }
   if (classId !== null && !UUID_PATTERN.test(classId)) {
     fieldErrors.classId = ['Choose a valid associated class.'];
   }
@@ -391,10 +433,35 @@ function buildAgendaEventPayload(
     startTime,
     endTime,
     isAllDay: input.isAllDay,
-    eventType: input.eventType,
     classId,
     location,
   };
+}
+
+function buildAgendaEventPayload(
+  input: CreateAgendaEventInput | UpdateAgendaEventInput,
+): AgendaEventPayload {
+  if (!UUID_PATTERN.test(input.categoryId)) {
+    throw new AgendaApiError(
+      'Review the highlighted Agenda fields.',
+      400,
+      'AGENDA_CLIENT_INPUT_INVALID',
+      { fieldErrors: { categoryId: ['Choose a valid Agenda category.'] } },
+    );
+  }
+  return { ...buildAgendaEventBasePayload(input), categoryId: input.categoryId };
+}
+
+function buildLegacyAgendaEventPayload(input: LegacyAgendaEventInput) {
+  if (!isLegacyAgendaEventType(input.eventType)) {
+    throw new AgendaApiError(
+      'Review the highlighted Agenda fields.',
+      400,
+      'AGENDA_CLIENT_INPUT_INVALID',
+      { fieldErrors: { eventType: ['Choose a valid historical Agenda category.'] } },
+    );
+  }
+  return { ...buildAgendaEventBasePayload(input), eventType: input.eventType };
 }
 
 // Selects an exact import acknowledgement without accepting internal idempotency fields.
@@ -537,6 +604,48 @@ export async function updateAgendaEvent(
   return event;
 }
 
+async function updateAgendaEventCompletion(
+  eventId: string,
+  operation: 'complete' | 'reopen',
+) {
+  if (!UUID_PATTERN.test(eventId)) {
+    throw new AgendaApiError(
+      'Choose a valid Agenda event.',
+      400,
+      'AGENDA_CLIENT_INPUT_INVALID',
+    );
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/agenda/events/${encodeURIComponent(eventId)}/${operation}`,
+      { method: 'POST', credentials: 'include' },
+    );
+  } catch (error) {
+    handleNetworkError(error);
+  }
+
+  if (!response.ok) throw await readApiError(response);
+  const event = await readSuccessData(
+    response,
+    `Unable to ${operation} the Agenda event.`,
+    readEvent,
+  );
+  if (event.id !== eventId) {
+    throw new AgendaApiError('The Agenda event did not match the request.', response.status);
+  }
+  return event;
+}
+
+export function completeAgendaEvent(eventId: string) {
+  return updateAgendaEventCompletion(eventId, 'complete');
+}
+
+export function reopenAgendaEvent(eventId: string) {
+  return updateAgendaEventCompletion(eventId, 'reopen');
+}
+
 // Deletes one server event and returns its exact confirmed UUID.
 export async function deleteAgendaEvent(eventId: string) {
   if (!UUID_PATTERN.test(eventId)) {
@@ -581,7 +690,7 @@ export async function importLegacyAgendaEvent(input: LegacyAgendaEventInput) {
     );
   }
 
-  const eventPayload = buildAgendaEventPayload(input);
+  const eventPayload = buildLegacyAgendaEventPayload(input);
   const payload = {
     legacyEventId,
     title: eventPayload.title,

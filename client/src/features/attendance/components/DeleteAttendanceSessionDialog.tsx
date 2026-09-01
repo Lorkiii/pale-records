@@ -9,9 +9,11 @@ import {
 } from '../attendance-api';
 import { formatAttendanceDateLong } from '../attendance-draft';
 import type { AttendanceSessionDraft } from '../attendance-types';
+import type { DateFormatPreference } from '../../settings/preference-display';
 
 interface DeleteAttendanceSessionDialogProps {
   session: AttendanceSessionDraft;
+  dateFormat?: DateFormatPreference;
   onClose: () => void;
   onDeleted: (sessionId: string) => void;
   onSessionExpired: () => void;
@@ -20,6 +22,7 @@ interface DeleteAttendanceSessionDialogProps {
 // Requires deliberate confirmation before permanently deleting a complete saved date.
 export function DeleteAttendanceSessionDialog({
   session,
+  dateFormat,
   onClose,
   onDeleted,
   onSessionExpired,
@@ -81,7 +84,7 @@ export function DeleteAttendanceSessionDialog({
 
       <p className="text-sm leading-6 text-ink-secondary">
         Delete <strong className="font-semibold text-ink">
-          {formatAttendanceDateLong(session.sessionDate)}
+          {formatAttendanceDateLong(session.sessionDate, dateFormat)}
         </strong>? Saved PALE statuses and Excused remarks for every student in this roster
         will also be deleted when present. This action cannot be undone.
       </p>

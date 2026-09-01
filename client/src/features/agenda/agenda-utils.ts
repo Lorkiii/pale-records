@@ -1,5 +1,9 @@
 // Provides date calculations, calendar matrix generators, and class schedule projection utilities.
 import type { ClassRecord } from '../classes/class-types';
+import {
+  formatDateOnly,
+  type DateFormatPreference,
+} from '../settings/preference-display';
 import type { CalendarDayCell, AgendaEvent, SyncedClassSession } from './agenda-types';
 
 export const DAYS_OF_WEEK_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
@@ -33,13 +37,12 @@ export function parseDateKey(dateKey: string): Date {
   return new Date(year, (month || 1) - 1, day || 1);
 }
 
-// Formats a date key for long display, e.g., "24 October 2026".
-export function formatDateDisplay(dateKey: string): string {
-  const date = parseDateKey(dateKey);
-  const day = date.getDate();
-  const month = MONTH_NAMES[date.getMonth()];
-  const year = date.getFullYear();
-  return `${day} ${month} ${year}`;
+// Formats a complete date key while retaining the previous long fallback style.
+export function formatDateDisplay(
+  dateKey: string,
+  dateFormat?: DateFormatPreference,
+): string {
+  return formatDateOnly(dateKey, dateFormat, 'long');
 }
 
 // Returns the full weekday name in uppercase for a date key, e.g., "FRIDAY".

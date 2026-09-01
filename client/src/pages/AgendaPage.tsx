@@ -1,5 +1,6 @@
-// Composes the Agenda workspace, confirmed CRUD dialogs, and explicit legacy import flow.
+// Composes category-based Agenda events, completion, dialogs, and legacy import.
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Header } from '../components/ui/Header';
 import { Notice } from '../components/ui/Notice';
@@ -17,6 +18,7 @@ import { AgendaToolbar } from '../features/agenda/components/AgendaToolbar';
 import { DeleteAgendaEventDialog } from '../features/agenda/components/DeleteAgendaEventDialog';
 import { useAgendaWorkspace } from '../features/agenda/useAgendaWorkspace';
 import { useAgendaLegacyImport } from '../features/agenda/useAgendaLegacyImport';
+import { useSystemPreferences } from '../features/settings/system-preferences-store';
 
 interface AgendaPageProps {
   currentUser: AuthenticatedUser;
@@ -24,6 +26,7 @@ interface AgendaPageProps {
 }
 
 export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
+  const navigate = useNavigate();
   const agenda = useAgendaWorkspace(onSessionExpired);
   const legacyImport = useAgendaLegacyImport({
     isAgendaReady: agenda.eventLoadStatus === 'ready',
@@ -31,6 +34,7 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
     onSessionExpired,
   });
   const accountName = getAuthenticatedUserDisplayName(currentUser);
+  const { preferences } = useSystemPreferences();
 
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<AgendaEvent | null>(null);
@@ -108,23 +112,47 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
             </div>
           ) : null}
 
-          {agenda.eventLoadStatus === 'loading' ? (
-            <PageLoad message="Loading Agenda events…" />
+          {agenda.eventLoadStatus === 'loading' || agenda.categoryLoadStatus === 'loading' ? (
+            <PageLoad message="Loading Agenda events and categories…" />
           ) : null}
 
-          {agenda.eventLoadStatus === 'error' ? (
-            <Notice variant="error" title="Agenda events unavailable">
+          {agenda.eventLoadStatus === 'error' || agenda.categoryLoadStatus === 'error' ? (
+            <Notice variant="error" title="Agenda workspace unavailable">
               <div className="space-y-4">
-                <p>{agenda.eventLoadError}</p>
-                <Button size="sm" variant="secondary" onClick={agenda.retryEventLoad}>
+                <p>{agenda.eventLoadError || agenda.categoryLoadError}</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    if (agenda.eventLoadStatus === 'error') agenda.retryEventLoad();
+                    if (agenda.categoryLoadStatus === 'error') agenda.retryCategoryLoad();
+                  }}
+                >
                   Try again
                 </Button>
               </div>
             </Notice>
           ) : null}
 
-          {agenda.eventLoadStatus === 'ready' ? (
+          {agenda.eventLoadStatus === 'ready' && agenda.categoryLoadStatus === 'ready' ? (
             <div className="space-y-5">
+              {!agenda.canManageEvents ? (
+                <Notice variant="warning" title="No active Agenda categories">
+                  <div className="space-y-4">
+                    <p>
+                      Activate or restore an Agenda category in Settings before scheduling a new event.
+                      Existing events and recurring Class schedules remain available below.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => navigate('/dashboard/settings')}
+                    >
+                      Open Settings
+                    </Button>
+                  </div>
+                </Notice>
+              ) : null}
               {agenda.classLoadStatus === 'error' ? (
                 <Notice variant="warning" title="Class schedules temporarily unavailable">
                   <div className="space-y-4">
@@ -145,6 +173,7 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
                   viewYear={agenda.viewYear}
                   viewMonth={agenda.viewMonth}
                   classes={agenda.classes}
+                  categories={agenda.categories}
                   selectedClassId={agenda.selectedClassId}
                   selectedTypeFilter={agenda.selectedTypeFilter}
                   onClassFilterChange={agenda.setSelectedClassId}
@@ -159,6 +188,9 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
                   <div className="border-b border-ink p-4 sm:p-5 lg:col-span-7 lg:border-r lg:border-b-0 xl:col-span-8">
                     <AgendaCalendarGrid
                       cells={agenda.calendarCells}
+                      dateFormat={preferences?.dateFormat}
+                      timeFormat={preferences?.timeFormat}
+                      tableDensity={preferences?.tableDensity}
                       onSelectDate={agenda.selectDate}
                     />
                   </div>
@@ -169,9 +201,14 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
                       events={agenda.selectedDateEvents}
                       sessions={agenda.selectedDateSessions}
                       classes={agenda.classes}
+                      dateFormat={preferences?.dateFormat}
+                      timeFormat={preferences?.timeFormat}
+                      tableDensity={preferences?.tableDensity}
                       onAddEvent={handleOpenCreate}
+                      canAddEvent={agenda.canManageEvents}
                       onEditEvent={handleOpenEdit}
                       onDeleteEvent={handleOpenDelete}
+                      onToggleCompletion={agenda.setEventCompletion}
                     />
                   </div>
                 </div>
@@ -189,6 +226,7 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
           setEditingEvent(null);
         }}
         classes={agenda.classes}
+        categories={agenda.categories}
         isClassSelectionAvailable={agenda.classLoadStatus === 'ready'}
         initialDateKey={dialogDateKey}
         editingEvent={editingEvent}
@@ -207,6 +245,8 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
         isOpen={Boolean(deletingEvent)}
         onClose={() => setDeletingEvent(null)}
         event={deletingEvent}
+        dateFormat={preferences?.dateFormat}
+        timeFormat={preferences?.timeFormat}
         onConfirm={async () => {
           if (deletingEvent) {
             await agenda.deleteEvent(deletingEvent.id);

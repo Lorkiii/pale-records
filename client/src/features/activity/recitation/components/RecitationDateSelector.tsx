@@ -3,6 +3,7 @@ import {
   formatRecitationDateLong,
   getRecitationMonthParts,
 } from '../recitation-draft';
+import type { DateFormatPreference } from '../../../settings/preference-display';
 
 interface RecitationDateSelectorProps {
   monthInput: string;
@@ -10,6 +11,7 @@ interface RecitationDateSelectorProps {
   existingDates: string[];
   isSelectionAvailable: boolean;
   isBusy: boolean;
+  dateFormat?: DateFormatPreference;
   onToggleDate: (date: string) => void;
 }
 
@@ -42,6 +44,7 @@ export function RecitationDateSelector({
   existingDates,
   isSelectionAvailable,
   isBusy,
+  dateFormat,
   onToggleDate,
 }: RecitationDateSelectorProps) {
   const month = getRecitationMonthParts(monthInput);
@@ -110,7 +113,7 @@ export function RecitationDateSelector({
           const isExisting = existingDateSet.has(date);
           const isSelected = selectedDateSet.has(date);
           const isUnavailable = !isSelectionAvailable || isBusy;
-          const dateLabel = formatRecitationDateLong(date);
+          const dateLabel = formatRecitationDateLong(date, dateFormat);
           const stateLabel = isExisting
             ? 'Existing Recitation date.'
             : isSelected

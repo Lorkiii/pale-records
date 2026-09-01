@@ -12,6 +12,11 @@ import {
   type AttendanceStudentRecord,
   type WorkingAttendanceRecord,
 } from '../attendance-types';
+import {
+  getTableDensityClasses,
+  type DateFormatPreference,
+  type TableDensityPreference,
+} from '../../settings/preference-display';
 
 interface AttendanceRegisterProps {
   roster: AttendanceStudentRecord[];
@@ -19,6 +24,8 @@ interface AttendanceRegisterProps {
   selectedSessionId: string;
   isEditing: boolean;
   liveMessage: string;
+  dateFormat?: DateFormatPreference;
+  tableDensity?: TableDensityPreference;
   onSelectSession: (sessionId: string) => void;
   onCycleStatus: (studentId: string) => void;
   onOpenDetails: (student: AttendanceStudentRecord) => void;
@@ -38,9 +45,10 @@ function getStatusButtonLabel(
   record: WorkingAttendanceRecord | undefined,
   isSelected: boolean,
   isEditable: boolean,
+  dateFormat?: DateFormatPreference,
 ) {
   const studentName = `${student.lastName}, ${student.firstName}`;
-  const dateLabel = formatAttendanceDateLong(sessionDraft.sessionDate);
+  const dateLabel = formatAttendanceDateLong(sessionDraft.sessionDate, dateFormat);
 
   if (!record) {
     return `${studentName}, ${dateLabel}, not included in this saved roster. Activate to select this date.`;
@@ -65,6 +73,8 @@ function AttendanceStatusCell({
   sessionDraft,
   isSelected,
   isEditing,
+  dateFormat,
+  tableInset,
   onSelectSession,
   onCycleStatus,
   onOpenDetails,
@@ -73,6 +83,8 @@ function AttendanceStatusCell({
   sessionDraft: AttendanceSessionDraft;
   isSelected: boolean;
   isEditing: boolean;
+  dateFormat?: DateFormatPreference;
+  tableInset: string;
   onSelectSession: (sessionId: string) => void;
   onCycleStatus: (studentId: string) => void;
   onOpenDetails: (student: AttendanceStudentRecord) => void;
@@ -103,7 +115,7 @@ function AttendanceStatusCell({
         isSelected ? 'border-x-2 border-x-ink bg-paper-muted' : 'bg-paper-light'
       }`}
     >
-      <div className="p-1.5">
+      <div className={tableInset}>
         <button
           type="button"
           aria-label={getStatusButtonLabel(
@@ -112,6 +124,7 @@ function AttendanceStatusCell({
             record,
             isSelected,
             isEditable,
+            dateFormat,
           )}
           onClick={handleStatusClick}
           className={`flex min-h-11 w-full cursor-pointer flex-col items-center justify-center border px-2 py-2 font-mono transition-colors hover:border-ink focus-visible:relative focus-visible:z-10 ${statusClassName}`}
@@ -156,13 +169,16 @@ export function AttendanceRegister({
   selectedSessionId,
   isEditing,
   liveMessage,
+  dateFormat,
+  tableDensity,
   onSelectSession,
   onCycleStatus,
   onOpenDetails,
 }: AttendanceRegisterProps) {
+  const density = getTableDensityClasses(tableDensity);
   const selectedDraft = sessionDrafts.find((session) => session.id === selectedSessionId);
   const selectedDateLabel = selectedDraft
-    ? formatAttendanceDateShort(selectedDraft.sessionDate)
+    ? formatAttendanceDateShort(selectedDraft.sessionDate, dateFormat)
     : '';
 
   return (
@@ -192,7 +208,7 @@ export function AttendanceRegister({
             <tr>
               <th
                 scope="col"
-                className="sticky top-0 left-0 z-40 w-44 min-w-44 border-r border-b border-ink bg-paper-muted px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.12em] text-ink md:w-60 md:min-w-60 md:px-4"
+                className={`sticky top-0 left-0 z-40 w-44 min-w-44 border-r border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.12em] text-ink md:w-60 md:min-w-60 ${density.tableCell}`}
               >
                 Student
               </th>
@@ -209,13 +225,13 @@ export function AttendanceRegister({
                     <button
                       type="button"
                       aria-pressed={isSelected}
-                      aria-label={`${formatAttendanceDateLong(sessionDraft.sessionDate)}${
+                      aria-label={`${formatAttendanceDateLong(sessionDraft.sessionDate, dateFormat)}${
                         isSelected ? ', selected' : '. Activate to select this saved date.'
                       }`}
                       onClick={() => onSelectSession(sessionDraft.id)}
                       className="flex min-h-16 w-full cursor-pointer flex-col items-center justify-center px-2 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink hover:bg-paper-dark"
                     >
-                      <span>{formatAttendanceDateShort(sessionDraft.sessionDate)}</span>
+                      <span>{formatAttendanceDateShort(sessionDraft.sessionDate, dateFormat)}</span>
                       {isSelected ? (
                         <span className="mt-1 border-t border-ink pt-1 text-[9px] tracking-[0.12em]">
                           Selected
@@ -227,14 +243,14 @@ export function AttendanceRegister({
               })}
               <th
                 scope="col"
-                className="sticky top-0 right-48 z-40 hidden w-56 min-w-56 border-r border-b border-l-2 border-ink bg-paper-muted px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell"
+                className={`sticky top-0 right-48 z-40 hidden w-56 min-w-56 border-r border-b border-l-2 border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell ${density.tableCell}`}
               >
                 <span className="block">Remarks</span>
                 <span className="mt-1 block text-[10px] text-ink-muted">{selectedDateLabel}</span>
               </th>
               <th
                 scope="col"
-                className="sticky top-0 right-0 z-40 hidden w-48 min-w-48 border-b border-ink bg-paper-muted px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell"
+                className={`sticky top-0 right-0 z-40 hidden w-48 min-w-48 border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell ${density.tableCell}`}
               >
                 <span className="block">Proof</span>
                 <span className="mt-1 block text-[10px] text-ink-muted">Unavailable</span>
@@ -248,7 +264,7 @@ export function AttendanceRegister({
                 <tr key={student.id}>
                   <th
                     scope="row"
-                    className="sticky left-0 z-10 w-44 min-w-44 border-r border-b border-paper-border bg-paper-light px-3 py-3 align-top md:w-60 md:min-w-60 md:px-4"
+                    className={`sticky left-0 z-10 w-44 min-w-44 border-r border-b border-paper-border bg-paper-light align-top md:w-60 md:min-w-60 ${density.tableCell}`}
                   >
                     <span className="block break-words text-sm font-semibold leading-5 text-ink">
                       {student.lastName}, {student.firstName}
@@ -267,13 +283,15 @@ export function AttendanceRegister({
                       sessionDraft={sessionDraft}
                       isSelected={sessionDraft.id === selectedSessionId}
                       isEditing={isEditing}
+                      dateFormat={dateFormat}
+                      tableInset={density.tableInset}
                       onSelectSession={onSelectSession}
                       onCycleStatus={onCycleStatus}
                       onOpenDetails={onOpenDetails}
                     />
                   ))}
 
-                  <td className="sticky right-48 z-10 hidden w-56 min-w-56 border-r border-b border-l-2 border-ink bg-paper-light p-1.5 xl:table-cell">
+                  <td className={`sticky right-48 z-10 hidden w-56 min-w-56 border-r border-b border-l-2 border-ink bg-paper-light xl:table-cell ${density.tableInset}`}>
                     <button
                       type="button"
                       onClick={() => onOpenDetails(student)}
@@ -285,7 +303,7 @@ export function AttendanceRegister({
                       </span>
                     </button>
                   </td>
-                  <td className="sticky right-0 z-10 hidden w-48 min-w-48 border-b border-paper-border bg-paper-muted p-3 text-sm text-ink-muted xl:table-cell">
+                  <td className={`sticky right-0 z-10 hidden w-48 min-w-48 border-b border-paper-border bg-paper-muted text-sm text-ink-muted xl:table-cell ${density.tableCell}`}>
                     Protected storage required
                   </td>
                 </tr>

@@ -13,6 +13,7 @@ import {
 
 const eventId = "099aa026-ef03-4ab6-92ee-68fa37fb6523";
 const classId = "2c6e62cc-584d-4faf-90f6-fdb50b27c9d0";
+const categoryId = "805a2580-d0b5-48a8-8eb3-9356e464b838";
 
 const publicEvent = {
   id: eventId,
@@ -22,9 +23,17 @@ const publicEvent = {
   startTime: "09:00",
   endTime: "11:00",
   isAllDay: false,
-  eventType: "EXAM",
+  categoryId,
+  category: {
+    id: categoryId,
+    name: "Examination",
+    shortCode: "EXAM",
+    accentKey: "SIGNAL_RED",
+    isActive: true,
+  },
   classId,
   location: "Room 204",
+  completedAt: null,
   createdAt: "2026-08-29T01:02:03.000Z",
   updatedAt: "2026-08-29T04:05:06.000Z",
 } as const;
@@ -38,6 +47,10 @@ test("Agenda event record accepts exactly the documented safe fields", () => {
   assert.equal(agendaEventRecordSchema.safeParse({
     ...publicEvent,
     isAllDay: true,
+  }).success, false);
+  assert.equal(agendaEventRecordSchema.safeParse({
+    ...publicEvent,
+    completedAt: "not-a-timestamp",
   }).success, false);
 });
 

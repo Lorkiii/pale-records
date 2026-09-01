@@ -76,7 +76,7 @@ export function DashboardShell({ currentUser }: DashboardShellProps) {
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted">Workspace / {currentSection}</p>
             </div>
           </div>
-          <UserProfile user={currentUser} accountLabel="Administrator" />
+          <UserProfile user={currentUser} />
         </header>
 
         <main>

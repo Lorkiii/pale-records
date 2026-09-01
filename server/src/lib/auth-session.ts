@@ -29,12 +29,13 @@ function getSessionDurationSeconds(rememberMe: boolean) {
 /** Creates a signed session token for the authenticated user. */
 export async function createSessionToken(
   userId: string,
+  sessionVersion: number,
   rememberMe: boolean,
 ) {
   // Get the duration of the session in seconds
   const durationSeconds = getSessionDurationSeconds(rememberMe);
 
-  return new SignJWT({})
+  return new SignJWT({ sessionVersion })
     // Set the protected header
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     // Set the subject of the session token
@@ -47,7 +48,7 @@ export async function createSessionToken(
     .sign(encodedSecret);
 }
 
-/** Verifies a session token and returns its trusted user identifier. */
+/** Verifies a session token and returns its trusted private identity claims. */
 export async function verifySessionToken(token: string) {
   const { payload } = await jwtVerify(token, encodedSecret, {
     algorithms: ["HS256"],
@@ -55,11 +56,17 @@ export async function verifySessionToken(token: string) {
     audience: SESSION_AUDIENCE,
   });
   // Check if the session token is missing a user identifier
-  if (!payload.sub) {
+  const sessionVersion = payload.sessionVersion;
+  if (
+    !payload.sub ||
+    typeof sessionVersion !== "number" ||
+    !Number.isInteger(sessionVersion) ||
+    sessionVersion < 0
+  ) {
     throw new Error("Session token is missing a user identifier");
   }
 
-  return { userId: payload.sub };
+  return { userId: payload.sub, sessionVersion };
 }
 
 /** Returns secure cookie settings, including persistence for remember-me logins. */

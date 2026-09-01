@@ -1,16 +1,24 @@
-// Owns per-user Agenda persistence, Class checks, idempotent legacy import, and public mapping.
-import { AgendaEventType, Prisma } from "../generated/prisma/client.js";
+// Owns category-based Agenda events, completion, Class checks, legacy import, and public mapping.
+import {
+  AgendaCategoryAccentKey,
+  AgendaCategoryDefaultKey,
+  Prisma,
+} from "../generated/prisma/client.js";
 import prisma from "../lib/db-client.js";
 import type {
-  AgendaEventTypeCode,
   CreateAgendaEventInput,
   ImportAgendaEventInput,
+  LegacyAgendaEventTypeCode,
   UpdateAgendaEventInput,
 } from "../validations/agenda.schema.js";
 import {
   AGENDA_MAX_EVENTS,
   type AgendaEventRecord,
 } from "../validations/agenda.response.js";
+import {
+  ensureDefaultAgendaCategories,
+  findDefaultAgendaCategory,
+} from "./agenda-category.service.js";
 
 export type AgendaEventDatabaseRecord = {
   id: string;
@@ -20,9 +28,17 @@ export type AgendaEventDatabaseRecord = {
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
-  eventType: AgendaEventType;
+  categoryId: string;
+  category: {
+    id: string;
+    name: string;
+    shortCode: string;
+    accentKey: AgendaCategoryAccentKey;
+    isActive: boolean;
+  };
   classId: string | null;
   location: string | null;
+  completedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -34,7 +50,7 @@ type AgendaEventWriteData = {
   startTime: string | null;
   endTime: string | null;
   isAllDay: boolean;
-  eventType: AgendaEventType;
+  categoryId: string;
   classId: string | null;
   location: string | null;
 };
@@ -46,7 +62,14 @@ export type AgendaServiceDependencies = {
     to: Date,
   ) => Promise<AgendaEventDatabaseRecord[]>;
   classExists: (classId: string) => Promise<boolean>;
-  findOwnedEvent: (userId: string, eventId: string) => Promise<boolean>;
+  findOwnedEvent: (
+    userId: string,
+    eventId: string,
+  ) => Promise<{ categoryId: string } | null>;
+  findOwnedCategory: (
+    userId: string,
+    categoryId: string,
+  ) => Promise<{ isActive: boolean } | null>;
   insertEvent: (
     userId: string,
     data: AgendaEventWriteData,
@@ -66,6 +89,19 @@ export type AgendaServiceDependencies = {
     data: AgendaEventWriteData,
   ) => Promise<AgendaEventDatabaseRecord>;
   isLegacyImportKeyConflict: (error: unknown) => boolean;
+  ensureDefaultCategories: (userId: string) => Promise<void>;
+  findDefaultCategory: (
+    userId: string,
+    defaultKey: AgendaCategoryDefaultKey,
+  ) => Promise<{ id: string } | null>;
+  completeOwnedEvent: (
+    userId: string,
+    eventId: string,
+  ) => Promise<AgendaEventDatabaseRecord | null>;
+  reopenOwnedEvent: (
+    userId: string,
+    eventId: string,
+  ) => Promise<AgendaEventDatabaseRecord | null>;
 };
 
 const agendaEventSelect = {
@@ -76,9 +112,19 @@ const agendaEventSelect = {
   startTime: true,
   endTime: true,
   isAllDay: true,
-  eventType: true,
+  categoryId: true,
+  category: {
+    select: {
+      id: true,
+      name: true,
+      shortCode: true,
+      accentKey: true,
+      isActive: true,
+    },
+  },
   classId: true,
   location: true,
+  completedAt: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -126,14 +172,19 @@ const defaultDependencies: AgendaServiceDependencies = {
     });
     return classRecord !== null;
   },
-  // Checks ownership before update-side Class validation to avoid cross-user disclosure.
+  // Checks ownership before update-side category/Class validation to avoid disclosure.
   findOwnedEvent: async (userId, eventId) => {
     const event = await prisma.agendaEvent.findFirst({
       where: { id: eventId, userId },
-      select: { id: true },
+      select: { categoryId: true },
     });
-    return event !== null;
+    return event;
   },
+  findOwnedCategory: (userId, categoryId) =>
+    prisma.agendaCategory.findFirst({
+      where: { id: categoryId, userId },
+      select: { isActive: true },
+    }),
   // Combines the trusted session user with explicitly mapped editable fields.
   insertEvent: (userId, data) =>
     prisma.agendaEvent.create({
@@ -177,6 +228,33 @@ const defaultDependencies: AgendaServiceDependencies = {
       select: agendaEventSelect,
     }),
   isLegacyImportKeyConflict,
+  ensureDefaultCategories: ensureDefaultAgendaCategories,
+  findDefaultCategory: async (userId, defaultKey) => {
+    const category = await findDefaultAgendaCategory(userId, defaultKey);
+    return category ? { id: category.id } : null;
+  },
+  completeOwnedEvent: (userId, eventId) =>
+    prisma.$transaction(async (transaction) => {
+      await transaction.agendaEvent.updateMany({
+        where: { id: eventId, userId, completedAt: null },
+        data: { completedAt: new Date() },
+      });
+      return transaction.agendaEvent.findFirst({
+        where: { id: eventId, userId },
+        select: agendaEventSelect,
+      });
+    }),
+  reopenOwnedEvent: (userId, eventId) =>
+    prisma.$transaction(async (transaction) => {
+      await transaction.agendaEvent.updateMany({
+        where: { id: eventId, userId, completedAt: { not: null } },
+        data: { completedAt: null },
+      });
+      return transaction.agendaEvent.findFirst({
+        where: { id: eventId, userId },
+        select: agendaEventSelect,
+      });
+    }),
 };
 
 // Converts a validated calendar date to Prisma's stable UTC date-only transport value.
@@ -189,39 +267,23 @@ export function toAgendaDateOnly(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
-// Maps the public event type allowlist to the generated Prisma enum explicitly.
-function toDatabaseAgendaEventType(value: AgendaEventTypeCode): AgendaEventType {
+// Maps historical browser type codes to the matching canonical default identity.
+function toDefaultCategoryKey(
+  value: LegacyAgendaEventTypeCode,
+): AgendaCategoryDefaultKey {
   switch (value) {
     case "EXAM":
-      return AgendaEventType.EXAM;
+      return AgendaCategoryDefaultKey.EXAM;
     case "ASSIGNMENT":
-      return AgendaEventType.ASSIGNMENT;
+      return AgendaCategoryDefaultKey.ASSIGNMENT;
     case "ACTIVITY":
-      return AgendaEventType.ACTIVITY;
+      return AgendaCategoryDefaultKey.ACTIVITY;
     case "HOLIDAY":
-      return AgendaEventType.HOLIDAY;
+      return AgendaCategoryDefaultKey.HOLIDAY;
     case "MEETING":
-      return AgendaEventType.MEETING;
+      return AgendaCategoryDefaultKey.MEETING;
     case "NOTE":
-      return AgendaEventType.NOTE;
-  }
-}
-
-// Maps generated Prisma values back to the stable public event type contract.
-function toAgendaEventTypeCode(value: AgendaEventType): AgendaEventTypeCode {
-  switch (value) {
-    case AgendaEventType.EXAM:
-      return "EXAM";
-    case AgendaEventType.ASSIGNMENT:
-      return "ASSIGNMENT";
-    case AgendaEventType.ACTIVITY:
-      return "ACTIVITY";
-    case AgendaEventType.HOLIDAY:
-      return "HOLIDAY";
-    case AgendaEventType.MEETING:
-      return "MEETING";
-    case AgendaEventType.NOTE:
-      return "NOTE";
+      return AgendaCategoryDefaultKey.NOTE;
   }
 }
 
@@ -234,6 +296,7 @@ function toNullableTrimmedString(value: string | null | undefined) {
 // Explicitly maps the complete editable contract into database-ready values.
 function toAgendaEventWriteData(
   input: CreateAgendaEventInput | UpdateAgendaEventInput | ImportAgendaEventInput,
+  categoryId: string,
 ): AgendaEventWriteData {
   return {
     title: input.title.trim(),
@@ -242,7 +305,7 @@ function toAgendaEventWriteData(
     startTime: toNullableTrimmedString(input.startTime),
     endTime: toNullableTrimmedString(input.endTime),
     isAllDay: input.isAllDay,
-    eventType: toDatabaseAgendaEventType(input.eventType),
+    categoryId,
     classId: input.classId ?? null,
     location: toNullableTrimmedString(input.location),
   };
@@ -260,9 +323,17 @@ export function toAgendaEventRecord(
     startTime: event.startTime,
     endTime: event.endTime,
     isAllDay: event.isAllDay,
-    eventType: toAgendaEventTypeCode(event.eventType),
+    categoryId: event.categoryId,
+    category: {
+      id: event.category.id,
+      name: event.category.name,
+      shortCode: event.category.shortCode,
+      accentKey: event.category.accentKey,
+      isActive: event.category.isActive,
+    },
     classId: event.classId,
     location: event.location,
+    completedAt: event.completedAt?.toISOString() ?? null,
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString(),
   };
@@ -286,7 +357,8 @@ export async function listAgendaEvents(
 
 export type CreateAgendaEventResult =
   | { status: "created"; event: AgendaEventRecord }
-  | { status: "class_not_found" };
+  | { status: "class_not_found" }
+  | { status: "category_not_found" };
 
 // Creates an event for the trusted authenticated user after any Class check.
 export async function createAgendaEvent(
@@ -294,7 +366,12 @@ export async function createAgendaEvent(
   input: CreateAgendaEventInput,
   dependencies: AgendaServiceDependencies = defaultDependencies,
 ): Promise<CreateAgendaEventResult> {
-  const data = toAgendaEventWriteData(input);
+  const category = await dependencies.findOwnedCategory(userId, input.categoryId);
+  if (!category?.isActive) {
+    return { status: "category_not_found" };
+  }
+
+  const data = toAgendaEventWriteData(input, input.categoryId);
 
   if (data.classId !== null && !(await dependencies.classExists(data.classId))) {
     return { status: "class_not_found" };
@@ -328,7 +405,16 @@ export async function importAgendaEvent(
     };
   }
 
-  const data = toAgendaEventWriteData(input);
+  await dependencies.ensureDefaultCategories(userId);
+  const defaultCategory = await dependencies.findDefaultCategory(
+    userId,
+    toDefaultCategoryKey(input.eventType),
+  );
+  if (!defaultCategory) {
+    throw new Error("Default Agenda category initialization failed");
+  }
+
+  const data = toAgendaEventWriteData(input, defaultCategory.id);
   let classAssociationRemoved = false;
 
   if (data.classId !== null && !(await dependencies.classExists(data.classId))) {
@@ -369,7 +455,8 @@ export async function importAgendaEvent(
 export type UpdateAgendaEventResult =
   | { status: "updated"; event: AgendaEventRecord }
   | { status: "event_not_found" }
-  | { status: "class_not_found" };
+  | { status: "class_not_found" }
+  | { status: "category_not_found" };
 
 // Replaces one owner's complete editable event payload without revealing other users' events.
 export async function updateAgendaEvent(
@@ -378,11 +465,19 @@ export async function updateAgendaEvent(
   input: UpdateAgendaEventInput,
   dependencies: AgendaServiceDependencies = defaultDependencies,
 ): Promise<UpdateAgendaEventResult> {
-  if (!(await dependencies.findOwnedEvent(userId, eventId))) {
+  const ownedEvent = await dependencies.findOwnedEvent(userId, eventId);
+  if (!ownedEvent) {
     return { status: "event_not_found" };
   }
 
-  const data = toAgendaEventWriteData(input);
+  if (input.categoryId !== ownedEvent.categoryId) {
+    const category = await dependencies.findOwnedCategory(userId, input.categoryId);
+    if (!category?.isActive) {
+      return { status: "category_not_found" };
+    }
+  }
+
+  const data = toAgendaEventWriteData(input, input.categoryId);
   if (data.classId !== null && !(await dependencies.classExists(data.classId))) {
     return { status: "class_not_found" };
   }
@@ -402,5 +497,29 @@ export async function deleteAgendaEvent(
   const wasDeleted = await dependencies.deleteOwnedEvent(userId, eventId);
   return wasDeleted
     ? { status: "deleted" as const }
+    : { status: "event_not_found" as const };
+}
+
+// Completes one owned event idempotently while retaining its first completion time.
+export async function completeAgendaEvent(
+  userId: string,
+  eventId: string,
+  dependencies: AgendaServiceDependencies = defaultDependencies,
+) {
+  const event = await dependencies.completeOwnedEvent(userId, eventId);
+  return event
+    ? { status: "updated" as const, event: toAgendaEventRecord(event) }
+    : { status: "event_not_found" as const };
+}
+
+// Reopens one owned event idempotently without changing any other event field.
+export async function reopenAgendaEvent(
+  userId: string,
+  eventId: string,
+  dependencies: AgendaServiceDependencies = defaultDependencies,
+) {
+  const event = await dependencies.reopenOwnedEvent(userId, eventId);
+  return event
+    ? { status: "updated" as const, event: toAgendaEventRecord(event) }
     : { status: "event_not_found" as const };
 }

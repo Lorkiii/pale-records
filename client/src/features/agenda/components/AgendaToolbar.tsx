@@ -3,7 +3,7 @@ import { Button } from '../../../components/ui/Button';
 import { Select, type SelectOption } from '../../../components/ui/Select';
 import type { ClassRecord } from '../../classes/class-types';
 import {
-  AGENDA_EVENT_TYPES,
+  type AgendaCategory,
   type AgendaTypeFilter,
 } from '../agenda-types';
 import { formatMonthYearHeader } from '../agenda-utils';
@@ -12,6 +12,7 @@ interface AgendaToolbarProps {
   viewYear: number;
   viewMonth: number;
   classes: ClassRecord[];
+  categories: AgendaCategory[];
   selectedClassId: string;
   selectedTypeFilter: AgendaTypeFilter;
   onClassFilterChange: (classId: string) => void;
@@ -26,6 +27,7 @@ export function AgendaToolbar({
   viewYear,
   viewMonth,
   classes,
+  categories,
   selectedClassId,
   selectedTypeFilter,
   onClassFilterChange,
@@ -51,9 +53,9 @@ export function AgendaToolbar({
     { value: 'ALL', label: 'All Categories & Sessions' },
     { value: 'CUSTOM_EVENTS', label: 'All Custom Events' },
     { value: 'CLASS_SESSIONS', label: 'Class Schedules Only' },
-    ...AGENDA_EVENT_TYPES.map((t) => ({
-      value: t.type,
-      label: t.label,
+    ...categories.map((category) => ({
+      value: category.id,
+      label: category.isActive ? category.name : `${category.name} (Inactive)`,
     })),
   ];
 

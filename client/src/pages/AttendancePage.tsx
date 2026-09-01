@@ -13,12 +13,13 @@ import {
 import { AttendanceDetailsDialog } from "../features/attendance/components/AttendanceDetailsDialog";
 import { AttendanceRegister } from "../features/attendance/components/AttendanceRegister";
 import { DeleteAttendanceSessionDialog } from "../features/attendance/components/DeleteAttendanceSessionDialog";
-import { ExportAttendancePdfDialog } from "../features/attendance/components/ExportAttendancePdfDialog";
+import { ExportAttendanceDialog } from "../features/attendance/components/ExportAttendancePdfDialog";
 import {
   AttendanceToolbar,
   type AttendanceToolbarFeedback,
 } from "../features/attendance/components/AttendanceToolbar";
 import { useAttendanceWorkspace } from "../features/attendance/useAttendanceWorkspace";
+import { useSystemPreferences } from "../features/settings/system-preferences-store";
 
 interface AttendancePageProps {
   currentUser: AuthenticatedUser;
@@ -44,9 +45,14 @@ function AttendanceIcon() {
 // Renders Attendance workspace states and delegates workflow behavior to its feature hook.
 export function AttendancePage({ currentUser, onSessionExpired }: AttendancePageProps) {
   const navigate = useNavigate();
-  const attendance = useAttendanceWorkspace(onSessionExpired);
+  const { preferences } = useSystemPreferences();
+  const attendance = useAttendanceWorkspace(
+    onSessionExpired,
+    preferences?.defaultAttendanceState,
+    preferences?.dateFormat,
+  );
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
-  const canExportPdf = Boolean(
+  const canExportAttendance = Boolean(
     attendance.selectedClass &&
     attendance.sessionLoadStatus === "ready" &&
     attendance.selectedClassSessions.length > 0 &&
@@ -80,13 +86,13 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
           <Button
             variant="secondary"
             aria-haspopup="dialog"
-            disabled={!canExportPdf}
-            title={canExportPdf
-              ? "Export the selected class month as PDF"
+            disabled={!canExportAttendance}
+            title={canExportAttendance
+              ? "Export the selected class month"
               : "Select and load a class month with attendance dates before exporting"}
             onClick={() => setIsExportDialogOpen(true)}
           >
-            Export PDF
+            Export attendance
           </Button>
         }
       />
@@ -156,6 +162,8 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
                 dateHint={attendance.dateHint}
                 statusCounts={attendance.statusCounts}
                 feedback={toolbarFeedback}
+                dateFormat={preferences?.dateFormat}
+                timeFormat={preferences?.timeFormat}
                 onClassChange={attendance.handleClassChange}
                 onMonthInputChange={attendance.handleMonthChange}
                 onDateInputChange={attendance.handleDateInputChange}
@@ -257,6 +265,8 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
                   selectedSessionId={attendance.selectedSessionId}
                   isEditing={attendance.isEditing}
                   liveMessage={attendance.liveMessage}
+                  dateFormat={preferences?.dateFormat}
+                  tableDensity={preferences?.tableDensity}
                   onSelectSession={attendance.handleSelectSession}
                   onCycleStatus={attendance.handleCycleStatus}
                   onOpenDetails={attendance.handleOpenDetails}
@@ -278,6 +288,7 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
           date={attendance.selectedSessionDraft.sessionDate}
           record={attendance.detailsRecord}
           isEditable={attendance.isEditing}
+          dateFormat={preferences?.dateFormat}
           onClose={attendance.handleCloseDetails}
           onApply={attendance.handleApplyDetails}
         />
@@ -287,6 +298,7 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
         <DeleteAttendanceSessionDialog
           key={attendance.deleteTarget.id}
           session={attendance.deleteTarget}
+          dateFormat={preferences?.dateFormat}
           onClose={attendance.handleCloseDelete}
           onDeleted={attendance.handleDeletedSession}
           onSessionExpired={onSessionExpired}
@@ -294,13 +306,15 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
       ) : null}
 
       {isExportDialogOpen && attendance.selectedClass ? (
-        <ExportAttendancePdfDialog
+        <ExportAttendanceDialog
           key={`${attendance.selectedClass.id}-${attendance.monthInput}`}
           classRecord={attendance.selectedClass}
           monthInput={attendance.monthInput}
           sessions={attendance.selectedClassSessions}
           createdBy={getAuthenticatedUserDisplayName(currentUser)}
           hasUnsavedChanges={attendance.hasUnsavedChanges}
+          defaultFormat={preferences?.defaultExportFormat ?? 'PDF'}
+          dateFormat={preferences?.dateFormat}
           onClose={() => setIsExportDialogOpen(false)}
         />
       ) : null}

@@ -1,9 +1,14 @@
 // Renders active students with their enrolled classes and edit/archive actions.
 import { useRef, type FocusEvent } from 'react';
+import {
+  getTableDensityClasses,
+  type TableDensityPreference,
+} from '../../settings/preference-display';
 import type { StudentRecord } from '../student-types';
 
 interface StudentDirectoryProps {
   students: StudentRecord[];
+  tableDensity?: TableDensityPreference;
   canEdit: boolean;
   onEdit: (student: StudentRecord) => void;
   onArchive: (student: StudentRecord) => void;
@@ -70,10 +75,13 @@ function StudentActions({ student, canEdit, onEdit, onArchive }: StudentActionsP
 // Presents students as responsive rows that remain readable without horizontal scrolling.
 export function StudentDirectory({
   students,
+  tableDensity,
   canEdit,
   onEdit,
   onArchive,
 }: StudentDirectoryProps) {
+  const density = getTableDensityClasses(tableDensity);
+
   return (
     <section aria-labelledby="student-directory-heading">
       <div className="mb-5 flex items-end gap-4">
@@ -95,7 +103,7 @@ export function StudentDirectory({
         {students.map((student, index) => (
           <li
             key={student.id}
-            className="grid gap-5 border-b border-paper-border p-5 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,1.4fr)_auto] sm:items-start sm:gap-6"
+            className={`grid border-b border-paper-border last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,1.4fr)_auto] sm:items-start ${density.directoryRow}`}
           >
             <span className="w-fit bg-ink px-2 py-1 font-mono text-[11px] font-bold text-paper-light">
               {String(index + 1).padStart(2, '0')}
@@ -123,7 +131,7 @@ export function StudentDirectory({
               <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
                 Classes
               </p>
-              <ul className="mt-1 space-y-2">
+              <ul className={`mt-1 ${density.compactStack}`}>
                 {student.classes.map((classRecord) => {
                   const metadata = [classRecord.subjectCode, classRecord.section]
                     .filter(Boolean)

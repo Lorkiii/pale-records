@@ -1,4 +1,4 @@
-// Owns session-aware routing between the PALE login and dashboard screens.
+// Owns session-aware routing and the authenticated dashboard preferences boundary.
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { DashboardShell } from './components/layout/DashboardShell';
@@ -15,6 +15,7 @@ import { LoginPage } from './pages/LoginPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StudentPage } from './pages/StudentPage';
 import SessionLoadingScreen from './components/ui/SessionLoading';
+import { SystemPreferencesProvider } from './features/settings/system-preferences-context';
 
 type AuthenticationStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
@@ -77,7 +78,9 @@ export default function App() {
         path="/dashboard"
         element={
           isAuthenticated ? (
-            <DashboardShell currentUser={authenticatedUser} />
+            <SystemPreferencesProvider onSessionExpired={handleSessionExpired}>
+              <DashboardShell currentUser={authenticatedUser} />
+            </SystemPreferencesProvider>
           ) : (
             <Navigate to="/login" replace />
           )
@@ -110,7 +113,13 @@ export default function App() {
         />
         <Route
           path="settings"
-          element={<SettingsPage currentUser={authenticatedUser} />}
+          element={
+            <SettingsPage
+              currentUser={authenticatedUser!}
+              onProfileUpdated={setAuthenticatedUser}
+              onSessionExpired={handleSessionExpired}
+            />
+          }
         />
       </Route>
       <Route path="*" element={<Navigate to={defaultPath} replace />} />

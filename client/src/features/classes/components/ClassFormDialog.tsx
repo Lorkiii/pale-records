@@ -21,6 +21,10 @@ import {
 interface ClassFormDialogProps {
   isOpen: boolean;
   classRecord?: ClassRecord;
+  newClassDefaults?: {
+    schoolYear?: string;
+    semester?: string;
+  };
   onClose: () => void;
   onSaved: (savedClass: ClassRecord) => void;
   onSessionExpired: () => void;
@@ -53,22 +57,29 @@ const FIELD_LIMITS: Partial<Record<ClassScalarFieldName, number>> = {
 
 const CLASS_FIELDS = Object.keys(EMPTY_FORM) as ClassScalarFieldName[];
 
-// Converts an existing record into controlled form values or supplies a blank add form.
-function getInitialValues(classRecord?: ClassRecord): ClassFormValues {
-  if (!classRecord) {
-    return EMPTY_FORM;
+// Initializes edits only from their record and applies optional defaults only to new forms.
+function getInitialValues(
+  classRecord?: ClassRecord,
+  newClassDefaults?: ClassFormDialogProps['newClassDefaults'],
+): ClassFormValues {
+  if (classRecord) {
+    return {
+      subjectName: classRecord.subjectName,
+      subjectCode: classRecord.subjectCode ?? '',
+      section: classRecord.section ?? '',
+      schoolYear: classRecord.schoolYear ?? '',
+      semester: classRecord.semester ?? '',
+      teacher: classRecord.teacher ?? '',
+      room: classRecord.room ?? '',
+      startDate: classRecord.startDate ?? '',
+      endDate: classRecord.endDate ?? '',
+    };
   }
 
   return {
-    subjectName: classRecord.subjectName,
-    subjectCode: classRecord.subjectCode ?? '',
-    section: classRecord.section ?? '',
-    schoolYear: classRecord.schoolYear ?? '',
-    semester: classRecord.semester ?? '',
-    teacher: classRecord.teacher ?? '',
-    room: classRecord.room ?? '',
-    startDate: classRecord.startDate ?? '',
-    endDate: classRecord.endDate ?? '',
+    ...EMPTY_FORM,
+    schoolYear: newClassDefaults?.schoolYear ?? '',
+    semester: newClassDefaults?.semester ?? '',
   };
 }
 
@@ -149,12 +160,15 @@ function readApiFieldErrors(error: ClassApiError) {
 export function ClassFormDialog({
   isOpen,
   classRecord,
+  newClassDefaults,
   onClose,
   onSaved,
   onSessionExpired,
 }: ClassFormDialogProps) {
   const isEditing = Boolean(classRecord);
-  const [values, setValues] = useState<ClassFormValues>(() => getInitialValues(classRecord));
+  const [values, setValues] = useState<ClassFormValues>(() =>
+    getInitialValues(classRecord, newClassDefaults)
+  );
   const [scheduleRows, setScheduleRows] = useState<ClassScheduleFormRow[]>(
     () => getInitialScheduleRows(classRecord),
   );

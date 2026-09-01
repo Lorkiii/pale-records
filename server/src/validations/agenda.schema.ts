@@ -1,4 +1,4 @@
-// Validates and normalizes Agenda identifiers, date ranges, complete writes, and legacy imports.
+// Validates Agenda identifiers, date ranges, category-based writes, and legacy imports.
 import { z } from "zod";
 
 export const AGENDA_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -18,7 +18,7 @@ export const agendaDateSchema = z
   .regex(AGENDA_DATE_PATTERN, "Use the YYYY-MM-DD date format")
   .refine(isRealCalendarDate, "Enter a valid calendar date");
 
-export const agendaEventTypeSchema = z.enum([
+export const legacyAgendaEventTypeSchema = z.enum([
   "EXAM",
   "ASSIGNMENT",
   "ACTIVITY",
@@ -84,7 +84,6 @@ const agendaEventInputShape = {
   startTime: nullableTimeSchema,
   endTime: nullableTimeSchema,
   isAllDay: z.boolean({ error: "All-day status is required" }),
-  eventType: agendaEventTypeSchema,
   classId: nullableClassIdSchema,
   location: nullableTrimmedString(
     160,
@@ -125,11 +124,17 @@ function validateAgendaTimes(
 }
 
 export const createAgendaEventSchema = z
-  .strictObject(agendaEventInputShape)
+  .strictObject({
+    ...agendaEventInputShape,
+    categoryId: z.string().uuid("Category ID must be a valid UUID"),
+  })
   .superRefine(validateAgendaTimes);
 
 export const updateAgendaEventSchema = z
-  .strictObject(agendaEventInputShape)
+  .strictObject({
+    ...agendaEventInputShape,
+    categoryId: z.string().uuid("Category ID must be a valid UUID"),
+  })
   .superRefine(validateAgendaTimes);
 
 export const importAgendaEventSchema = z
@@ -140,6 +145,7 @@ export const importAgendaEventSchema = z
       .min(1, "Legacy event ID is required")
       .max(160, "Legacy event ID must be at most 160 characters"),
     ...agendaEventInputShape,
+    eventType: legacyAgendaEventTypeSchema,
   })
   .superRefine(validateAgendaTimes);
 
@@ -175,7 +181,7 @@ export const listAgendaEventsQuerySchema = z
     }
   });
 
-export type AgendaEventTypeCode = z.infer<typeof agendaEventTypeSchema>;
+export type LegacyAgendaEventTypeCode = z.infer<typeof legacyAgendaEventTypeSchema>;
 export type CreateAgendaEventInput = z.infer<typeof createAgendaEventSchema>;
 export type UpdateAgendaEventInput = z.infer<typeof updateAgendaEventSchema>;
 export type ImportAgendaEventInput = z.infer<typeof importAgendaEventSchema>;

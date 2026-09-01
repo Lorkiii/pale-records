@@ -7,6 +7,11 @@ import type { AuthenticatedUser } from "../validations/auth.response.js";
 
 type LoginUserRecord = AuthenticatedUser & {
   passwordHash: string;
+  sessionVersion: number;
+};
+
+export type AuthenticatedSessionUser = AuthenticatedUser & {
+  sessionVersion: number;
 };
 
 // Type for the dependencies of the auth service
@@ -19,7 +24,7 @@ export type AuthServiceDependencies = {
 };
 
 export type SessionServiceDependencies = {
-  findUserById: (userId: string) => Promise<AuthenticatedUser | null>;
+  findUserById: (userId: string) => Promise<AuthenticatedSessionUser | null>;
 };
 
 const DUMMY_PASSWORD_HASH =
@@ -38,6 +43,7 @@ const defaultDependencies: AuthServiceDependencies = {
         username: true,
         email: true,
         passwordHash: true,
+        sessionVersion: true,
       },
     }),
   comparePassword: compare,
@@ -53,11 +59,12 @@ const defaultSessionDependencies: SessionServiceDependencies = {
         lastName: true,
         username: true,
         email: true,
+        sessionVersion: true,
       },
     }),
 };
 
-/** Authenticates an email or username without exposing the password hash. */
+/** Authenticates credentials and retains the private token version for session issuance. */
 export async function authenticateUser(
   { identifier, password }: LoginInput,
   dependencies: AuthServiceDependencies = defaultDependencies,
@@ -73,15 +80,18 @@ export async function authenticateUser(
   }
 
   return {
-    id: user.id,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    username: user.username,
-    email: user.email,
+    user: {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+      email: user.email,
+    },
+    sessionVersion: user.sessionVersion,
   };
 }
 
-/** Resolves a session identity without selecting credential data. */
+/** Resolves a session identity with the private version required for token validation. */
 export function getAuthenticatedUser(
   userId: string,
   dependencies: SessionServiceDependencies = defaultSessionDependencies,

@@ -96,7 +96,7 @@ function compareAttendanceStudents(
     first.id.localeCompare(second.id);
 }
 
-// Converts loaded session snapshots into the shared matrix used by PDF export.
+// Converts loaded session snapshots into the shared matrix used by both exporters.
 export function buildMonthlyAttendanceReport({
   classRecord,
   monthInput,
@@ -130,13 +130,17 @@ export function buildMonthlyAttendanceReport({
       statusByDateId: Object.fromEntries(
         orderedSessions.map((session) => [
           session.id,
-          session.savedRecords[student.id]?.status ?? null,
+          session.isRosterInitialized
+            ? session.savedRecords[student.id]?.status ?? null
+            : null,
         ]),
       ),
       remarkByDateId: Object.fromEntries(
         orderedSessions.map((session) => [
           session.id,
-          session.savedRecords[student.id]?.remarks.trim() ?? '',
+          session.isRosterInitialized
+            ? session.savedRecords[student.id]?.remarks.trim() ?? ''
+            : '',
         ]),
       ),
     }));

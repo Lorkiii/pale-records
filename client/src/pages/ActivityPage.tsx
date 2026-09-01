@@ -12,6 +12,7 @@ import {
   type RecitationToolbarFeedback,
 } from '../features/activity/recitation/components/RecitationToolbar';
 import { useRecitationWorkspace } from '../features/activity/recitation/useRecitationWorkspace';
+import { useSystemPreferences } from '../features/settings/system-preferences-store';
 
 interface ActivityPageProps {
   onSessionExpired: () => void;
@@ -37,7 +38,8 @@ function RecitationIcon() {
 // Renders Activity states while delegating Recitation workflow behavior to its hook.
 export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
   const navigate = useNavigate();
-  const recitation = useRecitationWorkspace(onSessionExpired);
+  const { preferences } = useSystemPreferences();
+  const recitation = useRecitationWorkspace(onSessionExpired, preferences?.dateFormat);
   const toolbarFeedback: RecitationToolbarFeedback | null = recitation.feedback
     ? {
         variant: recitation.feedback.variant,
@@ -120,6 +122,7 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
                 canAddDates={recitation.canAddDates}
                 markCounts={recitation.markCounts}
                 feedback={toolbarFeedback}
+                dateFormat={preferences?.dateFormat}
                 onClassChange={recitation.handleClassChange}
                 onMonthInputChange={recitation.handleMonthChange}
                 onToggleSelectedDate={recitation.handleToggleSelectedDate}
@@ -233,6 +236,8 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
                   selectedSessionId={recitation.selectedSessionId}
                   isEditing={recitation.isEditing}
                   isBusy={recitation.isBusy}
+                  dateFormat={preferences?.dateFormat}
+                  tableDensity={preferences?.tableDensity}
                   onSelectSession={recitation.handleSelectSession}
                   onCycleMark={recitation.handleCycleMark}
                 />
@@ -247,6 +252,7 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
           key={recitation.deleteTarget.id}
           session={recitation.deleteTarget}
           hasUnsavedChanges={recitation.hasUnsavedChanges}
+          dateFormat={preferences?.dateFormat}
           onClose={recitation.handleCloseDelete}
           onDeleted={recitation.handleDeletedSession}
           onSessionExpired={onSessionExpired}

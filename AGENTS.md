@@ -8,6 +8,9 @@ repository.
 - Apply these rules to every file under the repository root, including
   `client/` and `server/`.
 - Also follow the closest nested `AGENTS.md` for the area being changed.
+- Before changing files under `client/` or `server/`, read that area's nested
+  `AGENTS.md`. Read both nested files for work that crosses both areas, even
+  when the task starts from the repository root.
 - Nested instructions may add more specific requirements or override a root
   rule when the two directly conflict.
 - Keep client design and accessibility rules in `client/AGENTS.md`. Keep
@@ -70,6 +73,9 @@ repository.
   or uncommitted work.
 - Do not delete, overwrite, revert, or rewrite files or history without clear
   authorization.
+- Do not commit, push, deploy migrations, reset or seed a persistent database,
+  or use destructive database shortcuts unless the user explicitly authorizes
+  that action in the current task.
 - Add dependencies only when they are necessary and the current stack cannot
   solve the task clearly.
 - Do not change configuration, authentication, authorization, database
@@ -81,13 +87,20 @@ repository.
 
 ## Verification
 
-- Run checks that are relevant to the changed area and follow any additional
-  verification commands in the closest nested `AGENTS.md`.
+- Treat this section and the closest nested `AGENTS.md` verification section as
+  required even when a phase or implementation prompt does not repeat them.
+- Run checks that are relevant to every changed area. For cross-client/server
+  work, run both nested verification sets.
 - Add or update focused tests when behavior changes and the existing test setup
   supports them.
-- Run `git diff --check` when appropriate to catch whitespace errors.
+- After file changes, run `git diff --check`, inspect `git status --short`, and
+  review the final diff for accidental or unrelated changes.
+- Documentation-only changes do not require application test suites unless the
+  documentation also changes executable configuration or runtime behavior.
+- Wait for every verification process to finish before reporting its result.
 - Never claim that a check passed unless it was actually run successfully.
-- If a relevant check cannot run, report the exact reason.
+- If a relevant check or browser workflow cannot run, report the exact reason
+  and do not imply runtime or visual verification occurred.
 
 ## Completion Report
 
@@ -99,6 +112,10 @@ that includes:
 - `Summary`: explain the overall completed work and any important safeguards.
 - `Verification`: list the checks that passed and any checks not run, including
   the reason.
+
+When migrations are in scope, also state which migration artifacts were
+created or remain pending and whether any migration was applied. State whether
+a commit or push occurred.
 
 Report once after the complete task rather than interrupting the work after
 each individual file edit.

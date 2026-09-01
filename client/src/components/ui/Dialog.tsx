@@ -1,5 +1,12 @@
 // Provides an accessible native modal shell for focused forms and confirmations.
-import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  type MouseEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 interface DialogProps {
   isOpen: boolean;
@@ -9,6 +16,7 @@ interface DialogProps {
   children: ReactNode;
   footer?: ReactNode;
   isDismissDisabled?: boolean;
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 // Synchronizes an accessible native dialog with React-controlled open and dismiss states.
@@ -20,8 +28,10 @@ export function Dialog({
   children,
   footer,
   isDismissDisabled = false,
+  initialFocusRef,
 }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -33,11 +43,18 @@ export function Dialog({
     }
 
     if (isOpen && !dialog.open) {
+      returnFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
       dialog.showModal();
+      initialFocusRef?.current?.focus();
     } else if (!isOpen && dialog.open) {
       dialog.close();
+      const returnFocusTarget = returnFocusRef.current;
+      returnFocusRef.current = null;
+      window.requestAnimationFrame(() => returnFocusTarget?.focus());
     }
-  }, [isOpen]);
+  }, [initialFocusRef, isOpen]);
 
   // Closes only direct backdrop clicks while preserving interactions inside the dialog.
   const handleBackdropClick = (event: MouseEvent<HTMLDialogElement>) => {
@@ -86,7 +103,7 @@ export function Dialog({
         <div className="overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">{children}</div>
 
         {footer ? (
-          <footer className="flex flex-col-reverse gap-3 border-t border-ink bg-paper-muted px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+          <footer className="flex flex-col-reverse gap-3 border-t border-ink bg-paper-muted px-5 py-4 [&>button]:w-full sm:flex-row sm:justify-end sm:px-6 sm:[&>button]:w-auto">
             {footer}
           </footer>
         ) : null}

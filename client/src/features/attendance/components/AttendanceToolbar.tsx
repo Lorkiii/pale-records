@@ -12,6 +12,10 @@ import {
   formatAttendanceSessionSchedule,
 } from '../attendance-draft';
 import type { AttendanceSessionDraft } from '../attendance-types';
+import type {
+  DateFormatPreference,
+  TimeFormatPreference,
+} from '../../settings/preference-display';
 
 export interface AttendanceToolbarFeedback {
   variant: 'info' | 'warning' | 'error' | 'success';
@@ -36,6 +40,8 @@ interface AttendanceToolbarProps {
   dateHint: string;
   statusCounts: AttendanceStatusCounts;
   feedback: AttendanceToolbarFeedback | null;
+  dateFormat?: DateFormatPreference;
+  timeFormat?: TimeFormatPreference;
   onClassChange: (classId: string) => void;
   onMonthInputChange: (month: string) => void;
   onDateInputChange: (date: string) => void;
@@ -87,6 +93,8 @@ export function AttendanceToolbar({
   dateHint,
   statusCounts,
   feedback,
+  dateFormat,
+  timeFormat,
   onClassChange,
   onMonthInputChange,
   onDateInputChange,
@@ -167,7 +175,7 @@ export function AttendanceToolbar({
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <p className="text-sm font-semibold text-ink">
-                    {formatAttendanceDateLong(selectedDate)}
+                    {formatAttendanceDateLong(selectedDate, dateFormat)}
                   </p>
                   <span className="border border-ink bg-paper-muted px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
                     {isEditing ? 'Editing' : 'Read-only'}
@@ -184,7 +192,7 @@ export function AttendanceToolbar({
                   ) : null}
                   {selectedSession ? (
                     <span className="border border-paper-dark bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink-secondary">
-                      {formatAttendanceSessionSchedule(selectedSession)}
+                      {formatAttendanceSessionSchedule(selectedSession, timeFormat)}
                     </span>
                   ) : null}
                 </div>

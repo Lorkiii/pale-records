@@ -12,9 +12,9 @@ import {
 
 test("session tokens are signed and resolve to the authenticated user", async () => {
   const userId = "7d51b6b3-8f2c-4db6-b9eb-f933cd085da3";
-  const token = await createSessionToken(userId, false);
+  const token = await createSessionToken(userId, 3, false);
 
-  assert.deepEqual(await verifySessionToken(token), { userId });
+  assert.deepEqual(await verifySessionToken(token), { userId, sessionVersion: 3 });
 });
 
 test("remember me creates a persistent HTTP-only cookie", () => {

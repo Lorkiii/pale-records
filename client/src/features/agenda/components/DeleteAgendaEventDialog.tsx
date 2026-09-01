@@ -5,11 +5,18 @@ import { Dialog } from '../../../components/ui/Dialog';
 import { Notice } from '../../../components/ui/Notice';
 import type { AgendaEvent } from '../agenda-types';
 import { formatDateDisplay } from '../agenda-utils';
+import {
+  formatTime,
+  type DateFormatPreference,
+  type TimeFormatPreference,
+} from '../../settings/preference-display';
 
 interface DeleteAgendaEventDialogProps {
   isOpen: boolean;
   onClose: () => void;
   event: AgendaEvent | null;
+  dateFormat?: DateFormatPreference;
+  timeFormat?: TimeFormatPreference;
   onConfirm: () => Promise<void>;
 }
 
@@ -17,6 +24,8 @@ export function DeleteAgendaEventDialog({
   isOpen,
   onClose,
   event,
+  dateFormat,
+  timeFormat,
   onConfirm,
 }: DeleteAgendaEventDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -83,8 +92,8 @@ export function DeleteAgendaEventDialog({
         </p>
         <p className="mt-1 font-display text-lg font-bold text-ink">{event.title}</p>
         <p className="mt-1 font-mono text-xs text-ink-secondary">
-          Date: {formatDateDisplay(event.eventDate)}
-          {event.startTime ? ` • ${event.startTime}` : ''}
+          Date: {formatDateDisplay(event.eventDate, dateFormat)}
+          {event.startTime ? ` • ${formatTime(event.startTime, timeFormat)}` : ''}
         </p>
       </div>
     </Dialog>

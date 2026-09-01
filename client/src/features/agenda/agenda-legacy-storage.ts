@@ -1,5 +1,5 @@
 // Reads and clears the legacy Agenda key solely for explicit authenticated import.
-import type { AgendaEventType, LegacyAgendaEventInput } from './agenda-types';
+import type { LegacyAgendaEventInput, LegacyAgendaEventType } from './agenda-types';
 
 export const LEGACY_AGENDA_STORAGE_KEY = 'pale_agenda_events_v1';
 export const MAX_LEGACY_AGENDA_EVENTS = 200;
@@ -39,7 +39,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 // Confirms the six historical categories without trusting a type assertion.
-function isAgendaEventType(value: unknown): value is AgendaEventType {
+function isAgendaEventType(value: unknown): value is LegacyAgendaEventType {
   return value === 'EXAM' ||
     value === 'ASSIGNMENT' ||
     value === 'ACTIVITY' ||

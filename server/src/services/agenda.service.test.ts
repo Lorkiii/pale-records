@@ -1,17 +1,22 @@
-// Verifies Agenda ownership, Class checks, safe mapping, and idempotent legacy imports.
+// Verifies Agenda category ownership, completion, Class checks, and legacy import.
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AgendaEventType } from "../generated/prisma/client.js";
+import {
+  AgendaCategoryAccentKey,
+  AgendaCategoryDefaultKey,
+} from "../generated/prisma/client.js";
 import {
   createAgendaEventSchema,
   importAgendaEventSchema,
 } from "../validations/agenda.schema.js";
 import {
   createAgendaEvent,
+  completeAgendaEvent,
   deleteAgendaEvent,
   importAgendaEvent,
   listAgendaEvents,
+  reopenAgendaEvent,
   type AgendaEventDatabaseRecord,
   type AgendaServiceDependencies,
   toAgendaDateOnly,
@@ -25,6 +30,8 @@ const otherUserId = "1d7f6a68-01d8-4abe-9f17-c3d03ed4ad86";
 const eventId = "099aa026-ef03-4ab6-92ee-68fa37fb6523";
 const classId = "2c6e62cc-584d-4faf-90f6-fdb50b27c9d0";
 const legacyEventId = "evt_1724900000000_ab12cd3";
+const categoryId = "805a2580-d0b5-48a8-8eb3-9356e464b838";
+const otherCategoryId = "bb8d1bad-a458-44e7-b2ac-2cc7010ab287";
 
 const storedEvent: AgendaEventDatabaseRecord = {
   id: eventId,
@@ -34,9 +41,17 @@ const storedEvent: AgendaEventDatabaseRecord = {
   startTime: "09:00",
   endTime: "11:00",
   isAllDay: false,
-  eventType: AgendaEventType.EXAM,
+  categoryId,
+  category: {
+    id: categoryId,
+    name: "Examination",
+    shortCode: "EXAM",
+    accentKey: AgendaCategoryAccentKey.SIGNAL_RED,
+    isActive: true,
+  },
   classId,
   location: "Room 204",
+  completedAt: null,
   createdAt: new Date("2026-08-29T01:02:03.000Z"),
   updatedAt: new Date("2026-08-29T04:05:06.000Z"),
 };
@@ -48,14 +63,22 @@ const validInput = createAgendaEventSchema.parse({
   startTime: "09:00",
   endTime: "11:00",
   isAllDay: false,
-  eventType: "EXAM",
+  categoryId,
   classId,
   location: " Room 204 ",
 });
 
 const validImportInput = importAgendaEventSchema.parse({
   legacyEventId,
-  ...validInput,
+  title: validInput.title,
+  description: validInput.description,
+  eventDate: validInput.eventDate,
+  startTime: validInput.startTime,
+  endTime: validInput.endTime,
+  isAllDay: validInput.isAllDay,
+  eventType: "EXAM",
+  classId: validInput.classId,
+  location: validInput.location,
 });
 
 // Creates deterministic database fakes while allowing each test to replace one behavior.
@@ -65,13 +88,21 @@ function createDependencies(
   return {
     findEvents: async () => [],
     classExists: async () => true,
-    findOwnedEvent: async () => true,
+    findOwnedEvent: async () => ({ categoryId }),
+    findOwnedCategory: async () => ({ isActive: true }),
     insertEvent: async () => storedEvent,
     updateOwnedEvent: async () => storedEvent,
     deleteOwnedEvent: async () => true,
     findImportedEvent: async () => null,
     insertImportedEvent: async () => storedEvent,
     isLegacyImportKeyConflict: () => false,
+    ensureDefaultCategories: async () => undefined,
+    findDefaultCategory: async () => ({ id: categoryId }),
+    completeOwnedEvent: async () => ({
+      ...storedEvent,
+      completedAt: new Date("2026-08-29T05:06:07.000Z"),
+    }),
+    reopenOwnedEvent: async () => storedEvent,
     ...overrides,
   };
 }
@@ -99,9 +130,17 @@ test("Agenda explicitly maps only public fields and excludes userId", () => {
     startTime: "09:00",
     endTime: "11:00",
     isAllDay: false,
-    eventType: "EXAM",
+    categoryId,
+    category: {
+      id: categoryId,
+      name: "Examination",
+      shortCode: "EXAM",
+      accentKey: "SIGNAL_RED",
+      isActive: true,
+    },
     classId,
     location: "Room 204",
+    completedAt: null,
     createdAt: "2026-08-29T01:02:03.000Z",
     updatedAt: "2026-08-29T04:05:06.000Z",
   });
@@ -160,7 +199,7 @@ test("Agenda creation uses only the trusted user ID and explicit normalized data
     startTime: "09:00",
     endTime: "11:00",
     isAllDay: false,
-    eventType: AgendaEventType.EXAM,
+    categoryId,
     classId,
     location: "Room 204",
   });
@@ -219,7 +258,7 @@ test("Agenda update treats another owner's event as missing before Class checks"
     eventId,
     validInput,
     createDependencies({
-      findOwnedEvent: async () => false,
+      findOwnedEvent: async () => null,
       classExists: async () => {
         classWasChecked = true;
         return false;
@@ -301,7 +340,7 @@ test("Agenda legacy import creates one event with the trusted owner and generate
     startTime: "09:00",
     endTime: "11:00",
     isAllDay: false,
-    eventType: AgendaEventType.EXAM,
+    categoryId,
     classId,
     location: "Room 204",
   });
@@ -439,4 +478,104 @@ test("Agenda normal update data cannot overwrite an internal legacy import key",
 
   assert.equal(result.status, "updated");
   assert.equal(receivedData && Object.hasOwn(receivedData, "legacyImportKey"), false);
+});
+
+test("Agenda rejects inactive categories for create and category changes", async () => {
+  let insertWasCalled = false;
+  const createResult = await createAgendaEvent(
+    userId,
+    validInput,
+    createDependencies({
+      findOwnedCategory: async () => ({ isActive: false }),
+      insertEvent: async () => {
+        insertWasCalled = true;
+        return storedEvent;
+      },
+    }),
+  );
+  const updateResult = await updateAgendaEvent(
+    userId,
+    eventId,
+    { ...validInput, categoryId: otherCategoryId },
+    createDependencies({
+      findOwnedCategory: async () => ({ isActive: false }),
+    }),
+  );
+
+  assert.deepEqual(createResult, { status: "category_not_found" });
+  assert.deepEqual(updateResult, { status: "category_not_found" });
+  assert.equal(insertWasCalled, false);
+});
+
+test("Agenda update may retain its current inactive category", async () => {
+  let categoryWasChecked = false;
+  const result = await updateAgendaEvent(
+    userId,
+    eventId,
+    validInput,
+    createDependencies({
+      findOwnedCategory: async () => {
+        categoryWasChecked = true;
+        return { isActive: false };
+      },
+    }),
+  );
+
+  assert.equal(result.status, "updated");
+  assert.equal(categoryWasChecked, false);
+});
+
+test("Agenda legacy import maps every historical type to its owned default", async () => {
+  const mappings = [
+    ["EXAM", AgendaCategoryDefaultKey.EXAM],
+    ["ASSIGNMENT", AgendaCategoryDefaultKey.ASSIGNMENT],
+    ["ACTIVITY", AgendaCategoryDefaultKey.ACTIVITY],
+    ["HOLIDAY", AgendaCategoryDefaultKey.HOLIDAY],
+    ["MEETING", AgendaCategoryDefaultKey.MEETING],
+    ["NOTE", AgendaCategoryDefaultKey.NOTE],
+  ] as const;
+
+  for (const [eventType, expectedDefaultKey] of mappings) {
+    let receivedDefaultKey: AgendaCategoryDefaultKey | undefined;
+    await importAgendaEvent(
+      userId,
+      { ...validImportInput, eventType, legacyEventId: `${legacyEventId}-${eventType}` },
+      createDependencies({
+        findDefaultCategory: async (trustedUserId, defaultKey) => {
+          assert.equal(trustedUserId, userId);
+          receivedDefaultKey = defaultKey;
+          return { id: categoryId };
+        },
+      }),
+    );
+    assert.equal(receivedDefaultKey, expectedDefaultKey);
+  }
+});
+
+test("Agenda completion and reopening return only confirmed owned events", async () => {
+  const completedAt = new Date("2026-08-29T05:06:07.000Z");
+  const completedRecord = { ...storedEvent, completedAt };
+  const dependencies = createDependencies({
+    completeOwnedEvent: async () => completedRecord,
+    reopenOwnedEvent: async () => ({ ...completedRecord, completedAt: null }),
+  });
+
+  const completed = await completeAgendaEvent(userId, eventId, dependencies);
+  const repeated = await completeAgendaEvent(userId, eventId, dependencies);
+  const reopened = await reopenAgendaEvent(userId, eventId, dependencies);
+  const missing = await completeAgendaEvent(
+    otherUserId,
+    eventId,
+    createDependencies({ completeOwnedEvent: async () => null }),
+  );
+
+  assert.equal(completed.status, "updated");
+  assert.equal(repeated.status, "updated");
+  if (completed.status === "updated" && repeated.status === "updated") {
+    assert.equal(completed.event.completedAt, completedAt.toISOString());
+    assert.equal(repeated.event.completedAt, completed.event.completedAt);
+  }
+  assert.equal(reopened.status, "updated");
+  if (reopened.status === "updated") assert.equal(reopened.event.completedAt, null);
+  assert.deepEqual(missing, { status: "event_not_found" });
 });

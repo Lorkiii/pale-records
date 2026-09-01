@@ -1,23 +1,37 @@
-// Renders the detailed daily schedule docket for the selected calendar date.
+// Renders the daily docket with category, completion, and Class-session actions.
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionIconButton } from '../../../components/ui/ActionIconButton';
 import { Button } from '../../../components/ui/Button';
+import { Notice } from '../../../components/ui/Notice';
 import type { ClassRecord } from '../../classes/class-types';
 import {
-  AGENDA_EVENT_TYPES,
+  AGENDA_CATEGORY_ACCENTS,
   type AgendaEvent,
   type SyncedClassSession,
 } from '../agenda-types';
 import { formatDateDisplay, formatDayOfWeekName } from '../agenda-utils';
+import {
+  formatTime,
+  getTableDensityClasses,
+  type DateFormatPreference,
+  type TableDensityPreference,
+  type TimeFormatPreference,
+} from '../../settings/preference-display';
 
 interface AgendaDayDocketProps {
   selectedDateKey: string;
   events: AgendaEvent[];
   sessions: SyncedClassSession[];
   classes: ClassRecord[];
+  dateFormat?: DateFormatPreference;
+  timeFormat?: TimeFormatPreference;
+  tableDensity?: TableDensityPreference;
   onAddEvent: (dateKey: string) => void;
+  canAddEvent: boolean;
   onEditEvent: (event: AgendaEvent) => void;
   onDeleteEvent: (event: AgendaEvent) => void;
+  onToggleCompletion: (event: AgendaEvent) => Promise<AgendaEvent>;
 }
 
 export function AgendaDayDocket({
@@ -25,12 +39,20 @@ export function AgendaDayDocket({
   events,
   sessions,
   classes,
+  dateFormat,
+  timeFormat,
+  tableDensity,
   onAddEvent,
+  canAddEvent,
   onEditEvent,
   onDeleteEvent,
+  onToggleCompletion,
 }: AgendaDayDocketProps) {
   const navigate = useNavigate();
-  const dateHeading = formatDateDisplay(selectedDateKey);
+  const [pendingCompletionId, setPendingCompletionId] = useState<string | null>(null);
+  const [completionError, setCompletionError] = useState('');
+  const density = getTableDensityClasses(tableDensity);
+  const dateHeading = formatDateDisplay(selectedDateKey, dateFormat);
   const weekdayName = formatDayOfWeekName(selectedDateKey);
 
   const classMap = new Map(classes.map((c) => [c.id, c]));
@@ -38,7 +60,7 @@ export function AgendaDayDocket({
   return (
     <div className="flex flex-col border border-ink bg-paper-light">
       {/* Date Header Banner */}
-      <div className="border-b border-ink bg-paper-muted p-4 sm:p-5">
+      <div className={`border-b border-ink bg-paper-muted ${density.surface}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-ink-muted">
@@ -56,6 +78,7 @@ export function AgendaDayDocket({
           <Button
             variant="outline"
             size="sm"
+            disabled={!canAddEvent}
             onClick={() => onAddEvent(selectedDateKey)}
             className="text-xs"
             leftIcon={<span className="font-mono text-sm leading-none">+</span>}
@@ -65,7 +88,7 @@ export function AgendaDayDocket({
         </div>
       </div>
 
-      <div className="flex flex-col divide-y divide-paper-border p-4 sm:p-5">
+      <div className={`flex flex-col divide-y divide-paper-border ${density.surface}`}>
         {/* Section 01: Custom Academic Events */}
         <div className="pb-5">
           <div className="mb-3 flex items-center justify-between">
@@ -75,6 +98,14 @@ export function AgendaDayDocket({
             <span className="font-mono text-xs text-ink-muted">({events.length})</span>
           </div>
 
+          {completionError ? (
+            <div className="mb-3">
+              <Notice variant="error" title="Completion not updated" onDismiss={() => setCompletionError('')}>
+                {completionError}
+              </Notice>
+            </div>
+          ) : null}
+
           {events.length === 0 ? (
             <div className="border border-dashed border-paper-border bg-paper p-4 text-center">
               <p className="text-xs font-mono text-ink-muted">
@@ -82,51 +113,82 @@ export function AgendaDayDocket({
               </p>
               <button
                 type="button"
+                disabled={!canAddEvent}
                 onClick={() => onAddEvent(selectedDateKey)}
-                className="mt-2 text-xs font-mono font-semibold text-ink underline hover:text-ink-secondary cursor-pointer"
+                className="mt-2 cursor-pointer font-mono text-xs font-semibold text-ink underline hover:text-ink-secondary disabled:cursor-not-allowed disabled:text-ink-faint"
               >
                 + Schedule an event
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className={density.stack}>
               {events.map((evt) => {
-                const typeConfig = AGENDA_EVENT_TYPES.find((t) => t.type === evt.eventType);
+                const accent = AGENDA_CATEGORY_ACCENTS[evt.category.accentKey];
                 const linkedClass = evt.classId ? classMap.get(evt.classId) : null;
 
                 return (
                   <div
                     key={evt.id}
-                    className="border border-ink bg-paper p-3.5 sm:p-4 transition-all hover:border-black"
+                    className={`border border-ink bg-paper transition-all hover:border-black ${density.record} ${
+                      evt.completedAt ? 'opacity-75' : ''
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
                         {/* Event Category Tag */}
                         <span
                           className={`inline-flex items-center gap-1 border px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider ${
-                            typeConfig?.badgeStyle ?? 'border-ink text-ink bg-paper-light'
+                            accent.badgeStyle
                           }`}
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
-                              typeConfig?.pipColor ?? 'bg-ink'
+                              accent.pipColor
                             }`}
                           />
-                          {typeConfig?.label ?? evt.eventType}
+                          {evt.category.name}
                         </span>
+
+                        {evt.completedAt ? (
+                          <span className="border border-ink bg-paper-light px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-ink">
+                            Completed
+                          </span>
+                        ) : null}
 
                         {/* Time Stamp */}
                         <span className="font-mono text-xs font-semibold text-ink">
                           {evt.isAllDay
                             ? 'ALL DAY'
                             : evt.startTime
-                              ? `${evt.startTime}${evt.endTime ? ` - ${evt.endTime}` : ''}`
+                              ? `${formatTime(evt.startTime, timeFormat)}${evt.endTime ? ` – ${formatTime(evt.endTime, timeFormat)}` : ''}`
                               : 'TIME UNSPECIFIED'}
                         </span>
                       </div>
 
                       {/* Actions */}
                       <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          className="min-h-11"
+                          disabled={pendingCompletionId !== null}
+                          isLoading={pendingCompletionId === evt.id}
+                          onClick={async () => {
+                            setPendingCompletionId(evt.id);
+                            setCompletionError('');
+                            try {
+                              await onToggleCompletion(evt);
+                            } catch (error) {
+                              setCompletionError(error instanceof Error
+                                ? error.message
+                                : 'Unable to update event completion.');
+                            } finally {
+                              setPendingCompletionId(null);
+                            }
+                          }}
+                        >
+                          {evt.completedAt ? 'Reopen' : 'Mark Complete'}
+                        </Button>
                         <ActionIconButton
                           icon="edit"
                           label={`Edit ${evt.title}`}
@@ -143,7 +205,9 @@ export function AgendaDayDocket({
                     </div>
 
                     {/* Title */}
-                    <h4 className="mt-2 font-display text-base font-bold tracking-tight text-ink">
+                    <h4 className={`mt-2 font-display text-base font-bold tracking-tight text-ink ${
+                      evt.completedAt ? 'line-through' : ''
+                    }`}>
                       {evt.title}
                     </h4>
 
@@ -194,17 +258,17 @@ export function AgendaDayDocket({
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className={density.stack}>
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  className="border border-paper-border bg-paper-light p-3.5 sm:p-4 hover:border-ink transition-colors"
+                  className={`border border-paper-border bg-paper-light hover:border-ink transition-colors ${density.record}`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs font-bold text-ink">
-                          {session.startTime} - {session.endTime}
+                          {formatTime(session.startTime, timeFormat)} – {formatTime(session.endTime, timeFormat)}
                         </span>
                         {session.section && (
                           <span className="border border-paper-border bg-paper px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-secondary uppercase">

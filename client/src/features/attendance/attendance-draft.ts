@@ -10,6 +10,12 @@ import {
   type WorkingAttendanceRecord,
   type WorkingAttendanceRecordsByStudentId,
 } from './attendance-types';
+import {
+  formatDateOnly,
+  formatTime,
+  type DateFormatPreference,
+  type TimeFormatPreference,
+} from '../settings/preference-display';
 
 export interface AttendanceStatusCounts {
   P: number;
@@ -29,16 +35,6 @@ const ROSTER_COLLATOR = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: 'base',
 });
-const LONG_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-});
-
 // Parses the native date-input value in local time so display labels never shift calendar days.
 function parseLocalAttendanceDate(date: string) {
   const match = DATE_PATTERN.exec(date);
@@ -134,13 +130,18 @@ export function cloneAttendanceRecords(records: WorkingAttendanceRecordsByStuden
 // Converts a validated persisted session into equal working and last-server snapshots.
 export function createAttendanceSessionDraft(
   session: AttendanceSessionRecord,
+  defaultAttendanceState?: 'PRESENT' | 'UNRECORDED',
 ): AttendanceSessionDraft {
   const records = Object.fromEntries(session.records.map((record) => [
     record.student.id,
     {
       id: record.id,
       student: { ...record.student },
-      status: record.status,
+      status: !session.isRosterInitialized &&
+        defaultAttendanceState === 'PRESENT' &&
+        record.status === null
+        ? 'P'
+        : record.status,
       remarks: record.remarks ?? '',
     },
   ]));
@@ -273,15 +274,13 @@ export function isAttendanceDateValue(date: string) {
 }
 
 // Formats a complete local calendar label for controls and accessible names.
-export function formatAttendanceDateLong(date: string) {
-  const parsedDate = parseLocalAttendanceDate(date);
-  return parsedDate ? LONG_DATE_FORMATTER.format(parsedDate) : date;
+export function formatAttendanceDateLong(date: string, dateFormat?: DateFormatPreference) {
+  return formatDateOnly(date, dateFormat, 'long');
 }
 
 // Formats the compact local label used by register and selected-detail headers.
-export function formatAttendanceDateShort(date: string) {
-  const parsedDate = parseLocalAttendanceDate(date);
-  return parsedDate ? SHORT_DATE_FORMATTER.format(parsedDate) : date;
+export function formatAttendanceDateShort(date: string, dateFormat?: DateFormatPreference) {
+  return formatDateOnly(date, dateFormat, 'short');
 }
 
 // Keeps persisted date columns chronological without mutating page state.
@@ -291,18 +290,12 @@ export function sortAttendanceSessionDrafts(sessionDrafts: AttendanceSessionDraf
   );
 }
 
-// Formats copied HH:mm schedule values without applying timezone conversion.
-function formatAttendanceTime(time: string) {
-  const [hourValue, minute] = time.split(':');
-  const hour = Number(hourValue);
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour}:${minute} ${period}`;
-}
-
 // Describes whether one historical session matched and snapshotted a weekly schedule.
-export function formatAttendanceSessionSchedule(sessionDraft: AttendanceSessionDraft) {
+export function formatAttendanceSessionSchedule(
+  sessionDraft: AttendanceSessionDraft,
+  timeFormat?: TimeFormatPreference,
+) {
   return sessionDraft.startTime && sessionDraft.endTime
-    ? `Scheduled / ${formatAttendanceTime(sessionDraft.startTime)}–${formatAttendanceTime(sessionDraft.endTime)}`
+    ? `Scheduled / ${formatTime(sessionDraft.startTime, timeFormat, '12H')}–${formatTime(sessionDraft.endTime, timeFormat, '12H')}`
     : 'Unscheduled';
 }
