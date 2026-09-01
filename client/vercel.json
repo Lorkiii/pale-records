@@ -3,7 +3,7 @@
     "rewrites": [
       {
         "source": "/api/:path*",
-        "destination": "https://pale-records.vercel.app/api/:path*"
+        "destination": "https://pale-records-api.vercel.app/api/:path*"
       },
       {
         "source": "/(.*)",
