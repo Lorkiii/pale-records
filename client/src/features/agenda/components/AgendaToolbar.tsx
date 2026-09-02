@@ -1,4 +1,4 @@
-// Provides month navigation, class filtering, category filtering, and event creation triggers.
+// Provides month navigation, class filtering, and category filtering for the Agenda workspace.
 import { Button } from '../../../components/ui/Button';
 import { Select, type SelectOption } from '../../../components/ui/Select';
 import type { ClassRecord } from '../../classes/class-types';
@@ -20,7 +20,6 @@ interface AgendaToolbarProps {
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
-  onAddEventClick: () => void;
 }
 
 export function AgendaToolbar({
@@ -35,7 +34,6 @@ export function AgendaToolbar({
   onPrevMonth,
   onNextMonth,
   onToday,
-  onAddEventClick,
 }: AgendaToolbarProps) {
   const classOptions: SelectOption[] = [
     { value: 'ALL', label: 'All Classes' },
@@ -95,7 +93,6 @@ export function AgendaToolbar({
         </Button>
       </div>
 
-      {/* Filters & Add Action */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="w-full sm:w-56">
           <Select
@@ -116,16 +113,6 @@ export function AgendaToolbar({
             aria-label="Filter events by category"
           />
         </div>
-
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={onAddEventClick}
-          className="h-10 shrink-0"
-          leftIcon={<span className="font-mono text-base font-normal leading-none">+</span>}
-        >
-          Add Event
-        </Button>
       </div>
     </div>
   );

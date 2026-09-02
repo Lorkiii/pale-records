@@ -181,7 +181,6 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
                   onPrevMonth={agenda.goToPrevMonth}
                   onNextMonth={agenda.goToNextMonth}
                   onToday={agenda.goToToday}
-                  onAddEventClick={() => handleOpenCreate(agenda.selectedDateKey)}
                 />
 
                 <div className="grid grid-cols-1 lg:grid-cols-12">
