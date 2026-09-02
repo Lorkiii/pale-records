@@ -43,6 +43,16 @@ test("session lookup clears an invalid authenticated cookie", async () => {
   assert.equal(response.body.error.code, "UNAUTHENTICATED");
 });
 
+// Confirms Dashboard data cannot be read before the shared session boundary.
+test("Dashboard overview requires an authenticated session", async () => {
+  const response = await request(app)
+    .get("/api/dashboard/overview?date=2026-09-02");
+
+  assert.equal(response.status, 401);
+  assert.equal(response.headers["cache-control"], "no-store");
+  assert.equal(response.body.error.code, "UNAUTHENTICATED");
+});
+
 // Confirms all account and preference Settings endpoints require authentication first.
 test("Settings endpoints require an authenticated session", async () => {
   const profileResponse = await request(app).patch("/api/settings/profile").send({

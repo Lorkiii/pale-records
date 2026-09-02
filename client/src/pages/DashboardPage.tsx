@@ -1,19 +1,22 @@
-// Composes the authenticated compact PALE Records Dashboard with prioritized schedule, analytics, and quick actions.
+// Composes the authenticated Dashboard from its live overview and honest request states.
+import { Button } from '../components/ui/Button';
+import { Notice } from '../components/ui/Notice';
+import PageLoad from '../components/ui/PageLoad';
 import { DashboardAttendanceAnalytics } from '../features/dashboard/components/DashboardAttendanceAnalytics';
 import { DashboardKpiGrid } from '../features/dashboard/components/DashboardKpiGrid';
 import { DashboardQuickActions } from '../features/dashboard/components/DashboardQuickActions';
 import { DashboardRecentActivity } from '../features/dashboard/components/DashboardRecentActivity';
 import { DashboardScheduleAndEvents } from '../features/dashboard/components/DashboardScheduleAndEvents';
-import {
-  CLASS_ATTENDANCE_STATS,
-  DASHBOARD_KPIS,
-  RECENT_ACTIVITY_ITEMS,
-  TODAY_CLASS_SESSIONS,
-  UPCOMING_AGENDA_EVENTS,
-  WEEKLY_ATTENDANCE_TRENDS,
-} from '../features/dashboard/dashboard-mock-data';
+import { useDashboardOverview } from '../features/dashboard/useDashboardOverview';
 
-export function DashboardPage() {
+interface DashboardPageProps {
+  onSessionExpired: () => void;
+}
+
+// Renders the current local-date overview after its authenticated request resolves.
+export function DashboardPage({ onSessionExpired }: DashboardPageProps) {
+  const dashboard = useDashboardOverview(onSessionExpired);
+
   return (
     <div className="min-h-screen min-w-0 overflow-x-hidden">
       {/* Compact Dashboard Top Header */}
@@ -31,7 +34,7 @@ export function DashboardPage() {
 
             <div className="flex items-center">
               <span className="border border-paper-border bg-paper px-2.5 py-1 font-mono text-[11px] font-semibold text-ink-secondary">
-                AY 2026-2027 • 1st Sem
+                As of {dashboard.overview?.asOfDate ?? dashboard.asOfDate}
               </span>
             </div>
           </div>
@@ -41,29 +44,45 @@ export function DashboardPage() {
       {/* Main Workspace Body with Archival Grid */}
       <div className="archival-grid min-h-[calc(100vh-140px)]">
         <div className="mx-auto max-w-[1440px] space-y-5 px-4 py-4 sm:px-8 sm:py-5 xl:px-12">
-          {/* Top Row: Compact KPIs & Quick Actions Grid */}
-          <div className="space-y-3">
-            <DashboardKpiGrid kpis={DASHBOARD_KPIS} />
-            <DashboardQuickActions />
-          </div>
+          {dashboard.loadStatus === 'loading' ? (
+            <PageLoad message="Loading Dashboard overview…" />
+          ) : null}
 
-          {/* Section 02 (Top Focus): Today's Schedule & Upcoming Events */}
-          <DashboardScheduleAndEvents
-            todaySessions={TODAY_CLASS_SESSIONS}
-            upcomingEvents={UPCOMING_AGENDA_EVENTS}
-          />
+          {dashboard.loadStatus === 'error' ? (
+            <Notice variant="error" title="Dashboard unavailable">
+              <div className="space-y-4">
+                <p>{dashboard.loadError}</p>
+                <Button size="sm" variant="secondary" onClick={dashboard.retry}>
+                  Try again
+                </Button>
+              </div>
+            </Notice>
+          ) : null}
 
-          {/* Section 03: Compact Attendance Analytics */}
-          <DashboardAttendanceAnalytics
-            classStats={CLASS_ATTENDANCE_STATS}
-            weeklyTrends={WEEKLY_ATTENDANCE_TRENDS}
-          />
+          {dashboard.loadStatus === 'ready' && dashboard.overview ? (
+            <>
+              <div className="space-y-3">
+                <DashboardKpiGrid kpis={dashboard.overview.kpis} />
+                <DashboardQuickActions />
+              </div>
 
-          {/* Section 04: Compact Records Log & Class Directory */}
-          <DashboardRecentActivity
-            recentActivity={RECENT_ACTIVITY_ITEMS}
-            classes={CLASS_ATTENDANCE_STATS}
-          />
+              <DashboardScheduleAndEvents
+                todaySessions={dashboard.overview.todaySessions}
+                upcomingEvents={dashboard.overview.upcomingEvents}
+              />
+
+              <DashboardAttendanceAnalytics
+                classSummaries={dashboard.overview.classSummaries}
+                weeklyAttendance={dashboard.overview.weeklyAttendance}
+              />
+
+              <DashboardRecentActivity
+                recentUpdates={dashboard.overview.recentUpdates}
+                classes={dashboard.overview.classSummaries}
+                activeClassCount={dashboard.overview.kpis.activeClassCount}
+              />
+            </>
+          ) : null}
         </div>
       </div>
     </div>

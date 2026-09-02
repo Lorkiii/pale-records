@@ -86,7 +86,10 @@ export default function App() {
           )
         }
       >
-        <Route index element={<DashboardPage />} />
+        <Route
+          index
+          element={<DashboardPage onSessionExpired={handleSessionExpired} />}
+        />
         <Route path="classes" element={<ClassPage onSessionExpired={handleSessionExpired} />} />
         <Route path="students" element={<StudentPage onSessionExpired={handleSessionExpired} />} />
         <Route

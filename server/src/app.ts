@@ -9,6 +9,7 @@ import agendaRouter from "./routes/agenda.route.js";
 import attendanceRouter from "./routes/attendance.route.js";
 import authRouter from "./routes/auth.route.js";
 import classRouter from "./routes/class.route.js";
+import dashboardRouter from "./routes/dashboard.route.js";
 import recitationRouter from "./routes/recitation.route.js";
 import settingsRouter from "./routes/settings.route.js";
 import studentRouter from "./routes/student.route.js";
@@ -43,6 +44,7 @@ app.use(express.json({ limit: "16kb" }));
 app.use("/api/agenda", agendaRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/classes", classRouter);
+app.use("/api/dashboard", dashboardRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/students", studentRouter);
 

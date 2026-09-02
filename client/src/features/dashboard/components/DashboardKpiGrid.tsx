@@ -1,14 +1,57 @@
-// Renders compact high-level academic KPI metric cards for the PALE overview dashboard.
-import type { DashboardKpiItem } from '../dashboard-types';
+// Renders compact high-level academic KPI cards from persisted Dashboard counts.
+import type { DashboardKpis } from '../dashboard-types';
 
 interface DashboardKpiGridProps {
-  kpis: DashboardKpiItem[];
+  kpis: DashboardKpis;
+}
+
+// Formats the measured monthly change without inventing a comparison when data is absent.
+function getAttendanceChange(change: number | null) {
+  if (change === null) return undefined;
+  const prefix = change > 0 ? '+' : '';
+  return `${prefix}${change.toFixed(1)} pts vs previous month`;
 }
 
 export function DashboardKpiGrid({ kpis }: DashboardKpiGridProps) {
+  const items = [
+    {
+      id: 'attendance-rate',
+      code: '01/KPI',
+      label: 'Overall Attendance',
+      value: kpis.overallPresentRate === null
+        ? '—'
+        : `${kpis.overallPresentRate.toFixed(1)}%`,
+      change: getAttendanceChange(kpis.changeVsPreviousMonth),
+      changeType: kpis.changeVsPreviousMonth === null || kpis.changeVsPreviousMonth === 0
+        ? 'neutral'
+        : kpis.changeVsPreviousMonth > 0 ? 'positive' : 'negative',
+      description: kpis.overallPresentRate === null
+        ? 'No marked attendance this month'
+        : 'Across active classes this month',
+    },
+    {
+      id: 'enrolled-students',
+      code: '02/KPI',
+      label: 'Enrolled Students',
+      value: String(kpis.enrolledStudentCount),
+      change: `${kpis.activeClassCount} active ${kpis.activeClassCount === 1 ? 'class' : 'classes'}`,
+      changeType: 'neutral',
+      description: 'Unique students in active class rosters',
+    },
+    {
+      id: 'upcoming-events',
+      code: '03/KPI',
+      label: 'Upcoming Events',
+      value: String(kpis.upcomingEventCount),
+      change: 'Next 7 days',
+      changeType: 'neutral',
+      description: 'Incomplete Agenda events in range',
+    },
+  ] as const;
+
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      {kpis.map((kpi, index) => {
+      {items.map((kpi, index) => {
         const letter = String.fromCharCode(65 + index); // A, B, C
         return (
           <div
@@ -45,6 +88,11 @@ export function DashboardKpiGrid({ kpis }: DashboardKpiGridProps) {
                     {kpi.changeType === 'positive' && (
                       <span className="text-signal-emerald" aria-hidden="true">
                         ↑
+                      </span>
+                    )}
+                    {kpi.changeType === 'negative' && (
+                      <span className="text-signal-red" aria-hidden="true">
+                        ↓
                       </span>
                     )}
                     <span>{kpi.change}</span>
