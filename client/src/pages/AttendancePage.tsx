@@ -11,9 +11,11 @@ import {
   type AuthenticatedUser,
 } from "../features/auth/auth-api";
 import { AttendanceDetailsDialog } from "../features/attendance/components/AttendanceDetailsDialog";
+import { AttendanceImportDialog } from "../features/attendance/components/AttendanceImportDialog";
 import { AttendanceRegister } from "../features/attendance/components/AttendanceRegister";
 import { DeleteAttendanceSessionDialog } from "../features/attendance/components/DeleteAttendanceSessionDialog";
 import { ExportAttendanceDialog } from "../features/attendance/components/ExportAttendancePdfDialog";
+import { ExportAttendanceTemplateDialog } from "../features/attendance/components/ExportAttendanceTemplateDialog";
 import {
   AttendanceToolbar,
   type AttendanceToolbarFeedback,
@@ -52,10 +54,27 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
     preferences?.dateFormat,
   );
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const createdBy = getAuthenticatedUserDisplayName(currentUser);
   const canExportAttendance = Boolean(
     attendance.selectedClass &&
     attendance.sessionLoadStatus === "ready" &&
     attendance.selectedClassSessions.length > 0 &&
+    !attendance.isBusy,
+  );
+  const canImportAttendance = Boolean(
+    attendance.selectedClass &&
+    attendance.selectedSessionDraft &&
+    attendance.selectedRoster.length > 0 &&
+    attendance.isEditing &&
+    !attendance.hasUnsavedChanges &&
+    !attendance.isBusy,
+  );
+  const canExportTemplate = Boolean(
+    attendance.selectedClass &&
+    attendance.selectedSessionId &&
+    attendance.selectedClassSessions.some((session) => Object.keys(session.records).length > 0) &&
     !attendance.isBusy,
   );
 
@@ -158,6 +177,8 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
                 isCreating={attendance.isCreating}
                 isSaving={attendance.isSaving}
                 canUndo={attendance.canUndo}
+                canImport={canImportAttendance}
+                canExportTemplate={canExportTemplate}
                 canAddDate={attendance.canAddDate}
                 dateHint={attendance.dateHint}
                 statusCounts={attendance.statusCounts}
@@ -170,6 +191,8 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
                 onAddDate={attendance.handleAddDate}
                 onEdit={attendance.handleEdit}
                 onDelete={attendance.handleOpenDelete}
+                onImport={() => setIsImportDialogOpen(true)}
+                onExportTemplate={() => setIsTemplateDialogOpen(true)}
                 onMarkUnmarkedPresent={attendance.handleMarkUnmarkedPresent}
                 onUndo={attendance.handleUndo}
                 onCancel={attendance.handleCancel}
@@ -305,13 +328,45 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
         />
       ) : null}
 
+      {isImportDialogOpen &&
+      attendance.selectedClass &&
+      attendance.selectedSessionDraft ? (
+        <AttendanceImportDialog
+          key={`${attendance.selectedClass.id}-${attendance.selectedSessionDraft.id}`}
+          classRecord={attendance.selectedClass}
+          session={attendance.selectedSessionDraft}
+          createdBy={createdBy}
+          dateFormat={preferences?.dateFormat}
+          onClose={() => setIsImportDialogOpen(false)}
+          onApply={(records) => {
+            attendance.handleApplyAttendanceImport(records);
+            setIsImportDialogOpen(false);
+          }}
+        />
+      ) : null}
+
+      {isTemplateDialogOpen &&
+      attendance.selectedClass &&
+      attendance.selectedSessionId ? (
+        <ExportAttendanceTemplateDialog
+          key={`${attendance.selectedClass.id}-${attendance.monthInput}-${attendance.selectedSessionId}`}
+          classRecord={attendance.selectedClass}
+          sessions={attendance.selectedClassSessions}
+          selectedSessionId={attendance.selectedSessionId}
+          createdBy={createdBy}
+          dateFormat={preferences?.dateFormat}
+          timeFormat={preferences?.timeFormat}
+          onClose={() => setIsTemplateDialogOpen(false)}
+        />
+      ) : null}
+
       {isExportDialogOpen && attendance.selectedClass ? (
         <ExportAttendanceDialog
           key={`${attendance.selectedClass.id}-${attendance.monthInput}`}
           classRecord={attendance.selectedClass}
           monthInput={attendance.monthInput}
           sessions={attendance.selectedClassSessions}
-          createdBy={getAuthenticatedUserDisplayName(currentUser)}
+          createdBy={createdBy}
           hasUnsavedChanges={attendance.hasUnsavedChanges}
           defaultFormat={preferences?.defaultExportFormat ?? 'PDF'}
           dateFormat={preferences?.dateFormat}

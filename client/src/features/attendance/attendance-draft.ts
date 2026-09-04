@@ -127,6 +127,40 @@ export function cloneAttendanceRecords(records: WorkingAttendanceRecordsByStuden
   );
 }
 
+// Confirms that a candidate list contains every roster member exactly once.
+export function hasExactAttendanceRoster(
+  records: WorkingAttendanceRecordsByStudentId,
+  candidateStudentIds: readonly string[],
+) {
+  const expectedStudentIds = Object.keys(records);
+  const uniqueCandidateStudentIds = new Set(candidateStudentIds);
+
+  return expectedStudentIds.length === candidateStudentIds.length &&
+    uniqueCandidateStudentIds.size === candidateStudentIds.length &&
+    expectedStudentIds.every((studentId) => uniqueCandidateStudentIds.has(studentId));
+}
+
+// Counts changed status or remarks values across two working record collections.
+export function countAttendanceRecordChanges(
+  currentRecords: WorkingAttendanceRecordsByStudentId,
+  nextRecords: WorkingAttendanceRecordsByStudentId,
+) {
+  const studentIds = new Set([
+    ...Object.keys(currentRecords),
+    ...Object.keys(nextRecords),
+  ]);
+
+  return Array.from(studentIds).filter((studentId) => {
+    const currentRecord = currentRecords[studentId];
+    const nextRecord = nextRecords[studentId];
+
+    return !currentRecord ||
+      !nextRecord ||
+      currentRecord.status !== nextRecord.status ||
+      currentRecord.remarks !== nextRecord.remarks;
+  }).length;
+}
+
 // Converts a validated persisted session into equal working and last-server snapshots.
 export function createAttendanceSessionDraft(
   session: AttendanceSessionRecord,

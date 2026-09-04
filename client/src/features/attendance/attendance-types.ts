@@ -15,6 +15,11 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatusCode, string> = {
   E: 'Excused',
 };
 
+// Narrows untrusted values to the public PALE status vocabulary.
+export function isAttendanceStatusCode(value: unknown): value is AttendanceStatusCode {
+  return ATTENDANCE_STATUS_ORDER.some((status) => status === value);
+}
+
 export const ATTENDANCE_REMARKS_MAX_LENGTH = 1_000;
 
 export interface AttendanceStudentRecord {

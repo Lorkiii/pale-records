@@ -1,4 +1,4 @@
-// Renders Attendance class/month selection, manual dates, edit actions, totals, and draft feedback.
+// Renders Attendance selection, date controls, template/import/edit actions, totals, and feedback.
 import type { ReactNode } from 'react';
 import { ActionIconButton } from '../../../components/ui/ActionIconButton';
 import { Button } from '../../../components/ui/Button';
@@ -36,6 +36,8 @@ interface AttendanceToolbarProps {
   isCreating: boolean;
   isSaving: boolean;
   canUndo: boolean;
+  canImport: boolean;
+  canExportTemplate: boolean;
   canAddDate: boolean;
   dateHint: string;
   statusCounts: AttendanceStatusCounts;
@@ -48,6 +50,8 @@ interface AttendanceToolbarProps {
   onAddDate: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onImport: () => void;
+  onExportTemplate: () => void;
   onMarkUnmarkedPresent: () => void;
   onUndo: () => void;
   onCancel: () => void;
@@ -89,6 +93,8 @@ export function AttendanceToolbar({
   isCreating,
   isSaving,
   canUndo,
+  canImport,
+  canExportTemplate,
   canAddDate,
   dateHint,
   statusCounts,
@@ -101,6 +107,8 @@ export function AttendanceToolbar({
   onAddDate,
   onEdit,
   onDelete,
+  onImport,
+  onExportTemplate,
   onMarkUnmarkedPresent,
   onUndo,
   onCancel,
@@ -198,51 +206,76 @@ export function AttendanceToolbar({
                 </div>
               </div>
 
-              {isEditing ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" onClick={onMarkUnmarkedPresent} disabled={isBusy}>
-                    Mark unmarked as P
-                  </Button>
-                  <Button variant="ghost" onClick={onUndo} disabled={!canUndo || isBusy}>
-                    Undo last change
-                  </Button>
-                  <ActionIconButton
-                    icon="cancel"
-                    label="Cancel changes"
-                    tooltip="Cancel changes"
-                    variant="secondary"
-                    onClick={onCancel}
-                    disabled={isBusy}
-                  />
-                  <ActionIconButton
-                    icon="save"
-                    label={isSaving ? 'Saving attendance' : 'Save attendance'}
-                    tooltip={isSaving ? 'Saving attendance' : 'Save attendance'}
-                    isLoading={isSaving}
-                    onClick={onSave}
-                    disabled={isBusy}
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  <ActionIconButton
-                    icon="delete"
-                    label="Delete date"
-                    tooltip="Delete date"
-                    variant="destructive"
-                    onClick={onDelete}
-                    disabled={isBusy}
-                  />
-                  <ActionIconButton
-                    icon="edit"
-                    label="Edit attendance"
-                    tooltip="Edit attendance"
-                    variant="secondary"
-                    onClick={onEdit}
-                    disabled={isBusy}
-                  />
-                </div>
-              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  aria-haspopup="dialog"
+                  onClick={onExportTemplate}
+                  disabled={!canExportTemplate}
+                  title={canExportTemplate
+                    ? 'Choose one or more attendance dates to print'
+                    : 'A loaded attendance date with students is required to print templates'}
+                >
+                  Print template
+                </Button>
+
+                {isEditing ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      aria-haspopup="dialog"
+                      onClick={onImport}
+                      disabled={!canImport}
+                      title={canImport
+                        ? 'Choose an attendance template or import a completed PALE file'
+                        : 'Import attendance requires a clean editable roster'}
+                    >
+                      Import attendance
+                    </Button>
+                    <Button variant="secondary" onClick={onMarkUnmarkedPresent} disabled={isBusy}>
+                      Mark unmarked as P
+                    </Button>
+                    <Button variant="ghost" onClick={onUndo} disabled={!canUndo || isBusy}>
+                      Undo last change
+                    </Button>
+                    <ActionIconButton
+                      icon="cancel"
+                      label="Cancel changes"
+                      tooltip="Cancel changes"
+                      variant="secondary"
+                      onClick={onCancel}
+                      disabled={isBusy}
+                    />
+                    <ActionIconButton
+                      icon="save"
+                      label={isSaving ? 'Saving attendance' : 'Save attendance'}
+                      tooltip={isSaving ? 'Saving attendance' : 'Save attendance'}
+                      isLoading={isSaving}
+                      onClick={onSave}
+                      disabled={isBusy}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <ActionIconButton
+                      icon="delete"
+                      label="Delete date"
+                      tooltip="Delete date"
+                      variant="destructive"
+                      onClick={onDelete}
+                      disabled={isBusy}
+                    />
+                    <ActionIconButton
+                      icon="edit"
+                      label="Edit attendance"
+                      tooltip="Edit attendance"
+                      variant="secondary"
+                      onClick={onEdit}
+                      disabled={isBusy}
+                    />
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ) : null}
