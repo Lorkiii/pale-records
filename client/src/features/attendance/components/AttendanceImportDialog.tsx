@@ -29,7 +29,7 @@ import {
   type AttendanceOcrReviewRow,
 } from '../attendance-ocr-review';
 import {
-  exportPrintableAttendanceTemplates,
+  exportScannableAttendanceTemplate,
   type AttendanceTemplateExportAction,
 } from '../attendance-template-export';
 import {
@@ -221,10 +221,10 @@ export function AttendanceImportDialog({
     setTemplateErrorMessage('');
 
     try {
-      await exportPrintableAttendanceTemplates({
+      await exportScannableAttendanceTemplate({
         action,
         classRecord,
-        sessions: [session],
+        session,
         createdBy,
       });
     } catch (error) {

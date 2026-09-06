@@ -1,9 +1,15 @@
 // Owns the monthly report and printable Attendance template PDF layouts.
 import type { jsPDF } from 'jspdf';
 import type { AttendanceReportDate, MonthlyAttendanceReport } from './attendance-report';
-import type { PrintableAttendanceTemplate } from './attendance-template';
+import type {
+  PrintableAttendanceMatrix,
+  PrintableAttendanceMatrixDate,
+  PrintableAttendanceMatrixStudent,
+  PrintableAttendanceTemplate,
+} from './attendance-template';
 import {
   ATTENDANCE_TEMPLATE_HEADER_HEIGHT_MM,
+  ATTENDANCE_TEMPLATE_PAGE_HEIGHT_MM,
   ATTENDANCE_TEMPLATE_PAGE_MARGIN_MM,
   ATTENDANCE_TEMPLATE_REGISTRATION_MARK_CENTERS_MM,
   ATTENDANCE_TEMPLATE_REGISTRATION_MARK_SIZE_MM,
@@ -30,6 +36,12 @@ const DATE_COLUMNS_PER_PAGE = 10;
 const STUDENT_COLUMN_WIDTH = 48;
 const DATE_COLUMNS_TOTAL_WIDTH = 150;
 const REMARKS_COLUMN_WIDTH = 79;
+const PRINTABLE_MATRIX_TABLE_TOP = 47;
+const PRINTABLE_MATRIX_STUDENT_COLUMN_WIDTH = 70;
+const PRINTABLE_MATRIX_DATE_COLUMNS_TOTAL_WIDTH = 132;
+const PRINTABLE_MATRIX_REMARKS_COLUMN_WIDTH = 75;
+const PRINTABLE_MATRIX_MIN_ROW_HEIGHT = 7.25;
+const PRINTABLE_MATRIX_PAGE_SAFETY_GAP = 4;
 const PAPER_MUTED: [number, number, number] = [234, 234, 228];
 const PAPER_LIGHT: [number, number, number] = [252, 252, 250];
 const PAPER_ALTERNATE: [number, number, number] = [244, 244, 240];
@@ -45,6 +57,44 @@ export function chunkAttendanceDates(dates: AttendanceReportDate[]) {
   }
 
   return chunks.length > 0 ? chunks : [[]];
+}
+
+// Splits a wide printable matrix into readable horizontal continuations.
+export function chunkPrintableAttendanceMatrixDates(
+  dates: readonly PrintableAttendanceMatrixDate[],
+) {
+  const chunks: PrintableAttendanceMatrixDate[][] = [];
+
+  for (let index = 0; index < dates.length; index += DATE_COLUMNS_PER_PAGE) {
+    chunks.push(dates.slice(index, index + DATE_COLUMNS_PER_PAGE));
+  }
+
+  return chunks.length > 0 ? chunks : [[]];
+}
+
+function getPrintableAttendanceMatrixRowsPerPage(studentCount: number) {
+  const usableBodyHeight = ATTENDANCE_TEMPLATE_PAGE_HEIGHT_MM - PRINTABLE_MATRIX_TABLE_TOP -
+    ATTENDANCE_TEMPLATE_HEADER_HEIGHT_MM - 18 - PRINTABLE_MATRIX_PAGE_SAFETY_GAP;
+  const maximumRowsPerPage = Math.max(
+    1,
+    Math.floor(usableBodyHeight / PRINTABLE_MATRIX_MIN_ROW_HEIGHT),
+  );
+  const pageCount = Math.max(1, Math.ceil(studentCount / maximumRowsPerPage));
+  return Math.max(1, Math.ceil(studentCount / pageCount));
+}
+
+// Balances roster rows before rendering so continuation pages keep their full header area.
+export function chunkPrintableAttendanceMatrixStudents(
+  students: readonly PrintableAttendanceMatrixStudent[],
+) {
+  const rowsPerPage = getPrintableAttendanceMatrixRowsPerPage(students.length);
+  const chunks: PrintableAttendanceMatrixStudent[][] = [];
+
+  for (let index = 0; index < students.length; index += rowsPerPage) {
+    chunks.push(students.slice(index, index + rowsPerPage));
+  }
+
+  return chunks;
 }
 
 // Fits one metadata value on a fixed report line without colliding with adjacent fields.
@@ -183,6 +233,47 @@ function drawAttendanceTemplateHeader(
   );
 }
 
+// Repeats the combined matrix identity and handwriting guidance on continuation pages.
+function drawPrintableAttendanceMatrixHeader(
+  document: jsPDF,
+  matrix: PrintableAttendanceMatrix,
+) {
+  const pageWidth = document.internal.pageSize.getWidth();
+  const firstDate = matrix.dates[0]?.attendanceDateIso ?? '-';
+  const lastDate = matrix.dates[matrix.dates.length - 1]?.attendanceDateIso ?? '-';
+
+  document.setTextColor(...INK);
+  document.setFont('helvetica', 'bold');
+  document.setFontSize(14);
+  document.text('ATTENDANCE TEMPLATE', pageWidth / 2, 10, { align: 'center' });
+  document.setDrawColor(...INK);
+  document.setLineWidth(0.35);
+  document.line(PAGE_MARGIN, 14, pageWidth - PAGE_MARGIN, 14);
+
+  document.setFontSize(7.5);
+  drawMetadataLine(document, 'Subject', matrix.subject, PAGE_MARGIN, 20, 165);
+  drawMetadataLine(document, 'Subject Code', matrix.subjectCode, PAGE_MARGIN, 25, 165);
+  drawMetadataLine(document, 'Section', matrix.section, PAGE_MARGIN, 30, 165);
+  drawMetadataLine(
+    document,
+    'School Year and Sem',
+    matrix.schoolYearAndSemester,
+    PAGE_MARGIN,
+    35,
+    165,
+  );
+  drawMetadataLine(document, 'Date Range', `${firstDate} to ${lastDate}`, 190, 20, 97);
+  drawMetadataLine(document, 'Prepared By', matrix.createdBy, 190, 25, 97);
+  drawMetadataLine(document, 'Date Created', matrix.dateCreated, 190, 30, 97);
+  document.setFont('helvetica', 'bold');
+  document.setFontSize(6.5);
+  document.text(
+    'Write one P, A, L, or E in each applicable date cell. Leave unmarked cells blank. Prefix each remark with its date.',
+    PAGE_MARGIN,
+    42,
+  );
+}
+
 // Appends one horizontal date chunk and lets AutoTable continue it vertically as needed.
 export function appendAttendanceTable(
   document: jsPDF,
@@ -309,6 +400,84 @@ export function appendAttendanceTemplateTable(
   });
 }
 
+// Draws one horizontal continuation of the combined blank Student/date/Remarks matrix.
+export function appendPrintableAttendanceMatrixTable(
+  document: jsPDF,
+  matrix: PrintableAttendanceMatrix,
+  dateChunk: readonly PrintableAttendanceMatrixDate[],
+  studentChunk: readonly PrintableAttendanceMatrixStudent[],
+  renderTable: AutoTableRenderer,
+) {
+  const headers = ['Student', ...dateChunk.map((date) => date.label), 'Remarks'];
+  const usableBodyHeight = document.internal.pageSize.getHeight() -
+    PRINTABLE_MATRIX_TABLE_TOP - ATTENDANCE_TEMPLATE_HEADER_HEIGHT_MM - 18 -
+    PRINTABLE_MATRIX_PAGE_SAFETY_GAP;
+  const rowsPerPage = getPrintableAttendanceMatrixRowsPerPage(matrix.students.length);
+  const rowHeight = Math.min(
+    ATTENDANCE_TEMPLATE_ROW_HEIGHT_MM,
+    usableBodyHeight / rowsPerPage,
+  );
+  const dateColumnWidth = dateChunk.length > 0
+    ? Math.min(35, PRINTABLE_MATRIX_DATE_COLUMNS_TOTAL_WIDTH / dateChunk.length)
+    : PRINTABLE_MATRIX_DATE_COLUMNS_TOTAL_WIDTH / DATE_COLUMNS_PER_PAGE;
+  const remarksColumnWidth = PRINTABLE_MATRIX_REMARKS_COLUMN_WIDTH +
+    PRINTABLE_MATRIX_DATE_COLUMNS_TOTAL_WIDTH - (dateColumnWidth * dateChunk.length);
+  const columnStyles: Record<number, { cellWidth: number; halign?: 'left' | 'center' }> = {
+    0: { cellWidth: PRINTABLE_MATRIX_STUDENT_COLUMN_WIDTH, halign: 'left' },
+    [headers.length - 1]: {
+      cellWidth: remarksColumnWidth,
+      halign: 'left',
+    },
+  };
+
+  dateChunk.forEach((_, index) => {
+    columnStyles[index + 1] = { cellWidth: dateColumnWidth, halign: 'center' };
+  });
+
+  renderTable(document, {
+    startY: PRINTABLE_MATRIX_TABLE_TOP,
+    head: [headers],
+    body: studentChunk.map((student) => [
+      `${student.rowNumber}. ${student.name}`,
+      ...dateChunk.map((date) => student.rosterDateIds.includes(date.id) ? '' : '-'),
+      '',
+    ]),
+    theme: 'grid',
+    showHead: 'firstPage',
+    rowPageBreak: 'avoid',
+    margin: {
+      top: PRINTABLE_MATRIX_TABLE_TOP,
+      right: PAGE_MARGIN,
+      bottom: 18,
+      left: PAGE_MARGIN,
+    },
+    styles: {
+      font: 'helvetica',
+      fontSize: 8,
+      textColor: INK,
+      fillColor: PAPER_LIGHT,
+      lineColor: INK,
+      lineWidth: 0.3,
+      cellPadding: 1.8,
+      minCellHeight: rowHeight,
+      overflow: 'ellipsize',
+      valign: 'middle',
+    },
+    headStyles: {
+      fillColor: PAPER_MUTED,
+      textColor: INK,
+      fontStyle: 'bold',
+      halign: 'center',
+      lineColor: INK,
+      lineWidth: 0.35,
+      minCellHeight: ATTENDANCE_TEMPLATE_HEADER_HEIGHT_MM,
+    },
+    alternateRowStyles: { fillColor: PAPER_ALTERNATE },
+    columnStyles,
+    willDrawPage: () => drawPrintableAttendanceMatrixHeader(document, matrix),
+  });
+}
+
 // Adds the status legend and stable page numbering after every table is complete.
 export function drawAttendanceReportFooters(document: jsPDF) {
   const pageCount = document.getNumberOfPages();
@@ -322,6 +491,31 @@ export function drawAttendanceReportFooters(document: jsPDF) {
     document.setTextColor(...INK);
     document.text(
       'P Present | A Absent | L Late | E Excused | - Unmarked or not in roster',
+      PAGE_MARGIN,
+      pageHeight - 6,
+    );
+    document.text(
+      `Page ${pageNumber} of ${pageCount}`,
+      pageWidth - PAGE_MARGIN,
+      pageHeight - 6,
+      { align: 'right' },
+    );
+  }
+}
+
+// Adds one legend and document-wide page sequence to the combined printable matrix.
+export function drawPrintableAttendanceMatrixFooters(document: jsPDF) {
+  const pageCount = document.getNumberOfPages();
+  const pageWidth = document.internal.pageSize.getWidth();
+  const pageHeight = document.internal.pageSize.getHeight();
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    document.setPage(pageNumber);
+    document.setFont('helvetica', 'normal');
+    document.setFontSize(6.5);
+    document.setTextColor(...INK);
+    document.text(
+      'P Present | A Absent | L Late | E Excused | blank Unmarked | - Not in roster',
       PAGE_MARGIN,
       pageHeight - 6,
     );

@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Header } from '../components/ui/Header';
 import { Notice } from '../components/ui/Notice';
 import { ArchiveStudentDialog } from '../features/students/components/ArchiveStudentDialog';
 import { StudentDirectory } from '../features/students/components/StudentDirectory';
@@ -31,24 +32,16 @@ export function StudentPage({ onSessionExpired }: StudentPageProps) {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-paper-border bg-paper-light">
-        <div className="mx-auto flex max-w-[1440px] flex-col justify-between gap-6 px-5 py-8 sm:px-8 sm:py-10 md:flex-row md:items-end xl:px-12">
-          <div>
-            <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-              Workspace / Students
-            </p>
-            <h1 className="mt-3 font-display text-4xl font-bold tracking-[-0.05em] text-ink sm:text-5xl">
-              Students
-            </h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-ink-secondary">
-              Add each student once, assign every class they attend, and review saved identity details.
-            </p>
-          </div>
+      <Header
+        workspacePath="Workspace"
+        workspaceTitle="Students"
+        workspaceDescription="Add each student once, assign every class they attend, and review saved identity details."
+        actionButton={
           <Button onClick={workspace.handleOpenForm} disabled={!workspace.canAddStudent}>
             Add student
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="archival-grid min-h-[calc(100vh-185px)]">
         <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">

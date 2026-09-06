@@ -171,6 +171,9 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
                 dateInput={attendance.dateInput}
                 selectedDate={attendance.selectedDate}
                 selectedSession={attendance.selectedSessionDraft ?? null}
+                prevSessionId={attendance.prevSessionId}
+                nextSessionId={attendance.nextSessionId}
+                sessionPositionLabel={attendance.sessionPositionLabel}
                 isEditing={attendance.isEditing}
                 hasUnsavedChanges={attendance.hasUnsavedChanges}
                 isBusy={attendance.isBusy}
@@ -189,6 +192,8 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
                 onMonthInputChange={attendance.handleMonthChange}
                 onDateInputChange={attendance.handleDateInputChange}
                 onAddDate={attendance.handleAddDate}
+                onSelectPrevSession={attendance.handleSelectPrevSession}
+                onSelectNextSession={attendance.handleSelectNextSession}
                 onEdit={attendance.handleEdit}
                 onDelete={attendance.handleOpenDelete}
                 onImport={() => setIsImportDialogOpen(true)}

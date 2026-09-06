@@ -1,4 +1,4 @@
-// Renders Attendance selection, date controls, template/import/edit actions, totals, and feedback.
+// Renders Attendance selection, date controls, compact toolbar actions, totals, and feedback.
 import type { ReactNode } from 'react';
 import { ActionIconButton } from '../../../components/ui/ActionIconButton';
 import { Button } from '../../../components/ui/Button';
@@ -30,6 +30,9 @@ interface AttendanceToolbarProps {
   dateInput: string;
   selectedDate: string | null;
   selectedSession: AttendanceSessionDraft | null;
+  prevSessionId?: string | null;
+  nextSessionId?: string | null;
+  sessionPositionLabel?: string;
   isEditing: boolean;
   hasUnsavedChanges: boolean;
   isBusy: boolean;
@@ -48,6 +51,8 @@ interface AttendanceToolbarProps {
   onMonthInputChange: (month: string) => void;
   onDateInputChange: (date: string) => void;
   onAddDate: () => void;
+  onSelectPrevSession?: () => void;
+  onSelectNextSession?: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onImport: () => void;
@@ -87,6 +92,9 @@ export function AttendanceToolbar({
   dateInput,
   selectedDate,
   selectedSession,
+  prevSessionId,
+  nextSessionId,
+  sessionPositionLabel,
   isEditing,
   hasUnsavedChanges,
   isBusy,
@@ -105,6 +113,8 @@ export function AttendanceToolbar({
   onMonthInputChange,
   onDateInputChange,
   onAddDate,
+  onSelectPrevSession,
+  onSelectNextSession,
   onEdit,
   onDelete,
   onImport,
@@ -175,106 +185,155 @@ export function AttendanceToolbar({
         </div>
 
         {selectedDate ? (
-          <div className="border-t border-paper-border px-4 py-4 sm:px-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-                  Selected date
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-ink">
-                    {formatAttendanceDateLong(selectedDate, dateFormat)}
+          <div className="border-t border-paper-border px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                {sessionPositionLabel ? (
+                  <div className="flex shrink-0 items-center border border-ink bg-paper">
+                    <ActionIconButton
+                      icon="chevron-left"
+                      label="Previous attendance date"
+                      tooltip={prevSessionId ? 'Previous attendance date' : 'At earliest attendance date'}
+                      variant="ghost"
+                      onClick={onSelectPrevSession}
+                      disabled={!prevSessionId || isBusy}
+                    />
+                    <span
+                      className="min-w-[4.5rem] px-2 text-center font-mono text-[11px] font-bold tracking-wider text-ink"
+                      aria-label={`Attendance date ${sessionPositionLabel}`}
+                    >
+                      {sessionPositionLabel}
+                    </span>
+                    <ActionIconButton
+                      icon="chevron-right"
+                      label="Next attendance date"
+                      tooltip={nextSessionId ? 'Next attendance date' : 'At latest attendance date'}
+                      variant="ghost"
+                      onClick={onSelectNextSession}
+                      disabled={!nextSessionId || isBusy}
+                    />
+                  </div>
+                ) : null}
+
+                <div className="min-w-0">
+                  <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                    Selected date
                   </p>
-                  <span className="border border-ink bg-paper-muted px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                    {isEditing ? 'Editing' : 'Read-only'}
-                  </span>
-                  {selectedSession && !selectedSession.isRosterInitialized ? (
-                    <span className="border border-signal-blue bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-signal-blue">
-                      Unsaved roster draft
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-ink">
+                      {formatAttendanceDateLong(selectedDate, dateFormat)}
+                    </p>
+                    <span className="border border-ink bg-paper-muted px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
+                      {isEditing ? 'Editing' : 'Read-only'}
                     </span>
-                  ) : null}
-                  {hasUnsavedChanges ? (
-                    <span className="border border-signal-amber bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                      Unsaved changes
-                    </span>
-                  ) : null}
-                  {selectedSession ? (
-                    <span className="border border-paper-dark bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink-secondary">
-                      {formatAttendanceSessionSchedule(selectedSession, timeFormat)}
-                    </span>
-                  ) : null}
+                    {selectedSession && !selectedSession.isRosterInitialized ? (
+                      <span className="border border-signal-blue bg-paper-light px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-signal-blue">
+                        Draft
+                      </span>
+                    ) : null}
+                    {hasUnsavedChanges ? (
+                      <span className="border border-signal-amber bg-paper-light px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
+                        Unsaved
+                      </span>
+                    ) : null}
+                    {selectedSession ? (
+                      <span className="hidden border border-paper-dark bg-paper-light px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink-secondary sm:inline-block">
+                        {formatAttendanceSessionSchedule(selectedSession, timeFormat)}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  aria-haspopup="dialog"
-                  onClick={onExportTemplate}
-                  disabled={!canExportTemplate}
-                  title={canExportTemplate
-                    ? 'Choose one or more attendance dates to print'
-                    : 'A loaded attendance date with students is required to print templates'}
-                >
-                  Print template
-                </Button>
+              <div className="flex flex-wrap items-center gap-2 self-start sm:gap-3 lg:self-center">
+                <div className="flex items-center gap-1.5 border border-paper-border bg-paper p-1">
+                  <ActionIconButton
+                    icon="print"
+                    label="Print template"
+                    tooltip={canExportTemplate
+                      ? 'Print attendance template for this date'
+                      : 'Attendance date with enrolled students required'}
+                    variant="secondary"
+                    aria-haspopup="dialog"
+                    onClick={onExportTemplate}
+                    disabled={!canExportTemplate || isBusy}
+                  />
 
-                {isEditing ? (
-                  <>
-                    <Button
-                      variant="secondary"
-                      aria-haspopup="dialog"
-                      onClick={onImport}
-                      disabled={!canImport}
-                      title={canImport
-                        ? 'Choose an attendance template or import a completed PALE file'
-                        : 'Import attendance requires a clean editable roster'}
-                    >
-                      Import attendance
-                    </Button>
-                    <Button variant="secondary" onClick={onMarkUnmarkedPresent} disabled={isBusy}>
-                      Mark unmarked as P
-                    </Button>
-                    <Button variant="ghost" onClick={onUndo} disabled={!canUndo || isBusy}>
-                      Undo last change
-                    </Button>
-                    <ActionIconButton
-                      icon="cancel"
-                      label="Cancel changes"
-                      tooltip="Cancel changes"
-                      variant="secondary"
-                      onClick={onCancel}
-                      disabled={isBusy}
-                    />
-                    <ActionIconButton
-                      icon="save"
-                      label={isSaving ? 'Saving attendance' : 'Save attendance'}
-                      tooltip={isSaving ? 'Saving attendance' : 'Save attendance'}
-                      isLoading={isSaving}
-                      onClick={onSave}
-                      disabled={isBusy}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <ActionIconButton
-                      icon="delete"
-                      label="Delete date"
-                      tooltip="Delete date"
-                      variant="destructive"
-                      onClick={onDelete}
-                      disabled={isBusy}
-                    />
-                    <ActionIconButton
-                      icon="edit"
-                      label="Edit attendance"
-                      tooltip="Edit attendance"
-                      variant="secondary"
-                      onClick={onEdit}
-                      disabled={isBusy}
-                    />
-                  </>
-                )}
+                  {isEditing ? (
+                    <>
+                      <ActionIconButton
+                        icon="import"
+                        label="Import attendance"
+                        tooltip={canImport
+                          ? 'Import attendance (CSV / PALE template)'
+                          : 'Import requires a clean editable roster'}
+                        variant="secondary"
+                        aria-haspopup="dialog"
+                        onClick={onImport}
+                        disabled={!canImport || isBusy}
+                      />
+                      <ActionIconButton
+                        icon="mark-all"
+                        label="Mark unmarked as Present"
+                        tooltip="Quick-fill: Mark all unmarked students as Present (P)"
+                        variant="secondary"
+                        onClick={onMarkUnmarkedPresent}
+                        disabled={isBusy}
+                      />
+                      <ActionIconButton
+                        icon="undo"
+                        label="Undo last change"
+                        tooltip={canUndo ? 'Undo last attendance change' : 'No actions to undo'}
+                        variant="ghost"
+                        onClick={onUndo}
+                        disabled={!canUndo || isBusy}
+                      />
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center gap-1.5 border border-paper-border bg-paper p-1">
+                  {isEditing ? (
+                    <>
+                      <ActionIconButton
+                        icon="cancel"
+                        label="Cancel changes"
+                        tooltip="Cancel unsaved changes and revert to saved"
+                        variant="secondary"
+                        onClick={onCancel}
+                        disabled={isBusy}
+                      />
+                      <ActionIconButton
+                        icon="save"
+                        label={isSaving ? 'Saving attendance' : 'Save attendance'}
+                        tooltip={isSaving ? 'Saving attendance…' : 'Save attendance to class records'}
+                        isLoading={isSaving}
+                        variant="primary"
+                        onClick={onSave}
+                        disabled={isBusy}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <ActionIconButton
+                        icon="delete"
+                        label="Delete date"
+                        tooltip="Delete this attendance date and its records"
+                        variant="destructive"
+                        onClick={onDelete}
+                        disabled={isBusy}
+                      />
+                      <ActionIconButton
+                        icon="edit"
+                        label="Edit attendance"
+                        tooltip="Edit attendance records for this date"
+                        variant="primary"
+                        onClick={onEdit}
+                        disabled={isBusy}
+                      />
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>

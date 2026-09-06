@@ -1,5 +1,6 @@
 // Selects and exports one or more blank Attendance templates for manual marking.
 import { useState } from 'react';
+import { ActionIconButton } from '../../../components/ui/ActionIconButton';
 import { Button } from '../../../components/ui/Button';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import { Dialog } from '../../../components/ui/Dialog';
@@ -30,7 +31,7 @@ interface ExportAttendanceTemplateDialogProps {
   onClose: () => void;
 }
 
-// Provides one review point before opening or downloading the selected date templates.
+// Selects dates for one combined printable Attendance table and explains its manual workflow.
 export function ExportAttendanceTemplateDialog({
   classRecord,
   sessions,
@@ -113,101 +114,91 @@ export function ExportAttendanceTemplateDialog({
       description={`${classRecord.subjectName} / Choose dates from the loaded attendance month`}
       isDismissDisabled={isExporting}
       footer={
-        <>
-          <Button variant="ghost" onClick={handleClose} disabled={isExporting}>
-            Cancel
-          </Button>
+        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
           <Button
-            variant="secondary"
-            onClick={() => handleExport('download')}
-            isLoading={exportAction === 'download'}
-            disabled={isExporting || selectedSessionIds.size === 0}
-          >
-            Download PDF
-          </Button>
-          <Button
+            className="min-w-0 flex-1 px-3 text-xs sm:flex-none"
             onClick={() => handleExport('open')}
             isLoading={exportAction === 'open'}
             disabled={isExporting || selectedSessionIds.size === 0}
           >
-            Open printable PDF
+            Open PDF
           </Button>
-        </>
+          <ActionIconButton
+            icon="download"
+            label="Download PDF"
+            tooltip="Download PDF"
+            variant="secondary"
+            onClick={() => handleExport('download')}
+            isLoading={exportAction === 'download'}
+            disabled={isExporting || selectedSessionIds.size === 0}
+          />
+          <ActionIconButton
+            icon="cancel"
+            label="Cancel"
+            tooltip="Cancel"
+            variant="ghost"
+            onClick={handleClose}
+            disabled={isExporting}
+          />
+        </div>
       }
     >
       {errorMessage ? (
-        <Notice variant="error" title="Template not generated" className="mb-5">
+        <Notice variant="error" title="Template not generated" className="mb-3">
           {errorMessage}
         </Notice>
       ) : null}
 
-      <div className="space-y-5">
-        <Notice variant="info" title="Blank manual attendance sheets">
-          Each selected date uses its own roster and starts on a new PDF page. Saved and unsaved
-          attendance marks are not included.
-        </Notice>
+      <div className="space-y-3">
+        <p className="text-sm leading-5 text-ink-secondary">
+          Print selected dates in one blank Student/date/Remarks table. Attendance marks are not included.
+        </p>
 
-        <dl className="grid gap-px border border-ink bg-ink sm:grid-cols-3">
-          <div className="bg-paper-light p-4">
-            <dt className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              Selected dates
-            </dt>
-            <dd className="mt-1 font-mono text-lg font-bold tabular-nums text-ink" aria-live="polite">
-              {selectedSessionIds.size}
-            </dd>
-          </div>
-          <div className="bg-paper-light p-4">
-            <dt className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              Printable dates
-            </dt>
-            <dd className="mt-1 font-mono text-lg font-bold tabular-nums text-ink">
-              {printableSessionIds.length}
-            </dd>
-          </div>
-          <div className="bg-paper-light p-4">
-            <dt className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              Print format
-            </dt>
-            <dd className="mt-1 text-sm font-semibold text-ink">A4 landscape PDF</dd>
-          </div>
-        </dl>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm text-ink-secondary">
+          <p aria-live="polite" aria-atomic="true">
+            <span className="font-semibold tabular-nums text-ink">
+              {selectedSessionIds.size} of {printableSessionIds.length}
+            </span>{' '}printable dates selected
+          </p>
+          <p className="text-xs">A4 landscape PDF</p>
+        </div>
 
         <section aria-labelledby="attendance-template-dates-heading">
-          <div className="flex flex-col gap-3 border border-ink bg-paper-muted p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 id="attendance-template-dates-heading" className="text-sm font-semibold text-ink">
+          <div className="border border-ink bg-paper-muted px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 id="attendance-template-dates-heading" className="min-w-0 text-sm font-semibold text-ink">
                 Attendance dates
               </h3>
-              <p className="mt-1 text-sm leading-5 text-ink-secondary">
-                {isCurrentSessionPrintable
-                  ? 'The currently viewed date is selected first. Choose any other dates to include.'
-                  : 'The currently viewed date has no students. Choose another printable date.'}
-              </p>
+              <div className="flex shrink-0 gap-1">
+                <ActionIconButton
+                  icon="mark-all"
+                  label="Select all printable dates"
+                  tooltip="Select all printable dates"
+                  variant="secondary"
+                  disabled={isExporting || printableSessionIds.length === 0 || allPrintableSessionsSelected}
+                  onClick={() => {
+                    setSelectedSessionIds(new Set(printableSessionIds));
+                    setErrorMessage('');
+                  }}
+                />
+                <ActionIconButton
+                  icon="cancel"
+                  label="Clear selection"
+                  tooltip="Clear selection"
+                  variant="ghost"
+                  disabled={isExporting || selectedSessionIds.size === 0}
+                  onClick={() => {
+                    setSelectedSessionIds(new Set());
+                    setErrorMessage('');
+                  }}
+                />
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={isExporting || allPrintableSessionsSelected}
-                onClick={() => {
-                  setSelectedSessionIds(new Set(printableSessionIds));
-                  setErrorMessage('');
-                }}
-              >
-                Select all
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={isExporting || selectedSessionIds.size === 0}
-                onClick={() => {
-                  setSelectedSessionIds(new Set());
-                  setErrorMessage('');
-                }}
-              >
-                Clear
-              </Button>
-            </div>
+            <p className="mt-1 text-sm leading-5 text-ink-secondary">
+              {isCurrentSessionPrintable
+                ? 'Choose at least one date to print.'
+                : 'The current date has no students. Choose another date to print.'}
+            </p>
           </div>
 
           <ul className="max-h-72 overflow-y-auto border-x border-b border-ink bg-paper-light">
@@ -219,7 +210,7 @@ export function ExportAttendanceTemplateDialog({
               return (
                 <li
                   key={session.id}
-                  className="border-b border-paper-border p-4 last:border-b-0"
+                  className="border-b border-paper-border px-3 py-2.5 last:border-b-0"
                 >
                   <Checkbox
                     id={`attendance-template-date-${session.id}`}
@@ -227,18 +218,23 @@ export function ExportAttendanceTemplateDialog({
                     disabled={isExporting || !isPrintable}
                     onChange={(isSelected) => updateSessionSelection(session.id, isSelected)}
                     label={
-                      <span className="flex flex-wrap items-center gap-2 font-sans text-sm normal-case tracking-normal">
-                        <span>{formatAttendanceDateLong(session.sessionDate, dateFormat)}</span>
-                        {isCurrentSession ? (
-                          <span className="border border-ink bg-paper-muted px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-ink">
-                            Current
-                          </span>
-                        ) : null}
+                      <span className="flex min-h-11 flex-col justify-center gap-1 font-sans text-sm normal-case tracking-normal">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span>{formatAttendanceDateLong(session.sessionDate, dateFormat)}</span>
+                          {isCurrentSession ? (
+                            <span className="border border-ink bg-paper-muted px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-ink">
+                              Current
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="text-xs font-normal leading-4 text-ink-secondary">
+                          {isPrintable
+                            ? `${rosterSize} ${rosterSize === 1 ? 'student' : 'students'} / ${formatAttendanceSessionSchedule(session, timeFormat)}`
+                            : 'No students in this roster; this date cannot be printed.'}
+                        </span>
                       </span>
                     }
-                    description={isPrintable
-                      ? `${rosterSize} ${rosterSize === 1 ? 'student' : 'students'} / ${formatAttendanceSessionSchedule(session, timeFormat)}`
-                      : 'No students in this roster; this date cannot be printed.'}
+                    className="[&>div:last-child]:min-w-0 [&>div:last-child]:flex-1 [&_label]:block"
                   />
                 </li>
               );
@@ -246,20 +242,22 @@ export function ExportAttendanceTemplateDialog({
           </ul>
         </section>
 
-        <div className="border border-paper-border bg-paper p-4">
-          <h3 className="text-sm font-semibold text-ink">How to complete each sheet</h3>
-          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm leading-6 text-ink-secondary">
-            <li>Write one clear uppercase P, A, L, or E in each student's date cell.</li>
+        <details className="border border-paper-border bg-paper px-3">
+          <summary className="min-h-11 cursor-pointer content-center py-2 text-sm font-semibold text-ink">
+            Printing instructions
+          </summary>
+          <ol className="list-decimal space-y-1 pl-5 text-sm leading-5 text-ink-secondary">
+            <li>Write one clear uppercase P, A, L, or E in each applicable date cell.</li>
             <li>Leave the date cell blank when attendance is still unmarked.</li>
-            <li>Add a remark whenever a student is marked E for Excused.</li>
-            <li>When scanning, keep all four corner squares and the bottom identity strip visible.</li>
+            <li>A dash means the student was not part of that date's roster.</li>
+            <li>For E, add the required remark with its date, such as 9/5: Medical.</li>
           </ol>
-        </div>
-
-        <p className="text-sm leading-6 text-ink-secondary">
-          Select at least one date. Open printable PDF uses one new browser tab for immediate
-          printing; Download PDF saves one combined file on this device.
-        </p>
+          <p className="py-3 text-sm leading-5 text-ink-secondary">
+            The table continues across PDF pages when needed. Open PDF uses one new browser tab
+            for printing; Download PDF saves one combined file on this device. For scan import,
+            open Import file on a specific attendance date and use its scan-ready PDF.
+          </p>
+        </details>
       </div>
     </Dialog>
   );

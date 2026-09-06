@@ -222,6 +222,18 @@ export function useAttendanceWorkspace(
     () => getAttendanceSessionRoster(selectedSessionDraft),
     [selectedSessionDraft],
   );
+  const selectedSessionIndex = selectedClassSessions.findIndex(
+    (sessionDraft) => sessionDraft.id === selectedSessionId,
+  );
+  const prevSessionId = selectedSessionIndex > 0
+    ? selectedClassSessions[selectedSessionIndex - 1].id
+    : null;
+  const nextSessionId = selectedSessionIndex >= 0 && selectedSessionIndex < selectedClassSessions.length - 1
+    ? selectedClassSessions[selectedSessionIndex + 1].id
+    : null;
+  const sessionPositionLabel = selectedSessionIndex >= 0 && selectedClassSessions.length > 0
+    ? `${selectedSessionIndex + 1} / ${selectedClassSessions.length}`
+    : '';
   const selectedDate = selectedSessionDraft?.sessionDate ?? null;
   const detailsRecord = detailsTarget && selectedSessionDraft
     ? selectedSessionDraft.records[detailsTarget.id]
@@ -494,6 +506,20 @@ export function useAttendanceWorkspace(
     setFeedback(null);
     if (nextSession) {
       setLiveMessage(`${formatAttendanceDateLong(nextSession.sessionDate, dateFormat)} selected in read-only mode.`);
+    }
+  };
+
+  // Navigates to the chronologically preceding session if one exists.
+  const handleSelectPrevSession = () => {
+    if (prevSessionId) {
+      handleSelectSession(prevSessionId);
+    }
+  };
+
+  // Navigates to the chronologically subsequent session if one exists.
+  const handleSelectNextSession = () => {
+    if (nextSessionId) {
+      handleSelectSession(nextSessionId);
     }
   };
 
@@ -798,6 +824,9 @@ export function useAttendanceWorkspace(
     selectedSessionDraft,
     selectedRoster,
     selectedDate,
+    prevSessionId,
+    nextSessionId,
+    sessionPositionLabel,
     detailsTarget,
     detailsRecord,
     deleteTarget,
@@ -819,6 +848,8 @@ export function useAttendanceWorkspace(
     handleAddDate,
     handleRetrySessionLoad,
     handleSelectSession,
+    handleSelectPrevSession,
+    handleSelectNextSession,
     handleEdit,
     handleOpenDelete,
     handleCloseDelete,
