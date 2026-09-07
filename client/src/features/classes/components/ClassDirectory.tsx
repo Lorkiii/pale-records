@@ -112,6 +112,8 @@ export function ClassDirectory({
   onArchive,
 }: ClassDirectoryProps) {
   const density = getTableDensityClasses(tableDensity);
+  // Class cards stay information-dense so several records remain scannable together.
+  const cardDensity = getTableDensityClasses('COMPACT');
 
   return (
     <section aria-labelledby="class-directory-heading">
@@ -147,7 +149,7 @@ export function ClassDirectory({
 
           return (
             <article key={classRecord.id} className="border border-ink bg-paper-light">
-              <header className={`flex items-start justify-between gap-4 border-b border-ink bg-paper-muted ${density.surfaceHeader}`}>
+              <header className={`flex items-start justify-between gap-2 border-b border-ink bg-paper-muted ${cardDensity.surfaceHeader}`}>
                 <div className="min-w-0">
                   <h3 className="font-sans text-lg font-semibold leading-6 text-ink">{classRecord.subjectName}</h3>
                   {classRecord.subjectCode ? (
@@ -168,11 +170,11 @@ export function ClassDirectory({
                 </div>
               </header>
 
-              <div className={density.surface}>
+              <div className={cardDensity.surface}>
                 {metadata.length > 0 ? (
-                  <dl className={density.stack}>
+                  <dl className={cardDensity.stack}>
                     {metadata.map((entry) => (
-                      <div key={entry.label} className={`grid grid-cols-[7rem_1fr] gap-3 border-b border-paper-border last:border-b-0 last:pb-0 ${density.metadataRow}`}>
+                      <div key={entry.label} className={`grid grid-cols-[6.5rem_1fr] gap-2 border-b border-paper-border last:border-b-0 last:pb-0 ${cardDensity.metadataRow}`}>
                         <dt className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
                           {entry.label}
                         </dt>
@@ -184,12 +186,12 @@ export function ClassDirectory({
                   <p className="text-sm leading-6 text-ink-muted">No additional class details recorded.</p>
                 )}
 
-                <div className="mt-4 border-t border-paper-border pt-4">
+                <div className="mt-3 border-t border-paper-border pt-3">
                   <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
                     Weekly schedule
                   </p>
                   {schedules.length > 0 ? (
-                    <ul className={`mt-2 ${density.compactStack}`} aria-label={`${classRecord.subjectName} weekly schedule`}>
+                    <ul className={`mt-1 ${cardDensity.compactStack}`} aria-label={`${classRecord.subjectName} weekly schedule`}>
                       {schedules.map((schedule) => (
                         <li key={schedule.id} className="font-mono text-xs text-ink-secondary">
                           <span className="font-semibold text-ink">{getWeekdayShortLabel(schedule.dayOfWeek)}</span>

@@ -111,7 +111,7 @@ function AttendanceStatusCell({
 
   return (
     <td
-      className={`w-28 min-w-28 border-r border-b border-paper-border align-top ${
+      className={`w-22 min-w-22 border-r border-b border-paper-border align-top sm:w-24 sm:min-w-24 xl:w-26 xl:min-w-26 ${
         isSelected ? 'border-x-2 border-x-ink bg-paper-muted' : 'bg-paper-light'
       }`}
     >
@@ -127,18 +127,18 @@ function AttendanceStatusCell({
             dateFormat,
           )}
           onClick={handleStatusClick}
-          className={`flex min-h-11 w-full cursor-pointer flex-col items-center justify-center border px-2 py-2 font-mono transition-colors hover:border-ink focus-visible:relative focus-visible:z-10 ${statusClassName}`}
+          className={`flex min-h-11 w-full cursor-pointer flex-col items-center justify-center border px-1.5 py-2 font-mono transition-colors hover:border-ink focus-visible:relative focus-visible:z-10 ${statusClassName}`}
         >
           <span className="text-lg font-bold leading-none">
             {record?.status ?? (record ? '—' : 'N/R')}
           </span>
-          <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em]">
+          <span className="mt-1 hidden text-[10px] font-semibold uppercase tracking-[0.08em] sm:inline">
             {record
               ? record.status ? ATTENDANCE_STATUS_LABELS[record.status] : 'Unmarked'
               : 'Not in roster'}
           </span>
           {record?.remarks.trim() ? (
-            <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.06em] text-ink">
+            <span className="mt-1 hidden text-[9px] font-bold uppercase tracking-[0.06em] text-ink sm:inline">
               Remark
             </span>
           ) : null}
@@ -183,12 +183,12 @@ export function AttendanceRegister({
 
   return (
     <section className="min-w-0 max-w-full" aria-labelledby="attendance-register-heading">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
             04 / Attendance matrix
           </p>
-          <h2 id="attendance-register-heading" className="mt-1 font-display text-2xl font-semibold tracking-[-0.03em] text-ink">
+          <h2 id="attendance-register-heading" className="mt-1 font-display text-xl font-semibold tracking-[-0.03em] text-ink sm:text-2xl">
             Class register
           </h2>
         </div>
@@ -208,7 +208,7 @@ export function AttendanceRegister({
             <tr>
               <th
                 scope="col"
-                className={`sticky top-0 left-0 z-40 w-44 min-w-44 border-r border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.12em] text-ink md:w-60 md:min-w-60 ${density.tableCell}`}
+                className={`sticky top-0 left-0 z-40 w-36 min-w-36 border-r border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.12em] text-ink sm:w-44 sm:min-w-44 md:w-60 md:min-w-60 ${density.tableCell}`}
               >
                 Student
               </th>
@@ -218,7 +218,7 @@ export function AttendanceRegister({
                   <th
                     key={sessionDraft.id}
                     scope="col"
-                    className={`sticky top-0 z-20 w-28 min-w-28 border-r border-b border-ink bg-paper-muted p-0 text-center ${
+                    className={`sticky top-0 z-20 w-22 min-w-22 border-r border-b border-ink bg-paper-muted p-0 text-center sm:w-24 sm:min-w-24 xl:w-26 xl:min-w-26 ${
                       isSelected ? 'border-x-2 border-x-ink' : ''
                     }`}
                   >
@@ -229,7 +229,7 @@ export function AttendanceRegister({
                         isSelected ? ', selected' : '. Activate to select this saved date.'
                       }`}
                       onClick={() => onSelectSession(sessionDraft.id)}
-                      className="flex min-h-16 w-full cursor-pointer flex-col items-center justify-center px-2 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink hover:bg-paper-dark"
+                      className="flex min-h-14 w-full cursor-pointer flex-col items-center justify-center px-1.5 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink hover:bg-paper-dark"
                     >
                       <span>{formatAttendanceDateShort(sessionDraft.sessionDate, dateFormat)}</span>
                       {isSelected ? (
@@ -243,14 +243,14 @@ export function AttendanceRegister({
               })}
               <th
                 scope="col"
-                className={`sticky top-0 right-48 z-40 hidden w-56 min-w-56 border-r border-b border-l-2 border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell ${density.tableCell}`}
+                className={`sticky top-0 right-36 z-40 hidden w-40 min-w-40 border-r border-b border-l-2 border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell ${density.tableCell}`}
               >
                 <span className="block">Remarks</span>
                 <span className="mt-1 block text-[10px] text-ink-muted">{selectedDateLabel}</span>
               </th>
               <th
                 scope="col"
-                className={`sticky top-0 right-0 z-40 hidden w-48 min-w-48 border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell ${density.tableCell}`}
+                className={`sticky top-0 right-0 z-40 hidden w-36 min-w-36 border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.1em] text-ink xl:table-cell ${density.tableCell}`}
               >
                 <span className="block">Proof</span>
                 <span className="mt-1 block text-[10px] text-ink-muted">Unavailable</span>
@@ -264,7 +264,7 @@ export function AttendanceRegister({
                 <tr key={student.id}>
                   <th
                     scope="row"
-                    className={`sticky left-0 z-10 w-44 min-w-44 border-r border-b border-paper-border bg-paper-light align-top md:w-60 md:min-w-60 ${density.tableCell}`}
+                    className={`sticky left-0 z-10 w-36 min-w-36 border-r border-b border-paper-border bg-paper-light align-top sm:w-44 sm:min-w-44 md:w-60 md:min-w-60 ${density.tableCell}`}
                   >
                     <span className="block break-words text-sm font-semibold leading-5 text-ink">
                       {student.lastName}, {student.firstName}
@@ -291,19 +291,19 @@ export function AttendanceRegister({
                     />
                   ))}
 
-                  <td className={`sticky right-48 z-10 hidden w-56 min-w-56 border-r border-b border-l-2 border-ink bg-paper-light xl:table-cell ${density.tableInset}`}>
+                  <td className={`sticky right-36 z-10 hidden w-40 min-w-40 border-r border-b border-l-2 border-ink bg-paper-light xl:table-cell ${density.tableInset}`}>
                     <button
                       type="button"
                       onClick={() => onOpenDetails(student)}
-                      className="flex min-h-11 w-full cursor-pointer items-center px-3 text-left text-sm text-ink-secondary hover:bg-paper-muted"
+                      className="flex min-h-11 w-full cursor-pointer items-center px-2 text-left text-sm text-ink-secondary hover:bg-paper-muted"
                     >
-                      <span className="block max-w-48 truncate">
+                      <span className="block max-w-32 truncate">
                         {selectedRecord?.remarks.trim() ||
                           (isEditing && selectedRecord?.status === 'E' ? 'Add remark' : 'No remark')}
                       </span>
                     </button>
                   </td>
-                  <td className={`sticky right-0 z-10 hidden w-48 min-w-48 border-b border-paper-border bg-paper-muted text-sm text-ink-muted xl:table-cell ${density.tableCell}`}>
+                  <td className={`sticky right-0 z-10 hidden w-36 min-w-36 border-b border-paper-border bg-paper-muted text-xs leading-5 text-ink-muted xl:table-cell ${density.tableCell}`}>
                     Protected storage required
                   </td>
                 </tr>

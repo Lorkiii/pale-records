@@ -117,7 +117,7 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
       />
 
       <div className="archival-grid min-h-[calc(100vh-185px)] min-w-0">
-        <div className="mx-auto min-w-0 max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">
+        <div className="mx-auto min-w-0 max-w-[1440px] px-4 py-4 sm:px-8 sm:py-6 xl:px-12 xl:py-8">
           {attendance.loadStatus === "loading" ? (
             <div className="border border-ink bg-paper-light px-5 py-10 text-center">
               <p
@@ -163,7 +163,7 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
 
           {attendance.loadStatus === "ready" &&
           attendance.classes.length > 0 ? (
-            <div className="min-w-0 space-y-8">
+            <div className="min-w-0 space-y-5 sm:space-y-6">
               <AttendanceToolbar
                 classes={attendance.classes}
                 selectedClassId={attendance.selectedClassId}

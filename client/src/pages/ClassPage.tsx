@@ -52,7 +52,7 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
       />
 
       <div className="archival-grid min-h-[calc(100vh-185px)]">
-        <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">
+        <div className="mx-auto max-w-[1440px] px-5 py-5 sm:px-8 sm:py-6 xl:px-12 xl:py-8">
           {workspace.loadStatus === 'loading' ? (
             <div className="border border-ink bg-paper-light px-5 py-10 text-center">
               <p

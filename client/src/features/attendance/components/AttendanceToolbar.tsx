@@ -125,9 +125,9 @@ export function AttendanceToolbar({
   onSave,
 }: AttendanceToolbarProps) {
   return (
-    <section className="space-y-5" aria-labelledby="attendance-controls-heading">
+    <section className="space-y-3 sm:space-y-4" aria-labelledby="attendance-controls-heading">
       <div className="border border-ink bg-paper-light">
-        <div className="border-b border-ink bg-paper-muted px-4 py-3 sm:px-5">
+        <div className="border-b border-ink bg-paper-muted px-3 py-2 sm:px-4 sm:py-3">
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
             03 / Register controls
           </p>
@@ -136,7 +136,7 @@ export function AttendanceToolbar({
           </h2>
         </div>
 
-        <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)_minmax(12rem,0.75fr)_auto] lg:items-end">
+        <div className="grid gap-3 p-3 sm:gap-4 sm:p-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)_minmax(12rem,0.75fr)_auto] lg:items-end">
           <Select
             id="attendance-class"
             label="Class"
@@ -185,9 +185,9 @@ export function AttendanceToolbar({
         </div>
 
         {selectedDate ? (
-          <div className="border-t border-paper-border px-4 py-3 sm:px-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+          <div className="border-t border-paper-border px-3 py-2 sm:px-4 sm:py-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                 {sessionPositionLabel ? (
                   <div className="flex shrink-0 items-center border border-ink bg-paper">
                     <ActionIconButton
@@ -353,7 +353,7 @@ export function AttendanceToolbar({
       {selectedDate ? (
         <div className="grid gap-px border border-ink bg-ink sm:grid-cols-5" aria-label="Attendance summary">
           {SUMMARY_ITEMS.map((item) => (
-            <div key={item.key} className="flex items-center justify-between gap-4 bg-paper-light px-4 py-3">
+            <div key={item.key} className="flex items-center justify-between gap-3 bg-paper-light px-3 py-2">
               <div className="flex min-w-0 items-center gap-2">
                 <span className={`h-3 w-3 shrink-0 border border-ink ${item.markerClassName}`} aria-hidden="true" />
                 <span className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-secondary">
@@ -368,7 +368,7 @@ export function AttendanceToolbar({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-x-5 gap-y-2 border-y border-paper-border bg-paper-light px-4 py-3" aria-label="Attendance status legend">
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-y border-paper-border bg-paper-light px-3 py-2" aria-label="Attendance status legend">
         {SUMMARY_ITEMS.map((item) => (
           <span key={item.key} className="inline-flex items-center gap-2 text-sm text-ink-secondary">
             <span className={`h-2.5 w-2.5 border border-ink ${item.markerClassName}`} aria-hidden="true" />
