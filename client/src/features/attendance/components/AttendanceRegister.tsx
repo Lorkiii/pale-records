@@ -2,7 +2,6 @@
 import {
   cycleAttendanceStatus,
   formatAttendanceDateLong,
-  formatAttendanceDateShort,
   hasExcuseDetails,
 } from '../attendance-draft';
 import {
@@ -13,10 +12,12 @@ import {
   type WorkingAttendanceRecord,
 } from '../attendance-types';
 import {
+  formatMonthDay,
   getTableDensityClasses,
   type DateFormatPreference,
   type TableDensityPreference,
 } from '../../settings/preference-display';
+import { DATE_REGISTER_COLUMN_CLASSES, getDateRegisterColumnClasses } from '../../../components/ui/date-register-styles';
 
 interface AttendanceRegisterProps {
   roster: AttendanceStudentRecord[];
@@ -97,6 +98,7 @@ function AttendanceStatusCell({
       ? 'border-paper-dark bg-paper-light text-ink-secondary'
       : 'border-paper-border bg-paper-muted text-ink-faint';
   const containsDetails = record ? hasExcuseDetails(record) : false;
+  const columnClasses = getDateRegisterColumnClasses(isSelected, isEditing);
 
   // Selects another session, cycles a working value, or opens the selected read-only detail.
   const handleStatusClick = () => {
@@ -111,9 +113,7 @@ function AttendanceStatusCell({
 
   return (
     <td
-      className={`w-22 min-w-22 border-r border-b border-paper-border align-top sm:w-24 sm:min-w-24 xl:w-26 xl:min-w-26 ${
-        isSelected ? 'border-x-2 border-x-ink bg-paper-muted' : 'bg-paper-light'
-      }`}
+      className={`${DATE_REGISTER_COLUMN_CLASSES} border-r border-b border-paper-border align-top ${columnClasses.cell}`}
     >
       <div className={tableInset}>
         <button
@@ -178,7 +178,7 @@ export function AttendanceRegister({
   const density = getTableDensityClasses(tableDensity);
   const selectedDraft = sessionDrafts.find((session) => session.id === selectedSessionId);
   const selectedDateLabel = selectedDraft
-    ? formatAttendanceDateShort(selectedDraft.sessionDate, dateFormat)
+    ? formatMonthDay(selectedDraft.sessionDate)
     : '';
 
   return (
@@ -214,27 +214,26 @@ export function AttendanceRegister({
               </th>
               {sessionDrafts.map((sessionDraft) => {
                 const isSelected = sessionDraft.id === selectedSessionId;
+                const columnClasses = getDateRegisterColumnClasses(isSelected, isEditing);
                 return (
                   <th
                     key={sessionDraft.id}
                     scope="col"
-                    className={`sticky top-0 z-20 w-22 min-w-22 border-r border-b border-ink bg-paper-muted p-0 text-center sm:w-24 sm:min-w-24 xl:w-26 xl:min-w-26 ${
-                      isSelected ? 'border-x-2 border-x-ink' : ''
-                    }`}
+                    className={`sticky top-0 z-20 ${DATE_REGISTER_COLUMN_CLASSES} border-r border-b border-ink p-0 text-center ${columnClasses.header}`}
                   >
                     <button
                       type="button"
                       aria-pressed={isSelected}
                       aria-label={`${formatAttendanceDateLong(sessionDraft.sessionDate, dateFormat)}${
-                        isSelected ? ', selected' : '. Activate to select this saved date.'
+                        isSelected ? (isEditing ? ', selected, editing' : ', selected') : '. Activate to select this saved date.'
                       }`}
                       onClick={() => onSelectSession(sessionDraft.id)}
-                      className="flex min-h-14 w-full cursor-pointer flex-col items-center justify-center px-1.5 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink hover:bg-paper-dark"
+                      className={`flex min-h-14 w-full cursor-pointer flex-col items-center justify-center px-1 py-1.5 font-mono text-xs font-bold uppercase tracking-[0.04em] ${columnClasses.control}`}
                     >
-                      <span>{formatAttendanceDateShort(sessionDraft.sessionDate, dateFormat)}</span>
+                      <span>{formatMonthDay(sessionDraft.sessionDate)}</span>
                       {isSelected ? (
-                        <span className="mt-1 border-t border-ink pt-1 text-[9px] tracking-[0.12em]">
-                          Selected
+                        <span className="mt-1 text-[11px] tracking-normal">
+                          {isEditing ? 'Editing' : 'Selected'}
                         </span>
                       ) : null}
                     </button>

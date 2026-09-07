@@ -266,7 +266,7 @@ export function AttendanceImportDialog({
       }
     >
       <div className="space-y-5">
-        <Notice variant="info" title="Local file processing">
+        <Notice variant="info" title="Local file processing" collapsible>
           Your CSV, PDF, or image is read only in this browser and is not uploaded. Applying a reviewed import updates the unsaved draft; use Save attendance to persist it.
         </Notice>
 
@@ -421,7 +421,7 @@ export function AttendanceImportDialog({
             </div>
 
             {preview.changedRows.length === 0 ? (
-              <Notice variant="info" title="No changes found">
+              <Notice variant="info" title="No changes found" collapsible noticeKey={preview}>
                 The CSV already matches the current attendance draft.
               </Notice>
             ) : (
@@ -455,7 +455,7 @@ export function AttendanceImportDialog({
               </h3>
             </div>
 
-            <Notice variant="info" title="Review is required before applying">
+            <Notice variant="info" title="Review is required before applying" collapsible noticeKey={ocrPreview}>
               OCR can misread handwriting. Correct the extracted values and confirm every student row before applying this scan to the unsaved draft.
             </Notice>
 

@@ -62,8 +62,8 @@ export function RecitationDateSelector({
   }).format(new Date(month.year, month.month - 1, 1));
 
   return (
-    <section aria-labelledby="recitation-date-selector-heading">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <section className="min-w-0" aria-labelledby="recitation-date-selector-heading">
+      <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
             Select Recitation dates
@@ -74,7 +74,7 @@ export function RecitationDateSelector({
           >
             {calendarMonthLabel}
           </h3>
-          <p className="mt-1 text-sm leading-6 text-ink-secondary">
+          <p className="mt-1 text-sm leading-5 text-ink-secondary">
             Select available dates. Existing dates are already in the register.
           </p>
         </div>
@@ -83,76 +83,76 @@ export function RecitationDateSelector({
         </p>
       </div>
 
-      <div
-        className="mt-4 grid grid-cols-7 gap-px border border-ink bg-ink"
-        role="group"
-        aria-label="Recitation date calendar"
-      >
-        {WEEKDAY_LABELS.map((weekday) => (
-          <div
-            key={weekday}
-            className="bg-paper-muted px-1 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-ink-secondary sm:text-[11px]"
-          >
-            <span aria-hidden="true">{weekday.slice(0, 1)}</span>
-            <span className="sr-only">{weekday}</span>
-          </div>
-        ))}
-
-        {calendarDays.map((day, index) => {
-          if (day === null) {
-            return (
-              <div
-                key={`blank-${index}`}
-                className="min-h-14 bg-paper-light sm:min-h-16"
-                aria-hidden="true"
-              />
-            );
-          }
-
-          const date = getDateValue(month.year, month.month, day);
-          const isExisting = existingDateSet.has(date);
-          const isSelected = selectedDateSet.has(date);
-          const isUnavailable = !isSelectionAvailable || isBusy;
-          const dateLabel = formatRecitationDateLong(date, dateFormat);
-          const stateLabel = isExisting
-            ? 'Existing Recitation date.'
-            : isSelected
-              ? 'Selected. Activate to remove from selected dates.'
-              : isUnavailable
-                ? 'Unavailable while the Recitation workspace is busy or has unsaved changes.'
-                : 'Available. Activate to select.';
-          const stateText = isExisting
-            ? 'Existing'
-            : isSelected
-              ? 'Selected'
-              : isUnavailable
-                ? 'Unavailable'
-                : 'Available';
-          const stateClassName = isExisting
-            ? 'border-paper-dark bg-paper-muted text-ink-secondary'
-            : isSelected
-              ? 'border-ink bg-ink text-paper-light'
-              : isUnavailable
-                ? 'border-paper-dark bg-paper-muted text-ink-muted'
-                : 'border-paper-border bg-paper-light text-ink hover:border-ink hover:bg-paper-muted';
-
-          return (
-            <button
-              key={date}
-              type="button"
-              aria-label={`${dateLabel}. ${stateLabel}`}
-              aria-pressed={isExisting ? undefined : isSelected}
-              disabled={isExisting || isUnavailable}
-              onClick={() => onToggleDate(date)}
-              className={`flex min-h-14 w-full flex-col items-center justify-center border px-1 py-1.5 font-mono text-sm font-bold transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ink disabled:cursor-not-allowed sm:min-h-16 ${stateClassName}`}
+      <p id="recitation-calendar-legend" className="mt-2 text-xs leading-5 text-ink-secondary">
+        <span aria-hidden="true">✓</span> Selected · <span aria-hidden="true">●</span> Existing · <span aria-hidden="true">—</span> Unavailable
+      </p>
+      <div className="mt-2 overflow-x-auto">
+        <div
+          className="grid min-w-[316px] grid-cols-7 gap-px border border-ink bg-ink"
+          role="group"
+          aria-label="Recitation date calendar"
+          aria-describedby="recitation-calendar-legend"
+        >
+          {WEEKDAY_LABELS.map((weekday) => (
+            <div
+              key={weekday}
+              className="bg-paper-muted px-1 py-1 text-center font-mono text-[11px] font-bold uppercase text-ink-secondary"
             >
-              <span>{day}</span>
-              <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] sm:text-[10px]">
-                {stateText}
-              </span>
-            </button>
-          );
-        })}
+              <span aria-hidden="true">{weekday.slice(0, 1)}</span>
+              <span className="sr-only">{weekday}</span>
+            </div>
+          ))}
+
+          {calendarDays.map((day, index) => {
+            if (day === null) {
+              return (
+                <div
+                  key={`blank-${index}`}
+                  className="h-11 bg-paper-light"
+                  aria-hidden="true"
+                />
+              );
+            }
+
+            const date = getDateValue(month.year, month.month, day);
+            const isExisting = existingDateSet.has(date);
+            const isSelected = selectedDateSet.has(date);
+            const isUnavailable = !isSelectionAvailable || isBusy;
+            const dateLabel = formatRecitationDateLong(date, dateFormat);
+            const stateLabel = isExisting
+              ? 'Existing Recitation date.'
+              : isSelected
+                ? 'Selected. Activate to remove from selected dates.'
+                : isUnavailable
+                  ? 'Unavailable while the Recitation workspace is busy or has unsaved changes.'
+                  : 'Available. Activate to select.';
+            const stateSymbol = isExisting ? '●' : isSelected ? '✓' : isUnavailable ? '—' : '';
+            const stateClassName = isExisting
+              ? 'border-paper-dark bg-paper-muted text-ink-secondary'
+              : isSelected
+                ? 'border-ink bg-ink text-paper-light'
+                : isUnavailable
+                  ? 'border-paper-dark bg-paper-muted text-ink-muted'
+                  : 'border-paper-border bg-paper-light text-ink hover:border-ink hover:bg-paper-muted';
+
+            return (
+              <button
+                key={date}
+                type="button"
+                aria-label={`${dateLabel}. ${stateLabel}`}
+                aria-pressed={isExisting ? undefined : isSelected}
+                disabled={isExisting || isUnavailable}
+                onClick={() => onToggleDate(date)}
+                className={`relative flex h-11 min-w-11 w-full items-center justify-center border px-1 font-mono text-sm font-bold transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] disabled:cursor-not-allowed ${isSelected ? 'focus-visible:outline-paper-light' : 'focus-visible:outline-ink'} ${stateClassName}`}
+              >
+                <span>{day}</span>
+                <span aria-hidden="true" className="absolute top-0.5 right-1 text-[10px] leading-none">
+                  {stateSymbol}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

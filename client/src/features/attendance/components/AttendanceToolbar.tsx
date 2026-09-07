@@ -18,6 +18,7 @@ import type {
 } from '../../settings/preference-display';
 
 export interface AttendanceToolbarFeedback {
+  noticeKey: object;
   variant: 'info' | 'warning' | 'error' | 'success';
   title: string;
   content: ReactNode;
@@ -340,12 +341,12 @@ export function AttendanceToolbar({
         ) : null}
       </div>
 
-      <Notice variant="info" title="Attendance storage">
-        Attendance dates are saved when created. A date’s current-enrollment roster remains a draft until its first Save attendance; later enrollment changes do not rewrite a saved historical roster.
+      <Notice variant="info" title="How attendance is saved" collapsible>
+        Dates are saved when you create them. Select Save attendance to save a date’s roster and marks for the first time. Later enrollment changes do not change that saved roster.
       </Notice>
 
       {feedback ? (
-        <Notice variant={feedback.variant} title={feedback.title}>
+        <Notice variant={feedback.variant} title={feedback.title} collapsible noticeKey={feedback.noticeKey}>
           {feedback.content}
         </Notice>
       ) : null}

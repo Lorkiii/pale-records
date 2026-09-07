@@ -80,6 +80,7 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
 
   const toolbarFeedback: AttendanceToolbarFeedback | null = attendance.feedback
     ? {
+        noticeKey: attendance.feedback,
         variant: attendance.feedback.variant,
         title: attendance.feedback.title,
         content:
