@@ -1,9 +1,9 @@
 // Owns credentialed Attendance month, date, and roster requests with runtime response validation.
 import {
   ATTENDANCE_REMARKS_MAX_LENGTH,
+  isAttendanceStatusCode,
   type AttendanceRecord,
   type AttendanceSessionRecord,
-  type AttendanceStatusCode,
   type AttendanceStudentRecord,
   type SaveAttendanceRecordInput,
 } from './attendance-types';
@@ -50,11 +50,6 @@ function hasExactKeys(value: Record<string, unknown>, keys: string[]) {
   const expectedKeys = [...keys].sort();
   return actualKeys.length === expectedKeys.length &&
     actualKeys.every((key, index) => key === expectedKeys[index]);
-}
-
-// Narrows the exact four public PALE codes without trusting a type assertion.
-function isAttendanceStatusCode(value: unknown): value is AttendanceStatusCode {
-  return value === 'P' || value === 'A' || value === 'L' || value === 'E';
 }
 
 // Validates a date-only string without converting through browser local time.

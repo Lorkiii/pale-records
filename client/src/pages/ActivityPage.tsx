@@ -42,6 +42,7 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
   const recitation = useRecitationWorkspace(onSessionExpired, preferences?.dateFormat);
   const toolbarFeedback: RecitationToolbarFeedback | null = recitation.feedback
     ? {
+        noticeKey: recitation.feedback,
         variant: recitation.feedback.variant,
         title: recitation.feedback.title,
         content: recitation.feedback.messages.length === 1 ? (
@@ -69,7 +70,7 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
       </p>
 
       <div className="archival-grid min-h-[calc(100vh-185px)] min-w-0">
-        <div className="mx-auto min-w-0 max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">
+        <div className="mx-auto min-w-0 max-w-[1440px] px-3 py-5 sm:px-6 sm:py-6 xl:px-8 xl:py-8">
           {recitation.loadStatus === 'loading' ? (
             <PageLoad message="Loading Activity workspace…" />
           ) : null}
@@ -102,7 +103,7 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
           ) : null}
 
           {recitation.loadStatus === 'ready' && recitation.classes.length > 0 ? (
-            <div className="min-w-0 space-y-8">
+            <div className="min-w-0 space-y-5 sm:space-y-6">
               <RecitationToolbar
                 classes={recitation.classes}
                 selectedClassId={recitation.selectedClassId}

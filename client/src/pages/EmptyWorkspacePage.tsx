@@ -1,5 +1,6 @@
 // Renders the honest Agenda placeholder until that workspace has an active data flow.
 import { EmptyState } from '../components/ui/EmptyState';
+import { Header } from '../components/ui/Header';
 
 type EmptyWorkspaceSection = 'agenda';
 
@@ -37,17 +38,11 @@ export function EmptyWorkspacePage({ section }: EmptyWorkspacePageProps) {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-paper-border bg-paper-light">
-        <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12">
-          <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-            Workspace / {content.title}
-          </p>
-          <h1 className="mt-3 font-display text-4xl font-bold tracking-[-0.05em] text-ink sm:text-5xl">
-            {content.title}
-          </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-ink-secondary">{content.description}</p>
-        </div>
-      </header>
+      <Header
+        workspacePath="Workspace"
+        workspaceTitle={content.title}
+        workspaceDescription={content.description}
+      />
 
       <div className="archival-grid min-h-[calc(100vh-185px)]">
         <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 sm:py-10 xl:px-12 xl:py-12">

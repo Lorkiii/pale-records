@@ -102,7 +102,7 @@ export function AttendanceDetailsDialog({
     >
       <form id="attendance-details-form" onSubmit={handleSubmit} noValidate>
         {!isEditable ? (
-          <Notice variant="info" title="Read-only date" className="mb-5">
+          <Notice variant="info" title="Read-only date" className="mb-5" collapsible>
             Choose Edit attendance to change this persisted student record.
           </Notice>
         ) : null}
@@ -189,7 +189,7 @@ export function AttendanceDetailsDialog({
           </p>
         </div>
 
-        <Notice variant="info" title="Proof upload unavailable" className="mt-5">
+        <Notice variant="info" title="Proof upload unavailable" className="mt-5" collapsible>
           Proof upload will be enabled after protected file storage is configured. PALE does not upload to the Express filesystem or store file binaries in the database.
         </Notice>
 

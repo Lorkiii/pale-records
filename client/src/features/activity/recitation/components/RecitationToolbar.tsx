@@ -15,6 +15,7 @@ import type { DateFormatPreference } from '../../../settings/preference-display'
 import { RecitationDateSelector } from './RecitationDateSelector';
 
 export interface RecitationToolbarFeedback {
+  noticeKey: object;
   variant: 'info' | 'warning' | 'error' | 'success';
   title: string;
   content: ReactNode;
@@ -121,15 +122,15 @@ export function RecitationToolbar({
   onSave,
 }: RecitationToolbarProps) {
   return (
-    <section className="space-y-5" aria-labelledby="recitation-controls-heading">
+    <section className="space-y-3 sm:space-y-4" aria-labelledby="recitation-controls-heading">
       <div className="border border-ink bg-paper-light">
-        <div className="border-b border-ink bg-paper-muted px-4 py-3 sm:px-5">
+        <div className="border-b border-ink bg-paper-muted px-3 py-2 sm:px-4 sm:py-3">
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
             04 / Recitation controls
           </p>
           <h2
             id="recitation-controls-heading"
-            className="mt-1 font-display text-xl font-semibold tracking-[-0.03em] text-ink"
+            className="mt-1 font-display text-lg font-semibold tracking-[-0.03em] text-ink sm:text-xl"
           >
             Recitation register
           </h2>
@@ -138,7 +139,7 @@ export function RecitationToolbar({
           </p>
         </div>
 
-        <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)] lg:items-end">
+        <div className="grid gap-3 p-3 sm:gap-4 sm:p-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)] lg:items-end">
           <Select
             id="recitation-class"
             label="Class"
@@ -168,7 +169,7 @@ export function RecitationToolbar({
           />
         </div>
 
-        <div className="border-t border-paper-border px-4 py-4 sm:px-5">
+        <div className="border-t border-paper-border p-3 sm:p-4">
           <RecitationDateSelector
             monthInput={monthInput}
             selectedDates={selectedDates}
@@ -180,7 +181,7 @@ export function RecitationToolbar({
           />
 
           {selectedDates.length > 0 ? (
-            <div className="mt-5 border-t border-paper-border pt-4">
+            <div className="mt-3 border-t border-paper-border pt-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p
@@ -230,7 +231,7 @@ export function RecitationToolbar({
               </ul>
 
               <Button
-                className="mt-4 w-full sm:w-auto"
+                className="mt-3 w-full sm:w-auto"
                 onClick={onAddDates}
                 disabled={!canAddDates}
               >
@@ -245,8 +246,8 @@ export function RecitationToolbar({
         </div>
 
         {selectedDate ? (
-          <div className="border-t border-paper-border px-4 py-4 sm:px-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="border-t border-paper-border px-3 py-2 sm:px-4 sm:py-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
                   Selected date
@@ -316,12 +317,12 @@ export function RecitationToolbar({
         ) : null}
       </div>
 
-      <Notice variant="info" title="Recitation storage">
-        Selected dates remain local until Add dates is selected. Created dates use an unpersisted Unmarked roster until the first Save Recitation captures the complete historical roster; later enrollment changes do not rewrite it.
+      <Notice variant="info" title="How Recitation is saved" collapsible>
+        Select Add dates to save your selected dates. Their rosters start as Unmarked drafts. Select Save Recitation to save a date’s roster and marks for the first time. Later enrollment changes do not change that saved roster.
       </Notice>
 
       {feedback ? (
-        <Notice variant={feedback.variant} title={feedback.title}>
+        <Notice variant={feedback.variant} title={feedback.title} collapsible noticeKey={feedback.noticeKey}>
           {feedback.content}
         </Notice>
       ) : null}
@@ -334,7 +335,7 @@ export function RecitationToolbar({
           {SUMMARY_ITEMS.map((item) => (
             <div
               key={item.key}
-              className="flex items-center justify-between gap-4 bg-paper-light px-4 py-3"
+              className="flex items-center justify-between gap-3 bg-paper-light px-3 py-2"
             >
               <div className="flex min-w-0 items-center gap-2">
                 <span

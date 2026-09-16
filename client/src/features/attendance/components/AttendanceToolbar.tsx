@@ -1,4 +1,4 @@
-// Renders Attendance class/month selection, manual dates, edit actions, totals, and draft feedback.
+// Renders Attendance selection, date controls, compact toolbar actions, totals, and feedback.
 import type { ReactNode } from 'react';
 import { ActionIconButton } from '../../../components/ui/ActionIconButton';
 import { Button } from '../../../components/ui/Button';
@@ -18,6 +18,7 @@ import type {
 } from '../../settings/preference-display';
 
 export interface AttendanceToolbarFeedback {
+  noticeKey: object;
   variant: 'info' | 'warning' | 'error' | 'success';
   title: string;
   content: ReactNode;
@@ -30,12 +31,17 @@ interface AttendanceToolbarProps {
   dateInput: string;
   selectedDate: string | null;
   selectedSession: AttendanceSessionDraft | null;
+  prevSessionId?: string | null;
+  nextSessionId?: string | null;
+  sessionPositionLabel?: string;
   isEditing: boolean;
   hasUnsavedChanges: boolean;
   isBusy: boolean;
   isCreating: boolean;
   isSaving: boolean;
   canUndo: boolean;
+  canImport: boolean;
+  canExportTemplate: boolean;
   canAddDate: boolean;
   dateHint: string;
   statusCounts: AttendanceStatusCounts;
@@ -46,8 +52,12 @@ interface AttendanceToolbarProps {
   onMonthInputChange: (month: string) => void;
   onDateInputChange: (date: string) => void;
   onAddDate: () => void;
+  onSelectPrevSession?: () => void;
+  onSelectNextSession?: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onImport: () => void;
+  onExportTemplate: () => void;
   onMarkUnmarkedPresent: () => void;
   onUndo: () => void;
   onCancel: () => void;
@@ -83,12 +93,17 @@ export function AttendanceToolbar({
   dateInput,
   selectedDate,
   selectedSession,
+  prevSessionId,
+  nextSessionId,
+  sessionPositionLabel,
   isEditing,
   hasUnsavedChanges,
   isBusy,
   isCreating,
   isSaving,
   canUndo,
+  canImport,
+  canExportTemplate,
   canAddDate,
   dateHint,
   statusCounts,
@@ -99,17 +114,21 @@ export function AttendanceToolbar({
   onMonthInputChange,
   onDateInputChange,
   onAddDate,
+  onSelectPrevSession,
+  onSelectNextSession,
   onEdit,
   onDelete,
+  onImport,
+  onExportTemplate,
   onMarkUnmarkedPresent,
   onUndo,
   onCancel,
   onSave,
 }: AttendanceToolbarProps) {
   return (
-    <section className="space-y-5" aria-labelledby="attendance-controls-heading">
+    <section className="space-y-3 sm:space-y-4" aria-labelledby="attendance-controls-heading">
       <div className="border border-ink bg-paper-light">
-        <div className="border-b border-ink bg-paper-muted px-4 py-3 sm:px-5">
+        <div className="border-b border-ink bg-paper-muted px-3 py-2 sm:px-4 sm:py-3">
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
             03 / Register controls
           </p>
@@ -118,7 +137,7 @@ export function AttendanceToolbar({
           </h2>
         </div>
 
-        <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)_minmax(12rem,0.75fr)_auto] lg:items-end">
+        <div className="grid gap-3 p-3 sm:gap-4 sm:p-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(11rem,0.65fr)_minmax(12rem,0.75fr)_auto] lg:items-end">
           <Select
             id="attendance-class"
             label="Class"
@@ -167,93 +186,167 @@ export function AttendanceToolbar({
         </div>
 
         {selectedDate ? (
-          <div className="border-t border-paper-border px-4 py-4 sm:px-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-                  Selected date
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-ink">
-                    {formatAttendanceDateLong(selectedDate, dateFormat)}
+          <div className="border-t border-paper-border px-3 py-2 sm:px-4 sm:py-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                {sessionPositionLabel ? (
+                  <div className="flex shrink-0 items-center border border-ink bg-paper">
+                    <ActionIconButton
+                      icon="chevron-left"
+                      label="Previous attendance date"
+                      tooltip={prevSessionId ? 'Previous attendance date' : 'At earliest attendance date'}
+                      variant="ghost"
+                      onClick={onSelectPrevSession}
+                      disabled={!prevSessionId || isBusy}
+                    />
+                    <span
+                      className="min-w-[4.5rem] px-2 text-center font-mono text-[11px] font-bold tracking-wider text-ink"
+                      aria-label={`Attendance date ${sessionPositionLabel}`}
+                    >
+                      {sessionPositionLabel}
+                    </span>
+                    <ActionIconButton
+                      icon="chevron-right"
+                      label="Next attendance date"
+                      tooltip={nextSessionId ? 'Next attendance date' : 'At latest attendance date'}
+                      variant="ghost"
+                      onClick={onSelectNextSession}
+                      disabled={!nextSessionId || isBusy}
+                    />
+                  </div>
+                ) : null}
+
+                <div className="min-w-0">
+                  <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                    Selected date
                   </p>
-                  <span className="border border-ink bg-paper-muted px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                    {isEditing ? 'Editing' : 'Read-only'}
-                  </span>
-                  {selectedSession && !selectedSession.isRosterInitialized ? (
-                    <span className="border border-signal-blue bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-signal-blue">
-                      Unsaved roster draft
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-ink">
+                      {formatAttendanceDateLong(selectedDate, dateFormat)}
+                    </p>
+                    <span className="border border-ink bg-paper-muted px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
+                      {isEditing ? 'Editing' : 'Read-only'}
                     </span>
-                  ) : null}
-                  {hasUnsavedChanges ? (
-                    <span className="border border-signal-amber bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
-                      Unsaved changes
-                    </span>
-                  ) : null}
-                  {selectedSession ? (
-                    <span className="border border-paper-dark bg-paper-light px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink-secondary">
-                      {formatAttendanceSessionSchedule(selectedSession, timeFormat)}
-                    </span>
-                  ) : null}
+                    {selectedSession && !selectedSession.isRosterInitialized ? (
+                      <span className="border border-signal-blue bg-paper-light px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-signal-blue">
+                        Draft
+                      </span>
+                    ) : null}
+                    {hasUnsavedChanges ? (
+                      <span className="border border-signal-amber bg-paper-light px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink">
+                        Unsaved
+                      </span>
+                    ) : null}
+                    {selectedSession ? (
+                      <span className="hidden border border-paper-dark bg-paper-light px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-ink-secondary sm:inline-block">
+                        {formatAttendanceSessionSchedule(selectedSession, timeFormat)}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
-              {isEditing ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" onClick={onMarkUnmarkedPresent} disabled={isBusy}>
-                    Mark unmarked as P
-                  </Button>
-                  <Button variant="ghost" onClick={onUndo} disabled={!canUndo || isBusy}>
-                    Undo last change
-                  </Button>
+              <div className="flex flex-wrap items-center gap-2 self-start sm:gap-3 lg:self-center">
+                <div className="flex items-center gap-1.5 border border-paper-border bg-paper p-1">
                   <ActionIconButton
-                    icon="cancel"
-                    label="Cancel changes"
-                    tooltip="Cancel changes"
+                    icon="print"
+                    label="Print template"
+                    tooltip={canExportTemplate
+                      ? 'Print attendance template for this date'
+                      : 'Attendance date with enrolled students required'}
                     variant="secondary"
-                    onClick={onCancel}
-                    disabled={isBusy}
+                    aria-haspopup="dialog"
+                    onClick={onExportTemplate}
+                    disabled={!canExportTemplate || isBusy}
                   />
-                  <ActionIconButton
-                    icon="save"
-                    label={isSaving ? 'Saving attendance' : 'Save attendance'}
-                    tooltip={isSaving ? 'Saving attendance' : 'Save attendance'}
-                    isLoading={isSaving}
-                    onClick={onSave}
-                    disabled={isBusy}
-                  />
+
+                  {isEditing ? (
+                    <>
+                      <ActionIconButton
+                        icon="import"
+                        label="Import attendance"
+                        tooltip={canImport
+                          ? 'Import attendance (CSV / PALE template)'
+                          : 'Import requires a clean editable roster'}
+                        variant="secondary"
+                        aria-haspopup="dialog"
+                        onClick={onImport}
+                        disabled={!canImport || isBusy}
+                      />
+                      <ActionIconButton
+                        icon="mark-all"
+                        label="Mark unmarked as Present"
+                        tooltip="Quick-fill: Mark all unmarked students as Present (P)"
+                        variant="secondary"
+                        onClick={onMarkUnmarkedPresent}
+                        disabled={isBusy}
+                      />
+                      <ActionIconButton
+                        icon="undo"
+                        label="Undo last change"
+                        tooltip={canUndo ? 'Undo last attendance change' : 'No actions to undo'}
+                        variant="ghost"
+                        onClick={onUndo}
+                        disabled={!canUndo || isBusy}
+                      />
+                    </>
+                  ) : null}
                 </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  <ActionIconButton
-                    icon="delete"
-                    label="Delete date"
-                    tooltip="Delete date"
-                    variant="destructive"
-                    onClick={onDelete}
-                    disabled={isBusy}
-                  />
-                  <ActionIconButton
-                    icon="edit"
-                    label="Edit attendance"
-                    tooltip="Edit attendance"
-                    variant="secondary"
-                    onClick={onEdit}
-                    disabled={isBusy}
-                  />
+
+                <div className="flex items-center gap-1.5 border border-paper-border bg-paper p-1">
+                  {isEditing ? (
+                    <>
+                      <ActionIconButton
+                        icon="cancel"
+                        label="Cancel changes"
+                        tooltip="Cancel unsaved changes and revert to saved"
+                        variant="secondary"
+                        onClick={onCancel}
+                        disabled={isBusy}
+                      />
+                      <ActionIconButton
+                        icon="save"
+                        label={isSaving ? 'Saving attendance' : 'Save attendance'}
+                        tooltip={isSaving ? 'Saving attendance…' : 'Save attendance to class records'}
+                        isLoading={isSaving}
+                        variant="primary"
+                        onClick={onSave}
+                        disabled={isBusy}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <ActionIconButton
+                        icon="delete"
+                        label="Delete date"
+                        tooltip="Delete this attendance date and its records"
+                        variant="destructive"
+                        onClick={onDelete}
+                        disabled={isBusy}
+                      />
+                      <ActionIconButton
+                        icon="edit"
+                        label="Edit attendance"
+                        tooltip="Edit attendance records for this date"
+                        variant="primary"
+                        onClick={onEdit}
+                        disabled={isBusy}
+                      />
+                    </>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         ) : null}
       </div>
 
-      <Notice variant="info" title="Attendance storage">
-        Attendance dates are saved when created. A date’s current-enrollment roster remains a draft until its first Save attendance; later enrollment changes do not rewrite a saved historical roster.
+      <Notice variant="info" title="How attendance is saved" collapsible>
+        Dates are saved when you create them. Select Save attendance to save a date’s roster and marks for the first time. Later enrollment changes do not change that saved roster.
       </Notice>
 
       {feedback ? (
-        <Notice variant={feedback.variant} title={feedback.title}>
+        <Notice variant={feedback.variant} title={feedback.title} collapsible noticeKey={feedback.noticeKey}>
           {feedback.content}
         </Notice>
       ) : null}
@@ -261,7 +354,7 @@ export function AttendanceToolbar({
       {selectedDate ? (
         <div className="grid gap-px border border-ink bg-ink sm:grid-cols-5" aria-label="Attendance summary">
           {SUMMARY_ITEMS.map((item) => (
-            <div key={item.key} className="flex items-center justify-between gap-4 bg-paper-light px-4 py-3">
+            <div key={item.key} className="flex items-center justify-between gap-3 bg-paper-light px-3 py-2">
               <div className="flex min-w-0 items-center gap-2">
                 <span className={`h-3 w-3 shrink-0 border border-ink ${item.markerClassName}`} aria-hidden="true" />
                 <span className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-secondary">
@@ -276,7 +369,7 @@ export function AttendanceToolbar({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-x-5 gap-y-2 border-y border-paper-border bg-paper-light px-4 py-3" aria-label="Attendance status legend">
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-y border-paper-border bg-paper-light px-3 py-2" aria-label="Attendance status legend">
         {SUMMARY_ITEMS.map((item) => (
           <span key={item.key} className="inline-flex items-center gap-2 text-sm text-ink-secondary">
             <span className={`h-2.5 w-2.5 border border-ink ${item.markerClassName}`} aria-hidden="true" />

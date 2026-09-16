@@ -8,11 +8,13 @@ import {
 } from './attendance-api';
 import {
   cloneAttendanceRecords,
+  countAttendanceRecordChanges,
   countAttendanceStatuses,
   createAttendanceSessionDraft,
   cycleAttendanceStatus,
   formatAttendanceDateLong,
   getAttendanceSessionRoster,
+  hasExactAttendanceRoster,
   isAttendanceDateValue,
   isAttendanceSessionDirty,
   markUnmarkedAsPresent,
@@ -220,6 +222,18 @@ export function useAttendanceWorkspace(
     () => getAttendanceSessionRoster(selectedSessionDraft),
     [selectedSessionDraft],
   );
+  const selectedSessionIndex = selectedClassSessions.findIndex(
+    (sessionDraft) => sessionDraft.id === selectedSessionId,
+  );
+  const prevSessionId = selectedSessionIndex > 0
+    ? selectedClassSessions[selectedSessionIndex - 1].id
+    : null;
+  const nextSessionId = selectedSessionIndex >= 0 && selectedSessionIndex < selectedClassSessions.length - 1
+    ? selectedClassSessions[selectedSessionIndex + 1].id
+    : null;
+  const sessionPositionLabel = selectedSessionIndex >= 0 && selectedClassSessions.length > 0
+    ? `${selectedSessionIndex + 1} / ${selectedClassSessions.length}`
+    : '';
   const selectedDate = selectedSessionDraft?.sessionDate ?? null;
   const detailsRecord = detailsTarget && selectedSessionDraft
     ? selectedSessionDraft.records[detailsTarget.id]
@@ -495,6 +509,20 @@ export function useAttendanceWorkspace(
     }
   };
 
+  // Navigates to the chronologically preceding session if one exists.
+  const handleSelectPrevSession = () => {
+    if (prevSessionId) {
+      handleSelectSession(prevSessionId);
+    }
+  };
+
+  // Navigates to the chronologically subsequent session if one exists.
+  const handleSelectNextSession = () => {
+    if (nextSessionId) {
+      handleSelectSession(nextSessionId);
+    }
+  };
+
   // Creates a fresh local working copy from the selected server snapshot.
   const handleEdit = () => {
     if (!selectedSessionDraft || !selectedSessionId) {
@@ -572,6 +600,76 @@ export function useAttendanceWorkspace(
       }
       : null);
     setLiveMessage(`${currentRecord.student.lastName}, ${currentRecord.student.firstName} changed to ${nextStatus}.`);
+  };
+
+  // Replaces a clean working roster with one fully validated local import snapshot.
+  const handleApplyAttendanceImport = (
+    records: WorkingAttendanceRecordsByStudentId,
+  ) => {
+    if (!selectedSessionDraft || !isEditing) {
+      setFeedback({
+        variant: 'error',
+        title: 'Attendance import not applied',
+        messages: ['Open an attendance date in Edit mode before importing.'],
+      });
+      return;
+    }
+
+    if (hasUnsavedChanges) {
+      setFeedback({
+        variant: 'warning',
+        title: 'Unsaved attendance',
+        messages: ['Save or cancel the current changes before importing attendance.'],
+      });
+      return;
+    }
+
+    if (!hasExactAttendanceRoster(selectedSessionDraft.records, Object.keys(records))) {
+      setFeedback({
+        variant: 'error',
+        title: 'Attendance import not applied',
+        messages: ['The imported roster no longer matches the selected attendance date.'],
+      });
+      return;
+    }
+
+    const changedRecordCount = countAttendanceRecordChanges(
+      selectedSessionDraft.records,
+      records,
+    );
+    if (changedRecordCount === 0) {
+      setFeedback({
+        variant: 'info',
+        title: 'No attendance changes found',
+        messages: ['The imported attendance already matches the current draft.'],
+      });
+      return;
+    }
+
+    const nextDraft = {
+      ...selectedSessionDraft,
+      records: cloneAttendanceRecords(records),
+    };
+    const validationIssues = validateAttendanceSessionDraft(nextDraft);
+    if (validationIssues.length > 0) {
+      setFeedback({
+        variant: 'error',
+        title: 'Attendance import not applied',
+        messages: validationIssues.map((issue) => issue.message),
+      });
+      return;
+    }
+
+    setUndoRecords(cloneAttendanceRecords(selectedSessionDraft.records));
+    setSelectedDraft(nextDraft);
+    setFeedback({
+      variant: 'success',
+      title: 'Attendance import applied',
+      messages: [
+        `${changedRecordCount} ${changedRecordCount === 1 ? 'record is' : 'records are'} ready for review. Use Save attendance to persist this draft.`,
+      ],
+    });
+    setLiveMessage(`${changedRecordCount} attendance ${changedRecordCount === 1 ? 'record' : 'records'} imported into the unsaved draft.`);
   };
 
   // Marks only unmarked rows Present and captures one local Undo snapshot.
@@ -726,6 +824,9 @@ export function useAttendanceWorkspace(
     selectedSessionDraft,
     selectedRoster,
     selectedDate,
+    prevSessionId,
+    nextSessionId,
+    sessionPositionLabel,
     detailsTarget,
     detailsRecord,
     deleteTarget,
@@ -747,11 +848,14 @@ export function useAttendanceWorkspace(
     handleAddDate,
     handleRetrySessionLoad,
     handleSelectSession,
+    handleSelectPrevSession,
+    handleSelectNextSession,
     handleEdit,
     handleOpenDelete,
     handleCloseDelete,
     handleDeletedSession,
     handleCycleStatus,
+    handleApplyAttendanceImport,
     handleMarkUnmarkedPresent,
     handleUndo,
     handleCancel,

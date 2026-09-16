@@ -55,7 +55,7 @@ export function DashboardShell({ currentUser }: DashboardShellProps) {
       ) : null}
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-20 flex min-h-18 items-center justify-between gap-4 border-b border-ink bg-paper px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
+        <header className="sticky top-0 z-20 flex min-h-15 items-center justify-between gap-3 border-b border-ink bg-paper px-4 py-2 sm:px-6 lg:px-8 xl:px-12">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"

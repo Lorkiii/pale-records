@@ -75,6 +75,14 @@ export function formatDateOnly(
     .format(new Date(parts.year, parts.month - 1, parts.day));
 }
 
+// Omits the year only where a surrounding month already supplies that context.
+export function formatMonthDay(value: string) {
+  const parts = readDateOnly(value);
+  if (!parts) return value;
+
+  return `${String(parts.month).padStart(2, '0')}/${String(parts.day).padStart(2, '0')}`;
+}
+
 // Formats validated HH:mm display values while leaving stored values unchanged.
 export function formatTime(
   value: string,

@@ -2,7 +2,6 @@
 import {
   cycleRecitationMark,
   formatRecitationDateLong,
-  formatRecitationDateShort,
   getRecitationMarkLabel,
 } from "../recitation-draft";
 import type {
@@ -11,10 +10,12 @@ import type {
   WorkingRecitationRecord,
 } from "../recitation-types";
 import {
+  formatMonthDay,
   getTableDensityClasses,
   type DateFormatPreference,
   type TableDensityPreference,
 } from "../../../settings/preference-display";
+import { DATE_REGISTER_COLUMN_CLASSES, getDateRegisterColumnClasses } from '../../../../components/ui/date-register-styles';
 
 interface RecitationRegisterProps {
   roster: RecitationStudentRecord[];
@@ -127,6 +128,7 @@ function RecitationMarkCell({
   const record = sessionDraft.records[student.id];
   const isEditable = Boolean(record && isSelected && isEditing);
   const markDisplay = getMarkDisplay(record);
+  const columnClasses = getDateRegisterColumnClasses(isSelected, isEditing);
   const label = getMarkCellLabel(
     student,
     sessionDraft,
@@ -142,18 +144,16 @@ function RecitationMarkCell({
       <span className="text-lg font-bold leading-none">
         {markDisplay.symbol}
       </span>
-      <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.06em]">
+      <span className="mt-1 hidden text-[10px] font-semibold uppercase tracking-[0.04em] sm:inline">
         {markDisplay.label}
       </span>
     </>
   );
-  const cellClassName = `flex min-h-14 w-full flex-col items-center justify-center border px-2 py-2 font-mono ${getMarkClassName(record)}`;
+  const cellClassName = `flex min-h-11 w-full flex-col items-center justify-center border px-1 py-1.5 font-mono ${getMarkClassName(record)}`;
   // Builds the mark cell.
   return (
     <td
-      className={`w-32 min-w-32 border-r border-b border-paper-border align-top ${
-        isSelected ? "border-x-2 border-x-ink bg-paper-muted" : "bg-paper-light"
-      }`}>
+      className={`${DATE_REGISTER_COLUMN_CLASSES} border-r border-b border-paper-border align-top ${columnClasses.cell}`}>
       <div className={tableInset}>
         {isEditable ? (
           <button
@@ -201,14 +201,14 @@ export function RecitationRegister({
     <section
       className="min-w-0 max-w-full"
       aria-labelledby="recitation-register-heading">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
             04 / Recitation matrix
           </p>
           <h2
             id="recitation-register-heading"
-            className="mt-1 font-display text-2xl font-semibold tracking-[-0.03em] text-ink">
+            className="mt-1 font-display text-xl font-semibold tracking-[-0.03em] text-ink sm:text-2xl">
             Class Recitation register
           </h2>
         </div>
@@ -229,11 +229,12 @@ export function RecitationRegister({
             <tr>
               <th
                 scope="col"
-                className={`sticky top-0 left-0 z-30 w-48 min-w-48 border-r border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.12em] text-ink sm:w-60 sm:min-w-60 ${density.tableCell}`}>
+                className={`sticky top-0 left-0 z-30 w-36 min-w-36 border-r border-b border-ink bg-paper-muted font-mono text-xs font-bold uppercase tracking-[0.12em] text-ink sm:w-44 sm:min-w-44 md:w-60 md:min-w-60 ${density.tableCell}`}>
                 Student
               </th>
               {sessionDrafts.map((sessionDraft) => {
                 const isSelected = sessionDraft.id === selectedSessionId;
+                const columnClasses = getDateRegisterColumnClasses(isSelected, isEditing);
                 const dateLabel = formatRecitationDateLong(
                   sessionDraft.sessionDate,
                   dateFormat,
@@ -242,18 +243,16 @@ export function RecitationRegister({
                   <th
                     key={sessionDraft.id}
                     scope="col"
-                    className={`sticky top-0 z-20 w-32 min-w-32 border-r border-b border-ink bg-paper-muted p-0 text-center ${
-                      isSelected ? "border-x-2 border-x-ink" : ""
-                    }`}>
+                    className={`sticky top-0 z-20 ${DATE_REGISTER_COLUMN_CLASSES} border-r border-b border-ink p-0 text-center ${columnClasses.header}`}>
                     {isSelected ? (
                       <div
                         aria-current="date"
-                        className="flex min-h-16 w-full flex-col items-center justify-center px-2 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink">
+                        className="flex min-h-14 w-full flex-col items-center justify-center px-1 py-1.5 font-mono text-xs font-bold uppercase tracking-[0.04em]">
                         <span>
-                          {formatRecitationDateShort(sessionDraft.sessionDate, dateFormat)}
+                          {formatMonthDay(sessionDraft.sessionDate)}
                         </span>
-                        <span className="mt-1 border-t border-ink pt-1 text-[11px] tracking-[0.12em]">
-                          Selected
+                        <span className="mt-1 text-[11px] tracking-normal">
+                          {isEditing ? 'Editing' : 'Selected'}
                         </span>
                         <span className="sr-only">{dateLabel}, selected</span>
                       </div>
@@ -267,12 +266,9 @@ export function RecitationRegister({
                         }
                         disabled={isBusy}
                         onClick={() => onSelectSession(sessionDraft.id)}
-                        className="flex min-h-16 w-full cursor-pointer flex-col items-center justify-center px-2 py-2 font-mono text-xs font-bold uppercase tracking-[0.08em] text-ink hover:bg-paper-dark disabled:cursor-not-allowed">
+                        className={`flex min-h-14 w-full cursor-pointer flex-col items-center justify-center px-1 py-1.5 font-mono text-xs font-bold uppercase tracking-[0.04em] disabled:cursor-not-allowed ${columnClasses.control}`}>
                         <span>
-                          {formatRecitationDateShort(sessionDraft.sessionDate, dateFormat)}
-                        </span>
-                        <span className="mt-1 text-[11px] tracking-[0.12em] text-ink-muted">
-                          Select
+                          {formatMonthDay(sessionDraft.sessionDate)}
                         </span>
                       </button>
                     )}
@@ -286,7 +282,7 @@ export function RecitationRegister({
               <tr key={student.id}>
                 <th
                   scope="row"
-                  className={`sticky left-0 z-10 w-48 min-w-48 border-r border-b border-paper-border bg-paper-light align-top sm:w-60 sm:min-w-60 ${density.tableCell}`}>
+                  className={`sticky left-0 z-10 w-36 min-w-36 border-r border-b border-paper-border bg-paper-light align-top sm:w-44 sm:min-w-44 md:w-60 md:min-w-60 ${density.tableCell}`}>
                   <span className="block break-words text-sm font-semibold leading-5 text-ink">
                     {student.lastName}, {student.firstName}
                   </span>

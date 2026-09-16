@@ -3,16 +3,7 @@ import type {
   AttendanceReportStudentRow,
   MonthlyAttendanceReport,
 } from './attendance-report';
-
-// Neutralizes spreadsheet formulas and escapes one CSV field without losing its text.
-export function escapeAttendanceCsvField(value: string) {
-  const trimmedValue = value.trimStart();
-  const spreadsheetSafeValue = /^[=+@]/.test(trimmedValue) || /^-(?=.)/.test(trimmedValue)
-    ? `'${value}`
-    : value;
-  const escapedValue = spreadsheetSafeValue.replace(/"/g, '""');
-  return /[",\r\n]/.test(spreadsheetSafeValue) ? `"${escapedValue}"` : escapedValue;
-}
+import { escapeAttendanceCsvField } from './attendance-csv-field';
 
 // Mirrors the PDF Remarks column across the report's complete date matrix.
 function getStudentRemarks(
