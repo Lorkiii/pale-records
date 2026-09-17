@@ -60,24 +60,24 @@ export function AgendaToolbar({
   return (
     <div className="flex flex-col gap-4 border-b border-ink bg-paper-light p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
       {/* Month Navigator */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center border border-ink bg-paper">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center border border-ink bg-paper">
           <button
             type="button"
             aria-label="Previous month"
             onClick={onPrevMonth}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center border-r border-ink font-mono text-sm text-ink transition-colors hover:bg-paper-muted active:bg-paper-dark"
+            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border-r border-ink font-mono text-sm text-ink transition-colors hover:bg-paper-muted active:bg-paper-dark"
           >
             ◀
           </button>
-          <div className="min-w-[170px] px-4 text-center font-display text-base font-bold tracking-tight text-ink sm:text-lg">
+          <div className="min-w-0 px-2 text-center font-display text-sm font-bold tracking-tight text-ink sm:min-w-[170px] sm:px-4 sm:text-lg">
             {formatMonthYearHeader(viewYear, viewMonth)}
           </div>
           <button
             type="button"
             aria-label="Next month"
             onClick={onNextMonth}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center border-l border-ink font-mono text-sm text-ink transition-colors hover:bg-paper-muted active:bg-paper-dark"
+            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border-l border-ink font-mono text-sm text-ink transition-colors hover:bg-paper-muted active:bg-paper-dark"
           >
             ▶
           </button>
@@ -87,7 +87,7 @@ export function AgendaToolbar({
           variant="outline"
           size="sm"
           onClick={onToday}
-          className="h-10 text-xs"
+          className="h-11 text-xs"
         >
           Today
         </Button>

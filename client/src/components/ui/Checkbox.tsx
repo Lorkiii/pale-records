@@ -1,3 +1,4 @@
+// Renders a labeled checkbox with a touch-friendly label area and visible state.
 import React, { forwardRef } from 'react';
 
 export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'size'> {
@@ -34,7 +35,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     };
 
     return (
-      <div className={`flex items-start gap-3 select-none ${className}`}>
+      <div className={`flex min-h-11 items-start gap-3 select-none sm:min-h-0 ${className}`}>
         <div className="relative flex items-center justify-center mt-0.5 shrink-0">
           <input
             ref={ref}
@@ -61,7 +62,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             {label && (
               <label
                 htmlFor={inputId}
-                className={`text-xs md:text-sm font-mono tracking-tight font-semibold text-black cursor-pointer uppercase ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex min-h-11 items-center font-mono text-xs font-semibold uppercase tracking-tight text-black cursor-pointer sm:min-h-0 md:text-sm ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {label}
               </label>

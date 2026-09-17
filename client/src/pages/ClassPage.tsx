@@ -1,9 +1,15 @@
-// Composes the Classes workspace from feature-owned state, actions, and dialogs.
+// Composes active and archived Class workspaces with password-confirmed deletion.
+import { useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Header } from '../components/ui/Header';
 import { Notice } from '../components/ui/Notice';
+import { Tabs } from '../components/ui/Tabs';
+import { deleteArchivedClasses, fetchArchivedClasses } from '../features/archive/archive-api';
+import { DeleteArchivedDialog } from '../features/archive/DeleteArchivedDialog';
+import { useArchivedDirectory } from '../features/archive/useArchivedDirectory';
 import { ArchiveClassDialog } from '../features/classes/components/ArchiveClassDialog';
+import { ArchivedClassDirectory } from '../features/classes/components/ArchivedClassDirectory';
 import { ClassDirectory } from '../features/classes/components/ClassDirectory';
 import { ClassFormDialog } from '../features/classes/components/ClassFormDialog';
 import { useClassWorkspace } from '../features/classes/useClassWorkspace';
@@ -32,8 +38,16 @@ function ClassIcon() {
 
 // Renders Classes workspace states and delegates workflow behavior to its feature hook.
 export function ClassPage({ onSessionExpired }: ClassPageProps) {
+  const [activeTab, setActiveTab] = useState('active');
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const workspace = useClassWorkspace(onSessionExpired);
+  const archived = useArchivedDirectory(
+    activeTab === 'archived', fetchArchivedClasses, onSessionExpired,
+  );
   const { preferences } = useSystemPreferences();
+  const selectedRecords = archived.records
+    .filter((record) => archived.selectedIds.includes(record.id))
+    .map((record) => ({ id: record.id, label: record.subjectName }));
 
   return (
     <div className="min-h-screen">
@@ -53,6 +67,22 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
 
       <div className="archival-grid min-h-[calc(100vh-185px)]">
         <div className="mx-auto max-w-[1440px] px-5 py-5 sm:px-8 sm:py-6 xl:px-12 xl:py-8">
+          <Tabs
+            ariaLabel="Class directory views"
+            className="mb-6"
+            tabs={[
+              { id: 'active', tabId: 'class-active-tab', panelId: 'class-active-panel', label: 'Active' },
+              { id: 'archived', tabId: 'class-archived-tab', panelId: 'class-archived-panel', label: 'Archived' },
+            ]}
+            activeTab={activeTab}
+            onChange={(tabId) => {
+              setActiveTab(tabId);
+              archived.selectPage(false);
+              if (tabId === 'archived') archived.refresh();
+            }}
+          />
+          {activeTab === 'active' ? (
+          <div id="class-active-panel" role="tabpanel" aria-labelledby="class-active-tab">
           {workspace.loadStatus === 'loading' ? (
             <div className="border border-ink bg-paper-light px-5 py-10 text-center">
               <p
@@ -105,6 +135,37 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
               onArchive={workspace.handleOpenArchive}
             />
           ) : null}
+          </div>
+          ) : (
+          <div id="class-archived-panel" role="tabpanel" aria-labelledby="class-archived-tab">
+            {archived.loadStatus === 'idle' || archived.loadStatus === 'loading' ? (
+              <p role="status" className="border border-ink bg-paper-light p-6 text-sm text-ink-secondary">
+                Loading archived classes…
+              </p>
+            ) : null}
+            {archived.loadStatus === 'error' ? (
+              <Notice variant="error" title="Class archive unavailable">
+                <p>{archived.loadError}</p>
+                <Button variant="secondary" size="sm" className="mt-3" onClick={archived.refresh}>Try again</Button>
+              </Notice>
+            ) : null}
+            {archived.loadStatus === 'ready' ? (
+              <ArchivedClassDirectory
+                records={archived.records}
+                selectedIds={archived.selectedIds}
+                eligibleIds={archived.eligibleIds}
+                page={archived.page}
+                hasMore={archived.hasMore}
+                dateFormat={preferences?.dateFormat}
+                onToggle={archived.toggleSelected}
+                onSelectPage={archived.selectPage}
+                onDelete={() => setIsDeleteOpen(true)}
+                onPageChange={archived.changePage}
+                onRefresh={archived.refresh}
+              />
+            ) : null}
+          </div>
+          )}
         </div>
       </div>
 
@@ -131,6 +192,23 @@ export function ClassPage({ onSessionExpired }: ClassPageProps) {
           classRecord={workspace.archiveTarget}
           onClose={workspace.handleCloseArchive}
           onArchived={workspace.handleClassArchived}
+          onSessionExpired={onSessionExpired}
+        />
+      ) : null}
+      {isDeleteOpen && selectedRecords.length > 0 ? (
+        <DeleteArchivedDialog
+          resourceLabel="class"
+          selectedRecords={selectedRecords}
+          onConfirm={deleteArchivedClasses}
+          onClose={() => {
+            setIsDeleteOpen(false);
+            window.requestAnimationFrame(() => document.getElementById('class-archive-delete-trigger')?.focus());
+          }}
+          onDeleted={() => {
+            setIsDeleteOpen(false);
+            archived.onDeleted();
+            window.requestAnimationFrame(() => document.getElementById('class-archived-tab')?.focus());
+          }}
           onSessionExpired={onSessionExpired}
         />
       ) : null}

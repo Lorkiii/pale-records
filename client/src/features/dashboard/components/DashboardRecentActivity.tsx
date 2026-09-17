@@ -122,18 +122,18 @@ export function DashboardRecentActivity({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
-                        <p className="truncate font-sans text-[11px] font-semibold text-ink">
+                        <p className="break-words font-sans text-sm font-semibold text-ink sm:truncate sm:text-[11px]">
                           {update.title}
                         </p>
                         <time
                           dateTime={update.occurredAt}
-                          className="shrink-0 font-mono text-[9px] text-ink-faint"
+                          className="shrink-0 font-mono text-xs text-ink-muted sm:text-[9px]"
                         >
                           {formatOccurredAt(update.occurredAt)}
                         </time>
                       </div>
                       {update.description ? (
-                        <p className="truncate font-sans text-[10px] leading-tight text-ink-secondary">
+                        <p className="break-words font-sans text-xs leading-5 text-ink-secondary sm:truncate sm:text-[10px] sm:leading-tight">
                           {update.description}
                         </p>
                       ) : null}
@@ -167,7 +167,30 @@ export function DashboardRecentActivity({
                 No active classes are available.
               </p>
             ) : (
-              <div className="max-h-56 overflow-x-auto overflow-y-auto">
+              <>
+              <ul className="max-h-72 divide-y divide-paper-border overflow-y-auto sm:hidden" aria-label="Active classes">
+                {classes.map((classSummary) => (
+                  <li key={classSummary.classId} className="space-y-2 p-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold text-ink">{classSummary.subjectName}</p>
+                      <p className="mt-1 break-words font-mono text-xs text-ink-secondary">
+                        {classSummary.subjectCode ?? 'No code'} / {classSummary.section ?? 'No section'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono text-xs text-ink-secondary">{classSummary.enrolledCount} enrolled</span>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/dashboard/attendance')}
+                        className="min-h-11 cursor-pointer border border-ink bg-paper-light px-3 font-mono text-xs font-bold uppercase text-ink hover:bg-ink hover:text-paper-light"
+                      >
+                        Register
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden max-h-56 overflow-x-auto overflow-y-auto sm:block">
                 <table className="min-w-[34rem] w-full border-collapse text-left">
                   <thead>
                     <tr className="sticky top-0 z-10 border-b border-paper-border bg-paper-muted">
@@ -207,6 +230,7 @@ export function DashboardRecentActivity({
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </Panel>
         </div>

@@ -68,7 +68,7 @@ export function Dialog({
       ref={dialogRef}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      className="m-auto max-h-[calc(100vh-2rem)] w-[min(44rem,calc(100vw-2rem))] overflow-hidden border border-ink bg-paper-light p-0 text-ink backdrop:bg-ink/45"
+      className="m-auto max-h-[calc(100dvh-1rem)] w-[min(44rem,calc(100vw-1rem))] overflow-hidden border border-ink bg-paper-light p-0 text-ink backdrop:bg-ink/45 sm:max-h-[calc(100dvh-2rem)] sm:w-[min(44rem,calc(100vw-2rem))]"
       onCancel={(event) => {
         event.preventDefault();
         if (!isDismissDisabled) {
@@ -77,7 +77,7 @@ export function Dialog({
       }}
       onClick={handleBackdropClick}
     >
-      <div className="flex max-h-[calc(100vh-2rem)] flex-col">
+      <div className="flex max-h-[calc(100dvh-1rem)] flex-col sm:max-h-[calc(100dvh-2rem)]">
         <header className="flex items-start justify-between gap-6 border-b border-ink bg-paper-muted px-5 py-4 sm:px-6">
           <div>
             <h2 id={titleId} className="font-display text-xl font-semibold tracking-[-0.03em] text-ink">
@@ -100,7 +100,7 @@ export function Dialog({
           </button>
         </header>
 
-        <div className="overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">{children}</div>
+        <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">{children}</div>
 
         {footer ? (
           <footer className="flex flex-col-reverse gap-3 border-t border-ink bg-paper-muted px-5 py-4 [&>button]:w-full sm:flex-row sm:justify-end sm:px-6 sm:[&>button]:w-auto">

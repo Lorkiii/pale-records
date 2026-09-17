@@ -174,7 +174,7 @@ export function ClassDirectory({
                 {metadata.length > 0 ? (
                   <dl className={cardDensity.stack}>
                     {metadata.map((entry) => (
-                      <div key={entry.label} className={`grid grid-cols-[6.5rem_1fr] gap-2 border-b border-paper-border last:border-b-0 last:pb-0 ${cardDensity.metadataRow}`}>
+                      <div key={entry.label} className={`grid grid-cols-1 gap-1 border-b border-paper-border last:border-b-0 last:pb-0 sm:grid-cols-[6.5rem_1fr] sm:gap-2 ${cardDensity.metadataRow}`}>
                         <dt className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
                           {entry.label}
                         </dt>

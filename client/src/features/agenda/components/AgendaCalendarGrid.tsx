@@ -28,7 +28,8 @@ export function AgendaCalendarGrid({
   const density = getTableDensityClasses(tableDensity);
 
   return (
-    <div className="flex flex-col border border-ink bg-paper-light">
+    <div className="max-w-full overflow-x-auto">
+    <div className="flex min-w-[21rem] flex-col border border-ink bg-paper-light sm:min-w-0">
       {/* Weekday Column Headers */}
       <div className="grid grid-cols-7 border-b border-ink bg-paper-muted text-center font-mono text-xs font-bold uppercase tracking-[0.14em] text-ink">
         {DAYS_OF_WEEK_SHORT.map((day) => (
@@ -151,6 +152,7 @@ export function AgendaCalendarGrid({
           );
         })}
       </div>
+    </div>
     </div>
   );
 }

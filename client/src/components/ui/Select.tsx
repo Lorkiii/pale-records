@@ -45,7 +45,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     const selectId = id || `select-${generatedId}`;
 
     const sizeStyles = {
-      sm: 'h-8 px-2.5 text-xs',
+      sm: 'h-11 px-2.5 text-xs sm:h-8',
       md: 'h-11 px-3 text-sm',
       lg: 'h-13 px-4 text-base',
     }[size];

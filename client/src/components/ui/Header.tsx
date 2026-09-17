@@ -23,7 +23,7 @@ export function Header({ workspacePath, workspaceTitle, workspaceDescription, ac
                     </p>
                 </div>
                 {actionButton && (
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2 [&>button]:w-full sm:w-auto sm:[&>button]:w-auto">
                         {actionButton}
                     </div>
                 )}

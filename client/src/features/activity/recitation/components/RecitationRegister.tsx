@@ -1,4 +1,5 @@
-// Renders the responsive Recitation matrix for saved rosters and current-enrollment drafts.
+// Renders a selected-date mobile roster and the full Recitation history matrix.
+import { Select } from '../../../../components/ui/Select';
 import {
   cycleRecitationMark,
   formatRecitationDateLong,
@@ -183,7 +184,7 @@ function RecitationMarkCell({
   );
 }
 
-// Keeps one semantic table across desktop and narrow horizontal-scroll layouts.
+// Presents one selected date on phones and the complete date matrix on larger screens.
 export function RecitationRegister({
   roster,
   sessionDrafts,
@@ -196,6 +197,7 @@ export function RecitationRegister({
   onCycleMark,
 }: RecitationRegisterProps) {
   const density = getTableDensityClasses(tableDensity);
+  const selectedDraft = sessionDrafts.find((session) => session.id === selectedSessionId);
 
   return (
     <section
@@ -212,13 +214,61 @@ export function RecitationRegister({
             Class Recitation register
           </h2>
         </div>
-        <p className="max-w-lg text-sm leading-6 text-ink-muted">
+        <p className="hidden max-w-lg text-sm leading-6 text-ink-muted sm:block">
           Select a date to review its roster. Only the selected date becomes
           interactive after Edit Recitation.
         </p>
       </div>
 
-      <div className="max-h-[70vh] max-w-full overflow-auto border border-ink bg-paper-light">
+      {selectedDraft ? (
+        <div className="space-y-3 sm:hidden">
+          <Select
+            label="Recitation date"
+            value={selectedSessionId}
+            disabled={isBusy}
+            onChange={(event) => onSelectSession(event.target.value)}
+            options={sessionDrafts.map((session) => ({
+              value: session.id,
+              label: formatRecitationDateLong(session.sessionDate, dateFormat),
+            }))}
+            hint="Save or cancel Recitation edits before switching dates."
+          />
+          <ul className="divide-y divide-paper-border border border-ink bg-paper-light" aria-label="Selected date Recitation roster">
+            {roster.map((student) => {
+              const record = selectedDraft.records[student.id];
+              const mark = getMarkDisplay(record);
+              const label = getMarkCellLabel(student, selectedDraft, record, true, isEditing, isBusy, dateFormat);
+              return (
+                <li key={student.id} className={density.record}>
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-ink">{student.lastName}, {student.firstName}</p>
+                    {student.studentNo ? (
+                      <p className="mt-1 break-all font-mono text-xs text-ink-secondary">{student.studentNo}</p>
+                    ) : null}
+                  </div>
+                  {record && isEditing ? (
+                    <button
+                      type="button"
+                      aria-label={label}
+                      disabled={isBusy}
+                      onClick={() => onCycleMark(student.id)}
+                      className={`mt-3 min-h-11 cursor-pointer border px-3 py-2 font-mono text-xs font-semibold uppercase disabled:cursor-not-allowed ${getMarkClassName(record)}`}
+                    >
+                      {mark.symbol} / {mark.label}
+                    </button>
+                  ) : (
+                    <p role="group" aria-label={label} className={`mt-3 inline-flex min-h-11 items-center border px-3 py-2 font-mono text-xs font-semibold uppercase ${getMarkClassName(record)}`}>
+                      {mark.symbol} / {mark.label}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="hidden max-h-[70vh] max-w-full overflow-auto border border-ink bg-paper-light sm:block">
         <table className="w-max min-w-full border-separate border-spacing-0 text-left">
           <caption className="sr-only">
             Recitation register with sticky student identities and chronological

@@ -1,5 +1,5 @@
-// Provides responsive navigation and signed-in account chrome for dashboard pages.
-import { useEffect, useState } from 'react';
+// Provides focus-managed mobile navigation and signed-in account chrome.
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import type { AuthenticatedUser } from '../../features/auth/auth-api';
 import { DashboardSidebar } from './DashboardSidebar';
@@ -13,26 +13,35 @@ interface DashboardShellProps {
 // Frames nested dashboard pages with responsive navigation and authenticated identity.
 export function DashboardShell({ currentUser }: DashboardShellProps) {
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const navigationDialogRef = useRef<HTMLDialogElement>(null);
+  const navigationTriggerRef = useRef<HTMLButtonElement>(null);
+  const navigationCloseRef = useRef<HTMLButtonElement>(null);
   const location = useLocation();
   const currentSection = location.pathname.startsWith('/dashboard/settings')
     ? 'Settings'
     : (DASHBOARD_NAVIGATION.find((item) => item.to === location.pathname)?.label ?? 'Workspace');
 
   useEffect(() => {
-    if (!isNavigationOpen) {
-      return undefined;
+    const dialog = navigationDialogRef.current;
+    if (!dialog) return;
+
+    if (isNavigationOpen && !dialog.open) {
+      dialog.showModal();
+      navigationCloseRef.current?.focus();
+    } else if (!isNavigationOpen && dialog.open) {
+      dialog.close();
+      window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
     }
-
-    // Gives keyboard users an Escape shortcut for dismissing the mobile navigation drawer.
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsNavigationOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
   }, [isNavigationOpen]);
+
+  useEffect(() => {
+    const desktopQuery = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = () => {
+      if (desktopQuery.matches) setIsNavigationOpen(false);
+    };
+    desktopQuery.addEventListener('change', closeOnDesktop);
+    return () => desktopQuery.removeEventListener('change', closeOnDesktop);
+  }, []);
 
   return (
     <div className="min-h-screen bg-paper text-ink">
@@ -40,24 +49,42 @@ export function DashboardShell({ currentUser }: DashboardShellProps) {
         <DashboardSidebar />
       </div>
 
-      {isNavigationOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
-            aria-label="Close navigation"
-            className="absolute inset-0 cursor-default bg-ink/35"
-            onClick={() => setIsNavigationOpen(false)}
-          />
-          <div id="mobile-dashboard-navigation" className="relative h-full w-[min(18rem,88vw)]">
+      <dialog
+        ref={navigationDialogRef}
+        aria-label="Workspace navigation"
+        className="fixed top-0 left-0 z-50 m-0 h-dvh max-h-dvh w-[min(18rem,88vw)] max-w-none border-0 bg-paper-muted p-0 text-ink backdrop:bg-ink/35 lg:hidden"
+        onCancel={(event) => {
+          event.preventDefault();
+          setIsNavigationOpen(false);
+        }}
+        onClose={() => setIsNavigationOpen(false)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setIsNavigationOpen(false);
+        }}
+      >
+        <div id="mobile-dashboard-navigation" className="flex h-full min-h-0 flex-col">
+          <div className="flex justify-end border-b border-ink bg-paper-light p-2">
+            <button
+              ref={navigationCloseRef}
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setIsNavigationOpen(false)}
+              className="flex h-11 w-11 cursor-pointer items-center justify-center border border-ink bg-paper-light text-xl text-ink"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
             <DashboardSidebar onNavigate={() => setIsNavigationOpen(false)} />
           </div>
         </div>
-      ) : null}
+      </dialog>
 
       <div className="lg:pl-72">
         <header className="sticky top-0 z-20 flex min-h-15 items-center justify-between gap-3 border-b border-ink bg-paper px-4 py-2 sm:px-6 lg:px-8 xl:px-12">
           <div className="flex min-w-0 items-center gap-3">
             <button
+              ref={navigationTriggerRef}
               type="button"
               aria-controls="mobile-dashboard-navigation"
               aria-expanded={isNavigationOpen}

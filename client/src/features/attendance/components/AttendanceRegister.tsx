@@ -1,4 +1,5 @@
-// Renders the responsive Attendance matrix for saved history and current-roster drafts.
+// Renders a selected-date mobile roster and the full Attendance history matrix.
+import { Select } from '../../../components/ui/Select';
 import {
   cycleAttendanceStatus,
   formatAttendanceDateLong,
@@ -162,7 +163,7 @@ function AttendanceStatusCell({
   );
 }
 
-// Keeps one semantic table model across desktop and narrow horizontal-scroll layouts.
+// Presents the selected date as touch-friendly rows on phones and a history matrix above them.
 export function AttendanceRegister({
   roster,
   sessionDrafts,
@@ -192,14 +193,74 @@ export function AttendanceRegister({
             Class register
           </h2>
         </div>
-        <p className="max-w-lg text-sm leading-6 text-ink-muted">
+        <p className="hidden max-w-lg text-sm leading-6 text-ink-muted sm:block">
           Select a date to review its saved roster or current-enrollment draft. Only that date can be edited.
         </p>
       </div>
 
       <p className="sr-only" aria-live="polite" aria-atomic="true">{liveMessage}</p>
 
-      <div className="max-h-[70vh] max-w-full overflow-auto border border-ink bg-paper-light">
+      {selectedDraft ? (
+        <div className="space-y-3 sm:hidden">
+          <Select
+            label="Attendance date"
+            value={selectedSessionId}
+            onChange={(event) => onSelectSession(event.target.value)}
+            options={sessionDrafts.map((session) => ({
+              value: session.id,
+              label: formatAttendanceDateLong(session.sessionDate, dateFormat),
+            }))}
+            hint="Save or cancel attendance edits before switching dates."
+          />
+          <ul className="divide-y divide-paper-border border border-ink bg-paper-light" aria-label="Selected date attendance roster">
+            {roster.map((student) => {
+              const record = selectedDraft.records[student.id];
+              const statusClassName = record?.status
+                ? STATUS_CLASS_NAMES[record.status]
+                : record
+                  ? 'border-paper-dark bg-paper-light text-ink-secondary'
+                  : 'border-paper-border bg-paper-muted text-ink-muted';
+              return (
+                <li key={student.id} className={density.record}>
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-ink">{student.lastName}, {student.firstName}</p>
+                    {student.studentNo ? (
+                      <p className="mt-1 break-all font-mono text-xs text-ink-secondary">{student.studentNo}</p>
+                    ) : null}
+                  </div>
+                  {record ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label={getStatusButtonLabel(student, selectedDraft, record, true, isEditing, dateFormat)}
+                        onClick={() => isEditing ? onCycleStatus(student.id) : onOpenDetails(student)}
+                        className={`min-h-11 cursor-pointer border px-3 py-2 font-mono text-xs font-semibold uppercase ${statusClassName}`}
+                      >
+                        {record.status ? `${record.status} / ${ATTENDANCE_STATUS_LABELS[record.status]}` : '— / Unmarked'}
+                        {!isEditing ? ' · View details' : ''}
+                      </button>
+                      {isEditing ? (
+                        <button
+                          type="button"
+                          aria-label={`${hasExcuseDetails(record) ? 'Review' : 'Add'} remark for ${student.firstName} ${student.lastName}`}
+                          onClick={() => onOpenDetails(student)}
+                          className="min-h-11 cursor-pointer border border-paper-dark bg-paper-light px-3 py-2 font-mono text-xs font-semibold uppercase text-ink-secondary hover:bg-paper-muted"
+                        >
+                          {hasExcuseDetails(record) ? 'Review remark' : 'Add remark'}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-ink-secondary">Not in this saved roster</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="hidden max-h-[70vh] max-w-full overflow-auto border border-ink bg-paper-light sm:block">
         <table className="w-max min-w-full border-separate border-spacing-0 text-left">
           <caption className="sr-only">
             Attendance register with sticky student identity, chronological date columns, selected-date remarks, and an unavailable proof boundary.

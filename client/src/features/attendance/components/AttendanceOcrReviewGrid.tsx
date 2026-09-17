@@ -1,4 +1,4 @@
-// Renders the editable, row-confirmed review gate for scanned Attendance templates.
+// Renders the editable OCR review as mobile rows or a desktop table.
 import { Checkbox } from '../../../components/ui/Checkbox';
 import { Notice } from '../../../components/ui/Notice';
 import { Select, type SelectOption } from '../../../components/ui/Select';
@@ -101,12 +101,12 @@ export function AttendanceOcrReviewGrid({
       </p>
 
       <div
-        className="max-h-[32rem] overflow-auto border border-ink"
+        className="border border-ink sm:max-h-[32rem] sm:overflow-auto"
         tabIndex={0}
         aria-label="Editable scanned attendance review"
       >
-        <table className="w-full min-w-[58rem] border-collapse text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-paper-muted">
+        <table className="block w-full border-collapse text-left text-sm sm:table sm:min-w-[58rem]">
+          <thead className="hidden bg-paper-muted sm:sticky sm:top-0 sm:z-10 sm:table-header-group">
             <tr>
               <th scope="col" className="border-b border-r border-ink px-3 py-2 font-semibold text-ink">
                 Student
@@ -122,7 +122,7 @@ export function AttendanceOcrReviewGrid({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="block divide-y divide-paper-border sm:table-row-group sm:divide-y-0">
             {rows.map((row) => {
               const fieldIdSuffix = row.rosterRowNumber;
               const sourceIssueId = `attendance-ocr-source-${fieldIdSuffix}`;
@@ -137,11 +137,11 @@ export function AttendanceOcrReviewGrid({
               return (
                 <tr
                   key={row.studentId}
-                  className={row.needsReview ? 'bg-paper-muted' : 'bg-paper-light'}
+                  className={`block p-3 sm:table-row sm:p-0 ${row.needsReview ? 'bg-paper-muted' : 'bg-paper-light'}`}
                 >
                   <th
                     scope="row"
-                    className="border-b border-r border-paper-border px-3 py-3 align-top font-medium text-ink"
+                    className="block border-b border-paper-border pb-3 text-left align-top font-medium text-ink sm:table-cell sm:border-r sm:px-3 sm:py-3"
                   >
                     <span className="mr-2 font-mono text-xs text-ink-muted">
                       {row.rosterRowNumber}.
@@ -158,7 +158,8 @@ export function AttendanceOcrReviewGrid({
                         : 'OCR found no confidence warnings.'}
                     </span>
                   </th>
-                  <td className="border-b border-r border-paper-border px-3 py-3 align-top">
+                  <td className="block border-b border-paper-border py-3 align-top sm:table-cell sm:border-r sm:px-3">
+                    <span className="mb-1 block font-mono text-xs font-semibold uppercase text-ink sm:hidden">Status</span>
                     <Select
                       id={`attendance-ocr-status-${fieldIdSuffix}`}
                       aria-label={`Attendance status for ${row.studentName}`}
@@ -174,8 +175,8 @@ export function AttendanceOcrReviewGrid({
                       {getOcrStatusLabel(row)}
                     </p>
                   </td>
-                  <td className="border-b border-r border-paper-border px-3 py-3 align-top">
-                    <label className="sr-only" htmlFor={`attendance-ocr-remarks-${fieldIdSuffix}`}>
+                  <td className="block border-b border-paper-border py-3 align-top sm:table-cell sm:border-r sm:px-3">
+                    <label className="mb-1 block font-mono text-xs font-semibold uppercase text-ink sm:sr-only" htmlFor={`attendance-ocr-remarks-${fieldIdSuffix}`}>
                       Remarks for {row.studentName}
                     </label>
                     <textarea
@@ -210,7 +211,7 @@ export function AttendanceOcrReviewGrid({
                       </ul>
                     ) : null}
                   </td>
-                  <td className="border-b border-paper-border px-3 py-3 align-top">
+                  <td className="block pt-3 align-top sm:table-cell sm:border-b sm:border-paper-border sm:px-3 sm:py-3">
                     <Checkbox
                       id={`attendance-ocr-confirmed-${fieldIdSuffix}`}
                       label="Confirmed"
