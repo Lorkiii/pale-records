@@ -46,7 +46,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
                 <span>CLASS RECORD WORKSPACE</span>
               </div>
 
-              <h1 className="font-display text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter text-black uppercase leading-[0.9] mb-4">
+              <h1 className="mb-4 font-display text-[clamp(2.75rem,14vw,6rem)] font-black uppercase leading-[0.9] tracking-tighter text-black md:text-7xl lg:text-8xl">
                 PALE
                 <br />
                 <span className="tracking-tight font-extrabold text-neutral-900">

@@ -15,8 +15,10 @@ export function useStudentWorkspace(onSessionExpired: () => void) {
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadError, setLoadError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [detailStudentId, setDetailStudentId] = useState<string | null>(null);
   const [studentFormTarget, setStudentFormTarget] = useState<StudentFormTarget>(null);
   const [archiveTarget, setArchiveTarget] = useState<StudentRecord | null>(null);
+  const detailTarget = students.find((student) => student.id === detailStudentId) ?? null;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -60,13 +62,23 @@ export function useStudentWorkspace(onSessionExpired: () => void) {
   // Opens the persisted multi-class student form when active classes are available.
   const handleOpenForm = () => {
     if (loadStatus === 'ready' && classes.length > 0) {
+      setDetailStudentId(null);
       setStudentFormTarget('new');
     }
+  };
+
+  const handleOpenDetails = (student: StudentRecord) => {
+    setDetailStudentId(student.id);
+  };
+
+  const handleCloseDetails = () => {
+    setDetailStudentId(null);
   };
 
   // Opens the student form with one persisted active student selected for editing.
   const handleOpenEdit = (student: StudentRecord) => {
     if (classes.length > 0) {
+      setDetailStudentId(null);
       setStudentFormTarget(student);
     }
   };
@@ -78,6 +90,7 @@ export function useStudentWorkspace(onSessionExpired: () => void) {
 
   // Opens or closes archive confirmation without changing the active directory.
   const handleOpenArchive = (student: StudentRecord) => {
+    setDetailStudentId(null);
     setArchiveTarget(student);
   };
 
@@ -114,11 +127,14 @@ export function useStudentWorkspace(onSessionExpired: () => void) {
     students,
     loadStatus,
     loadError,
+    detailTarget,
     studentFormTarget,
     archiveTarget,
     canAddStudent: loadStatus === 'ready' && classes.length > 0,
     handleRetryLoad,
     handleOpenForm,
+    handleOpenDetails,
+    handleCloseDetails,
     handleOpenEdit,
     handleCloseForm,
     handleOpenArchive,

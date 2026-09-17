@@ -81,13 +81,13 @@ export function DashboardQuickActions() {
   const navigate = useNavigate();
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
       {QUICK_ACTIONS.map((action) => (
         <button
           key={action.code}
           type="button"
           onClick={() => navigate(action.to)}
-          className={`group flex items-center justify-between gap-2 border px-3 py-2 text-left transition-colors cursor-pointer ${
+          className={`group flex min-h-11 items-center justify-between gap-2 border px-3 py-2 text-left transition-colors cursor-pointer ${
             action.isPrimary
               ? 'border-ink bg-ink text-paper-light hover:bg-neutral-900 active:translate-y-[1px]'
               : 'border-paper-border bg-paper-light text-ink hover:border-ink hover:bg-paper-muted active:translate-y-[1px]'
