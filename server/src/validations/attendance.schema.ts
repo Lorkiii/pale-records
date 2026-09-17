@@ -68,6 +68,7 @@ export const ensureAttendanceMonthSchema = z.strictObject({
     .int("Month must be a whole number")
     .min(1, "Month must be between 1 and 12")
     .max(12, "Month must be between 1 and 12"),
+  fillMissing: z.boolean().optional(),
 });
 
 export const saveAttendanceRecordsSchema = z.strictObject({

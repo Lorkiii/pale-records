@@ -43,6 +43,9 @@ interface AttendanceToolbarProps {
   canImport: boolean;
   canExportTemplate: boolean;
   canAddDate: boolean;
+  canGenerateMissingDates: boolean;
+  missingScheduledDates: string[];
+  isFillingDates: boolean;
   dateHint: string;
   statusCounts: AttendanceStatusCounts;
   feedback: AttendanceToolbarFeedback | null;
@@ -52,6 +55,7 @@ interface AttendanceToolbarProps {
   onMonthInputChange: (month: string) => void;
   onDateInputChange: (date: string) => void;
   onAddDate: () => void;
+  onGenerateMissingDates: () => void;
   onSelectPrevSession?: () => void;
   onSelectNextSession?: () => void;
   onEdit: () => void;
@@ -105,6 +109,9 @@ export function AttendanceToolbar({
   canImport,
   canExportTemplate,
   canAddDate,
+  canGenerateMissingDates,
+  missingScheduledDates,
+  isFillingDates,
   dateHint,
   statusCounts,
   feedback,
@@ -114,6 +121,7 @@ export function AttendanceToolbar({
   onMonthInputChange,
   onDateInputChange,
   onAddDate,
+  onGenerateMissingDates,
   onSelectPrevSession,
   onSelectNextSession,
   onEdit,
@@ -163,7 +171,7 @@ export function AttendanceToolbar({
             min="2000-01"
             max="2100-12"
             onChange={(event) => onMonthInputChange(event.target.value)}
-            hint="Scheduled dates are generated once when this month is opened."
+            hint="Scheduled dates are created when you open a class month. Fill later schedule gaps below."
           />
 
           <Input
@@ -184,6 +192,41 @@ export function AttendanceToolbar({
             {isCreating ? 'Adding date…' : 'Add date'}
           </Button>
         </div>
+
+        {missingScheduledDates.length > 0 ? (
+          <div className="border-t border-paper-border px-3 py-3 sm:px-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink">
+                  {missingScheduledDates.length} missing weekly {missingScheduledDates.length === 1 ? 'date' : 'dates'}
+                </p>
+                <p className="mt-1 text-sm text-ink-secondary">
+                  Current weekly rules include these dates. Some may have been deleted earlier; generating will add them again. Existing attendance stays unchanged.
+                </p>
+                {hasUnsavedChanges ? (
+                  <p className="mt-1 text-sm font-semibold text-ink">Save or cancel attendance edits to generate dates.</p>
+                ) : null}
+                <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Scheduled attendance dates to create">
+                  {missingScheduledDates.map((date) => (
+                    <li key={date} className="border border-paper-dark bg-paper px-2 py-1 text-xs text-ink">
+                      {formatAttendanceDateLong(date, dateFormat)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={onGenerateMissingDates}
+                disabled={!canGenerateMissingDates}
+                isLoading={isFillingDates}
+                className="w-full shrink-0 sm:w-auto"
+              >
+                Generate missing dates
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {selectedDate ? (
           <div className="border-t border-paper-border px-3 py-2 sm:px-4 sm:py-3">

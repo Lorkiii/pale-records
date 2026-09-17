@@ -9,6 +9,7 @@ import {
   createAttendanceSession,
   deleteAttendanceSession,
   ensureAttendanceMonth,
+  getAttendanceMonthWriteDecision,
   getIsoWeekday,
   listAttendanceSessions,
   loadAttendanceSession,
@@ -102,7 +103,7 @@ function createDependencies(
     findClassSessions: async () => [],
     findSession: async () => storedSession,
     deleteSession: async () => true,
-    ensureSessionMonth: async () => ({ status: "ensured", sessions: [] }),
+    ensureSessionMonth: async () => ({ status: "ensured", sessions: [], scheduledDates: [] }),
     saveSessionRecords: async () => ({ status: "saved", session: storedSession }),
     ...overrides,
   };
@@ -142,15 +143,34 @@ test("monthly generation respects inclusive class start and end dates", () => {
   );
 });
 
+test("empty months stay unmarked and existing months fill only on explicit request", () => {
+  assert.deepEqual(getAttendanceMonthWriteDecision(0, false, false), {
+    createSessions: false,
+    markMonth: false,
+  });
+  assert.deepEqual(getAttendanceMonthWriteDecision(4, false, false), {
+    createSessions: true,
+    markMonth: true,
+  });
+  assert.deepEqual(getAttendanceMonthWriteDecision(4, true, false), {
+    createSessions: false,
+    markMonth: false,
+  });
+  assert.deepEqual(getAttendanceMonthWriteDecision(4, true, true), {
+    createSessions: true,
+    markMonth: false,
+  });
+});
+
 test("ensureAttendanceMonth preserves archived and missing class outcomes", async () => {
   let archivedCalls = 0;
-  const archived = await ensureAttendanceMonth(classId, 2026, 8, createDependencies({
+  const archived = await ensureAttendanceMonth(classId, 2026, 8, false, createDependencies({
     ensureSessionMonth: async () => {
       archivedCalls += 1;
       return { status: "class_archived" };
     },
   }));
-  const missing = await ensureAttendanceMonth(classId, 2026, 8, createDependencies({
+  const missing = await ensureAttendanceMonth(classId, 2026, 8, false, createDependencies({
     ensureSessionMonth: async () => ({ status: "class_not_found" }),
   }));
 
@@ -159,7 +179,7 @@ test("ensureAttendanceMonth preserves archived and missing class outcomes", asyn
   assert.deepEqual(missing, { status: "class_not_found" });
 });
 
-test("repeated and concurrent month opens skip manual dates and do not recreate deletions", async () => {
+test("normal month opens preserve deletions and explicit fill restores only missing dates", async () => {
   const manualSession = {
     ...draftSession,
     id: "00000000-0000-4000-8000-000000000011",
@@ -176,8 +196,8 @@ test("repeated and concurrent month opens skip manual dates and do not recreate 
   let generationPasses = 0;
 
   const dependencies = createDependencies({
-    ensureSessionMonth: async () => {
-      if (!isGenerated) {
+    ensureSessionMonth: async (_classId, _year, _month, fillMissing) => {
+      if (!isGenerated || fillMissing) {
         isGenerated = true;
         generationPasses += 1;
         const rows = buildScheduledAttendanceSessions(classId, 2026, 8, {
@@ -202,13 +222,17 @@ test("repeated and concurrent month opens skip manual dates and do not recreate 
         }
       }
 
-      return { status: "ensured", sessions };
+      return {
+        status: "ensured",
+        sessions,
+        scheduledDates: ["2026-08-04", "2026-08-11", "2026-08-18", "2026-08-25"],
+      };
     },
   });
 
   const [first, concurrentRetry] = await Promise.all([
-    ensureAttendanceMonth(classId, 2026, 8, dependencies),
-    ensureAttendanceMonth(classId, 2026, 8, dependencies),
+    ensureAttendanceMonth(classId, 2026, 8, false, dependencies),
+    ensureAttendanceMonth(classId, 2026, 8, false, dependencies),
   ]);
 
   assert.equal(generationPasses, 1);
@@ -219,12 +243,15 @@ test("repeated and concurrent month opens skip manual dates and do not recreate 
     assert.equal(first.sessions.filter((session) => session.sessionDate === "2026-08-11").length, 1);
     assert.equal(first.sessions.every((session) => !session.isRosterInitialized), true);
     assert.equal(sessions.every((session) => session.attendanceRecords.length === 0), true);
+    assert.deepEqual(first.scheduledDates, [
+      "2026-08-04", "2026-08-11", "2026-08-18", "2026-08-25",
+    ]);
   }
 
   sessions = sessions.filter(
     (session) => session.sessionDate.toISOString().slice(0, 10) !== "2026-08-18",
   );
-  const reopened = await ensureAttendanceMonth(classId, 2026, 8, dependencies);
+  const reopened = await ensureAttendanceMonth(classId, 2026, 8, false, dependencies);
 
   assert.equal(generationPasses, 1);
   assert.equal(
@@ -232,6 +259,15 @@ test("repeated and concurrent month opens skip manual dates and do not recreate 
       reopened.sessions.some((session) => session.sessionDate === "2026-08-18"),
     false,
   );
+
+  const filled = await ensureAttendanceMonth(classId, 2026, 8, true, dependencies);
+  assert.equal(generationPasses, 2);
+  assert.equal(
+    filled.status === "ensured" &&
+      filled.sessions.some((session) => session.sessionDate === "2026-08-18"),
+    true,
+  );
+  assert.equal(sessions.find((session) => session.id === manualSession.id), manualSession);
 });
 
 test("manual creation keeps past unscheduled dates and creates no AttendanceRecord rows", async () => {

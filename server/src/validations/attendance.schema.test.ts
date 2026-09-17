@@ -40,6 +40,11 @@ test("ensureAttendanceMonthSchema accepts only bounded integer year/month input"
     year: 2026,
     month: 8,
   });
+  assert.deepEqual(ensureAttendanceMonthSchema.parse({ year: 2026, month: 8, fillMissing: true }), {
+    year: 2026,
+    month: 8,
+    fillMissing: true,
+  });
 
   for (const input of [
     { year: 1999, month: 8 },
@@ -48,6 +53,7 @@ test("ensureAttendanceMonthSchema accepts only bounded integer year/month input"
     { year: 2026, month: 13 },
     { year: "2026", month: 8 },
     { year: 2026, month: 8, extra: true },
+    { year: 2026, month: 8, fillMissing: "true" },
   ]) {
     assert.equal(ensureAttendanceMonthSchema.safeParse(input).success, false);
   }

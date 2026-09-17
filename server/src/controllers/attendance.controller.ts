@@ -19,6 +19,7 @@ import type {
 import {
   attendanceClassArchivedResponseSchema,
   attendanceClassNotFoundResponseSchema,
+  attendanceMonthResponseSchema,
   attendanceRosterMismatchResponseSchema,
   attendanceSessionExistsResponseSchema,
   attendanceSessionDeleteResponseSchema,
@@ -109,6 +110,7 @@ export function createAttendanceControllerHandlers(
         req.params.classId,
         req.body.year,
         req.body.month,
+        req.body.fillMissing ?? false,
       );
 
       if (result.status === "class_not_found") {
@@ -128,9 +130,9 @@ export function createAttendanceControllerHandlers(
         }));
       }
 
-      return res.status(200).json(attendanceSessionListResponseSchema.parse({
+      return res.status(200).json(attendanceMonthResponseSchema.parse({
         success: true,
-        data: { sessions: result.sessions },
+        data: { sessions: result.sessions, scheduledDates: result.scheduledDates },
       }));
     } catch (error) {
       next(error);

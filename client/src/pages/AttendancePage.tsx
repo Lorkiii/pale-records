@@ -184,6 +184,9 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
                 canImport={canImportAttendance}
                 canExportTemplate={canExportTemplate}
                 canAddDate={attendance.canAddDate}
+                canGenerateMissingDates={attendance.canGenerateMissingDates}
+                missingScheduledDates={attendance.missingScheduledDates}
+                isFillingDates={attendance.isFillingDates}
                 dateHint={attendance.dateHint}
                 statusCounts={attendance.statusCounts}
                 feedback={toolbarFeedback}
@@ -193,6 +196,7 @@ export function AttendancePage({ currentUser, onSessionExpired }: AttendancePage
                 onMonthInputChange={attendance.handleMonthChange}
                 onDateInputChange={attendance.handleDateInputChange}
                 onAddDate={attendance.handleAddDate}
+                onGenerateMissingDates={attendance.handleGenerateMissingDates}
                 onSelectPrevSession={attendance.handleSelectPrevSession}
                 onSelectNextSession={attendance.handleSelectNextSession}
                 onEdit={attendance.handleEdit}
