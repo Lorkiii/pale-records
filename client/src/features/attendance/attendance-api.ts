@@ -217,6 +217,19 @@ function readSessions(data: Record<string, unknown>) {
     : undefined;
 }
 
+// Reads the server's current weekly-date preview alongside one class month.
+function readAttendanceMonth(data: Record<string, unknown>) {
+  const sessions = readSessions(data);
+  const scheduledDates = data.scheduledDates;
+  return sessions !== undefined &&
+    Array.isArray(scheduledDates) &&
+    scheduledDates.length <= 31 &&
+    scheduledDates.every(isDateOnly) &&
+    new Set(scheduledDates).size === scheduledDates.length
+    ? { sessions, scheduledDates: scheduledDates as string[] }
+    : undefined;
+}
+
 // Selects the identifier confirmed after deleting one complete Attendance date.
 function readDeletedSessionId(data: Record<string, unknown>) {
   return typeof data.sessionId === 'string' && UUID_PATTERN.test(data.sessionId)
@@ -255,12 +268,13 @@ export async function createAttendanceSession(classId: string, sessionDate: stri
   return readSuccessData(response, 'Unable to read the created attendance session.', readSession);
 }
 
-// Ensures scheduled dates once for a class/month and returns that month's draft or saved rosters.
+// Opens one class month or deliberately fills its missing weekly dates.
 export async function ensureAttendanceSessionMonth(
   classId: string,
   year: number,
   month: number,
   signal: AbortSignal,
+  fillMissing = false,
 ) {
   let response: Response;
 
@@ -271,7 +285,7 @@ export async function ensureAttendanceSessionMonth(
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month }),
+        body: JSON.stringify({ year, month, ...(fillMissing ? { fillMissing: true } : {}) }),
         signal,
       },
     );
@@ -283,7 +297,7 @@ export async function ensureAttendanceSessionMonth(
     throw await readApiError(response);
   }
 
-  return readSuccessData(response, 'Unable to read the attendance month.', readSessions);
+  return readSuccessData(response, 'Unable to read the attendance month.', readAttendanceMonth);
 }
 
 // Loads at most 31 newest complete sessions for one class.

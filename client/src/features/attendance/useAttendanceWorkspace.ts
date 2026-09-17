@@ -118,12 +118,14 @@ export function useAttendanceWorkspace(
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [draftsByClassId, setDraftsByClassId] = useState<AttendanceDraftsByClassId>({});
+  const [scheduledDates, setScheduledDates] = useState<string[]>([]);
   const [undoRecords, setUndoRecords] = useState<WorkingAttendanceRecordsByStudentId | null>(null);
   const [detailsTarget, setDetailsTarget] = useState<AttendanceStudentRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AttendanceSessionDraft | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [liveMessage, setLiveMessage] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isFillingDates, setIsFillingDates] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const defaultAttendanceStateRef = useRef(defaultAttendanceState);
 
@@ -170,7 +172,7 @@ export function useAttendanceWorkspace(
       month.month,
       controller.signal,
     )
-      .then((sessions) => {
+      .then(({ sessions, scheduledDates: dates }) => {
         const sessionDrafts = sortAttendanceSessionDrafts(
           sessions.map((session) => createAttendanceSessionDraft(
             session,
@@ -181,6 +183,7 @@ export function useAttendanceWorkspace(
           ...currentDrafts,
           [selectedClassId]: sessionDrafts,
         }));
+        setScheduledDates(dates);
         setSelectedSessionId(sessions[0]?.id ?? null);
         setEditingSessionId(null);
         setUndoRecords(null);
@@ -215,6 +218,10 @@ export function useAttendanceWorkspace(
     () => sortAttendanceSessionDrafts(draftsByClassId[selectedClassId] ?? []),
     [draftsByClassId, selectedClassId],
   );
+  const missingScheduledDates = useMemo(() => {
+    const existingDates = new Set(selectedClassSessions.map((session) => session.sessionDate));
+    return scheduledDates.filter((date) => !existingDates.has(date));
+  }, [scheduledDates, selectedClassSessions]);
   const selectedSessionDraft = selectedClassSessions.find(
     (sessionDraft) => sessionDraft.id === selectedSessionId,
   );
@@ -241,10 +248,17 @@ export function useAttendanceWorkspace(
   const isEditing = selectedSessionId !== null && editingSessionId === selectedSessionId;
   const hasUnsavedChanges = isEditing && isAttendanceSessionDirty(selectedSessionDraft);
   const statusCounts = countAttendanceStatuses(selectedSessionDraft);
-  const isBusy = sessionLoadStatus === 'loading' || isCreating || isSaving;
+  const isBusy = sessionLoadStatus === 'loading' || isCreating || isFillingDates || isSaving;
   const canAddDate = Boolean(
     selectedClass &&
     isAttendanceDateValue(dateInput) &&
+    !hasUnsavedChanges &&
+    !isBusy,
+  );
+  const canGenerateMissingDates = Boolean(
+    selectedClass &&
+    sessionLoadStatus === 'ready' &&
+    missingScheduledDates.length > 0 &&
     !hasUnsavedChanges &&
     !isBusy,
   );
@@ -296,6 +310,7 @@ export function useAttendanceWorkspace(
     }
 
     setSelectedClassId(classId);
+    setScheduledDates([]);
     setSessionLoadStatus(classId ? 'loading' : 'idle');
     setSessionLoadError('');
     setSelectedSessionId(null);
@@ -327,6 +342,7 @@ export function useAttendanceWorkspace(
     }
 
     setMonthInput(month);
+    setScheduledDates([]);
     setDateInput('');
     setSessionLoadStatus(selectedClassId && getAttendanceMonthParts(month) ? 'loading' : 'idle');
     setSessionLoadError('');
@@ -344,6 +360,7 @@ export function useAttendanceWorkspace(
     const dateMonth = date.slice(0, 7);
     if (!hasUnsavedChanges && getAttendanceMonthParts(dateMonth) && dateMonth !== monthInput) {
       setMonthInput(dateMonth);
+      setScheduledDates([]);
       setSessionLoadStatus(selectedClassId ? 'loading' : 'idle');
       setSessionLoadError('');
       setSelectedSessionId(null);
@@ -421,7 +438,7 @@ export function useAttendanceWorkspace(
             });
             return;
           }
-          const sessions = await ensureAttendanceSessionMonth(
+          const { sessions, scheduledDates: dates } = await ensureAttendanceSessionMonth(
             selectedClass.id,
             month.year,
             month.month,
@@ -438,6 +455,7 @@ export function useAttendanceWorkspace(
             ...currentDrafts,
             [selectedClass.id]: sessionDrafts,
           }));
+          setScheduledDates(dates);
           setSelectedSessionId(duplicate?.id ?? sessions[0]?.id ?? null);
           setEditingSessionId(null);
           setUndoRecords(null);
@@ -472,6 +490,65 @@ export function useAttendanceWorkspace(
       });
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  // Explicitly fills displayed weekly dates, including any the user previously removed.
+  const handleGenerateMissingDates = async () => {
+    const month = getAttendanceMonthParts(monthInput);
+    if (!selectedClass || !month || !canGenerateMissingDates) {
+      return;
+    }
+
+    const previouslyMissing = new Set(missingScheduledDates);
+    setIsFillingDates(true);
+    setFeedback(null);
+    try {
+      const { sessions, scheduledDates: dates } = await ensureAttendanceSessionMonth(
+        selectedClass.id,
+        month.year,
+        month.month,
+        new AbortController().signal,
+        true,
+      );
+      const sessionDrafts = sortAttendanceSessionDrafts(
+        sessions.map((session) => createAttendanceSessionDraft(
+          session,
+          defaultAttendanceStateRef.current,
+        )),
+      );
+      const firstFilledSession = sessions.find((session) => previouslyMissing.has(session.sessionDate));
+      setDraftsByClassId((currentDrafts) => ({
+        ...currentDrafts,
+        [selectedClass.id]: sessionDrafts,
+      }));
+      setScheduledDates(dates);
+      setSelectedSessionId(firstFilledSession?.id ?? sessions[0]?.id ?? null);
+      setEditingSessionId(null);
+      setUndoRecords(null);
+      setDetailsTarget(null);
+      setDeleteTarget(null);
+      setFeedback({
+        variant: 'success',
+        title: 'Scheduled dates available',
+        messages: ['Missing dates were added. Existing attendance was left unchanged. Save each new date’s roster and marks when ready.'],
+      });
+      setLiveMessage('Missing scheduled attendance dates are now available.');
+    } catch (error: unknown) {
+      if (error instanceof AttendanceApiError && error.status === 401) {
+        onSessionExpired();
+        return;
+      }
+
+      setFeedback({
+        variant: 'error',
+        title: 'Scheduled dates not created',
+        messages: error instanceof AttendanceApiError
+          ? getAttendanceApiMessages(error)
+          : [error instanceof Error ? error.message : 'Unable to generate missing dates.'],
+      });
+    } finally {
+      setIsFillingDates(false);
     }
   };
 
@@ -835,9 +912,12 @@ export function useAttendanceWorkspace(
     statusCounts,
     isBusy,
     isCreating,
+    isFillingDates,
     isSaving,
     canUndo: undoRecords !== null,
     canAddDate,
+    canGenerateMissingDates,
+    missingScheduledDates,
     dateHint,
     feedback,
     liveMessage,
@@ -846,6 +926,7 @@ export function useAttendanceWorkspace(
     handleMonthChange,
     handleDateInputChange,
     handleAddDate,
+    handleGenerateMissingDates,
     handleRetrySessionLoad,
     handleSelectSession,
     handleSelectPrevSession,

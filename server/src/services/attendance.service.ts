@@ -69,7 +69,7 @@ type SaveAttendanceRecordData = {
 };
 
 type EnsureAttendanceMonthDatabaseResult =
-  | { status: "ensured"; sessions: AttendanceSessionDatabaseRecord[] }
+  | { status: "ensured"; sessions: AttendanceSessionDatabaseRecord[]; scheduledDates: string[] }
   | { status: "class_not_found" }
   | { status: "class_archived" };
 
@@ -95,6 +95,7 @@ export type AttendanceServiceDependencies = {
     classId: string,
     year: number,
     month: number,
+    fillMissing: boolean,
   ) => Promise<EnsureAttendanceMonthDatabaseResult>;
   saveSessionRecords: (
     sessionId: string,
@@ -256,6 +257,19 @@ export function buildScheduledAttendanceSessions(
   return sessions;
 }
 
+// Keeps empty months open for later schedules while requiring an explicit fill after generation.
+export function getAttendanceMonthWriteDecision(
+  scheduledCount: number,
+  hasGenerationMarker: boolean,
+  fillMissing: boolean,
+) {
+  const hasScheduledDates = scheduledCount > 0;
+  return {
+    createSessions: hasScheduledDates && (!hasGenerationMarker || fillMissing),
+    markMonth: hasScheduledDates && !hasGenerationMarker,
+  };
+}
+
 // Compares complete student sets without relying on request ordering.
 function hasExactStudentSet(storedStudentIds: string[], submittedStudentIds: string[]) {
   if (storedStudentIds.length !== submittedStudentIds.length) {
@@ -328,8 +342,8 @@ const defaultDependencies: AttendanceServiceDependencies = {
     });
     return result.count === 1;
   },
-  // Serializes one class/month, creates missing sessions, then marks the month in one transaction.
-  ensureSessionMonth: (classId, year, month) =>
+  // Serializes initial generation and deliberate backfills for one class/month.
+  ensureSessionMonth: (classId, year, month, fillMissing) =>
     prisma.$transaction(async (transaction) => {
       const monthLockKey = `${classId}:${year}-${month.toString().padStart(2, "0")}`;
       await transaction.$queryRaw<Array<{ locked: number }>>`
@@ -370,21 +384,26 @@ const defaultDependencies: AttendanceServiceDependencies = {
         select: { id: true },
       });
 
-      if (!generation) {
-        const sessions = buildScheduledAttendanceSessions(
-          classId,
-          year,
-          month,
-          classSnapshot,
-        );
+      const scheduledSessions = buildScheduledAttendanceSessions(
+        classId,
+        year,
+        month,
+        classSnapshot,
+      );
+      const writeDecision = getAttendanceMonthWriteDecision(
+        scheduledSessions.length,
+        generation !== null,
+        fillMissing,
+      );
 
-        if (sessions.length > 0) {
-          await transaction.attendanceSession.createMany({
-            data: sessions,
-            skipDuplicates: true,
-          });
-        }
+      if (writeDecision.createSessions) {
+        await transaction.attendanceSession.createMany({
+          data: scheduledSessions,
+          skipDuplicates: true,
+        });
+      }
 
+      if (writeDecision.markMonth) {
         await transaction.attendanceMonthGeneration.create({
           data: { classId, monthStart },
           select: { id: true },
@@ -401,7 +420,11 @@ const defaultDependencies: AttendanceServiceDependencies = {
         select: attendanceSessionSelect,
       });
 
-      return { status: "ensured", sessions };
+      return {
+        status: "ensured",
+        sessions,
+        scheduledDates: scheduledSessions.map((session) => toDateOnly(session.sessionDate)),
+      };
     }),
   // Claims first initialization before reading enrollments so roster creation and values are atomic.
   saveSessionRecords: async (sessionId, records) => {
@@ -642,22 +665,24 @@ export async function createAttendanceSession(
 }
 
 export type EnsureAttendanceMonthResult =
-  | { status: "ensured"; sessions: AttendanceSessionRecord[] }
+  | { status: "ensured"; sessions: AttendanceSessionRecord[]; scheduledDates: string[] }
   | { status: "class_not_found" }
   | { status: "class_archived" };
 
-// Ensures one active class/month exactly once and returns every session in that month.
+// Opens a class month once or explicitly fills later schedule gaps.
 export async function ensureAttendanceMonth(
   classId: string,
   year: number,
   month: number,
+  fillMissing = false,
   dependencies: AttendanceServiceDependencies = defaultDependencies,
 ): Promise<EnsureAttendanceMonthResult> {
-  const result = await dependencies.ensureSessionMonth(classId, year, month);
+  const result = await dependencies.ensureSessionMonth(classId, year, month, fillMissing);
   return result.status === "ensured"
     ? {
       status: "ensured",
       sessions: result.sessions.map(toAttendanceSessionRecord),
+      scheduledDates: result.scheduledDates,
     }
     : result;
 }

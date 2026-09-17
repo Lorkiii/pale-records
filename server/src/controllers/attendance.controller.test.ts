@@ -63,7 +63,11 @@ function createTestApp(
   const dependencies: AttendanceControllerDependencies = {
     createSession: async () => ({ status: "created", session: publicDraftSession }),
     deleteSession: async () => true,
-    ensureMonth: async () => ({ status: "ensured", sessions: [publicDraftSession] }),
+    ensureMonth: async () => ({
+      status: "ensured",
+      sessions: [publicDraftSession],
+      scheduledDates: ["2026-08-25"],
+    }),
     listSessions: async () => ({ status: "found", sessions: [publicSession] }),
     loadSession: async () => publicSession,
     saveRecords: async () => ({ status: "saved", session: publicSession }),
@@ -128,6 +132,7 @@ test("Attendance controllers return correct success statuses and envelopes", asy
   assert.equal(createResponse.body.data.session.id, sessionId);
   assert.equal(monthResponse.status, 200);
   assert.equal(monthResponse.body.data.sessions.length, 1);
+  assert.deepEqual(monthResponse.body.data.scheduledDates, ["2026-08-25"]);
   assert.equal(listResponse.status, 200);
   assert.equal(listResponse.body.data.sessions.length, 1);
   assert.equal(loadResponse.status, 200);
@@ -187,7 +192,7 @@ test("Attendance month controller returns safe class errors and validates year/m
   const invalidResponse = await request(createTestApp({
     ensureMonth: async () => {
       ensureWasCalled = true;
-      return { status: "ensured", sessions: [] };
+      return { status: "ensured", sessions: [], scheduledDates: [] };
     },
   }))
     .post(`/classes/${classId}/session-months`)
@@ -198,6 +203,22 @@ test("Attendance month controller returns safe class errors and validates year/m
   assert.equal(invalidResponse.status, 400);
   assert.equal(invalidResponse.body.error.code, "VALIDATION_ERROR");
   assert.equal(ensureWasCalled, false);
+});
+
+test("Attendance month controller forwards deliberate missing-date generation", async () => {
+  let fillMissing = false;
+  const response = await request(createTestApp({
+    ensureMonth: async (_classId, _year, _month, shouldFill) => {
+      fillMissing = shouldFill ?? false;
+      return { status: "ensured", sessions: [publicDraftSession], scheduledDates: ["2026-08-25"] };
+    },
+  }))
+    .post(`/classes/${classId}/session-months`)
+    .send({ year: 2026, month: 8, fillMissing: true });
+
+  assert.equal(response.status, 200);
+  assert.equal(fillMissing, true);
+  assert.deepEqual(response.body.data.scheduledDates, ["2026-08-25"]);
 });
 
 test("Attendance load and save controllers return safe missing and roster errors", async () => {

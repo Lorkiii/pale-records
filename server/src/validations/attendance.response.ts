@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   ATTENDANCE_DATE_PATTERN,
   ATTENDANCE_REMARKS_MAX_LENGTH,
+  attendanceDateSchema,
   attendanceStatusCodeSchema,
 } from "./attendance.schema.js";
 import { CLASS_SCHEDULE_TIME_PATTERN } from "./class.schema.js";
@@ -120,6 +121,14 @@ export const attendanceSessionListResponseSchema = z.strictObject({
   success: z.literal(true),
   data: z.strictObject({
     sessions: z.array(attendanceSessionRecordSchema).max(31),
+  }),
+});
+
+export const attendanceMonthResponseSchema = z.strictObject({
+  success: z.literal(true),
+  data: z.strictObject({
+    sessions: z.array(attendanceSessionRecordSchema).max(31),
+    scheduledDates: z.array(attendanceDateSchema).max(31),
   }),
 });
 
