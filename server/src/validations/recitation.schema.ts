@@ -1,4 +1,4 @@
-// Validates Recitation identifiers, date-only values, month queries, marks, and complete rosters.
+// Validates Recitation identifiers, dates, counts, and complete historical rosters.
 import { z } from "zod";
 
 export const RECITATION_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -14,11 +14,13 @@ export const recitationDateSchema = z
   .regex(RECITATION_DATE_PATTERN, "Use the YYYY-MM-DD date format")
   .refine(isRealCalendarDate, "Enter a valid calendar date");
 
-export const recitationMarkSchema = z.enum(["CHECK", "X"]);
+export const MAX_RECITATION_COUNT = 2_147_483_647;
+// Null can only preserve a historical Check; the service verifies that stored state.
+export const recitationCountSchema = z.number().int().min(0).max(MAX_RECITATION_COUNT).nullable();
 
 export const recitationRecordInputSchema = z.strictObject({
   studentId: z.string().uuid("Student ID must be a valid UUID"),
-  mark: recitationMarkSchema.nullable(),
+  count: recitationCountSchema,
 });
 
 export const createRecitationSessionSchema = z.strictObject({
@@ -88,7 +90,7 @@ export const recitationSessionIdParamsSchema = z.strictObject({
   sessionId: z.string().uuid("Recitation session ID must be a valid UUID"),
 });
 
-export type RecitationMarkCode = z.infer<typeof recitationMarkSchema>;
+export type RecitationCount = z.infer<typeof recitationCountSchema>;
 export type RecitationRecordInput = z.infer<typeof recitationRecordInputSchema>;
 export type CreateRecitationSessionInput = z.infer<typeof createRecitationSessionSchema>;
 export type ListRecitationSessionsQuery = z.infer<typeof listRecitationSessionsQuerySchema>;

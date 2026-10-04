@@ -1,6 +1,6 @@
-// Provides pure Recitation draft, sorting, mark, count, dirty-state, and date helpers.
+// Provides Recitation count validation, working snapshots, summaries, and date helpers.
 import type {
-  RecitationMarkCode,
+  RecitationCount,
   RecitationSessionDraft,
   RecitationSessionRecord,
   RecitationStudentRecord,
@@ -12,10 +12,17 @@ import {
   type DateFormatPreference,
 } from '../../settings/preference-display';
 
-export interface RecitationMarkCounts {
-  CHECK: number;
-  X: number;
-  unmarked: number;
+export interface RecitationSummary {
+  recited: number;
+  blank: number;
+  total: number;
+  unknown: number;
+}
+
+export const MAX_RECITATION_COUNT = 2_147_483_647;
+
+export function isValidRecitationCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_RECITATION_COUNT;
 }
 
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -71,7 +78,7 @@ function compareRecitationStudents(
     first.id.localeCompare(second.id);
 }
 
-// Compares working marks with the last validated server snapshot.
+// Compares working counts with the last validated server snapshot.
 function areRecitationRecordsEqual(
   first: WorkingRecitationRecordsByStudentId,
   second: WorkingRecitationRecordsByStudentId,
@@ -90,7 +97,7 @@ function areRecitationRecordsEqual(
       firstRecord &&
       secondRecord &&
       firstRecord.id === secondRecord.id &&
-      firstRecord.mark === secondRecord.mark,
+      firstRecord.count === secondRecord.count,
     );
   });
 }
@@ -116,7 +123,7 @@ export function createRecitationSessionDraft(
     {
       id: record.id,
       student: { ...record.student },
-      mark: record.mark,
+      count: record.count,
     },
   ]));
 
@@ -130,31 +137,23 @@ export function createRecitationSessionDraft(
   };
 }
 
-// Captures the one local snapshot that Undo may restore after the next mark change.
+// Captures the one local snapshot that Undo may restore after the next count change.
 export function createRecitationUndoSnapshot(
   records: WorkingRecitationRecordsByStudentId,
 ): RecitationUndoSnapshot {
   return cloneRecitationRecords(records);
 }
 
-// Returns the next value in the exact Unmarked -> CHECK -> X -> Unmarked cycle.
-export function cycleRecitationMark(mark: RecitationMarkCode | null) {
-  if (mark === null) {
-    return 'CHECK' satisfies RecitationMarkCode;
-  }
-
-  return mark === 'CHECK' ? 'X' : null;
-}
-
-// Replaces one student's working mark without mutating the selected draft.
-export function updateRecitationMark(
+// Replaces one count without mutating snapshots or inventing unknown participation.
+export function updateRecitationCount(
   sessionDraft: RecitationSessionDraft,
   studentId: string,
-  mark: RecitationMarkCode | null,
+  count: RecitationCount,
 ): RecitationSessionDraft {
   const currentRecord = sessionDraft.records[studentId];
 
-  if (!currentRecord) {
+  if (!currentRecord || currentRecord.count === count ||
+    (count === null ? currentRecord.count !== null : !isValidRecitationCount(count))) {
     return sessionDraft;
   }
 
@@ -162,7 +161,7 @@ export function updateRecitationMark(
     ...sessionDraft,
     records: {
       ...sessionDraft.records,
-      [studentId]: { ...currentRecord, mark },
+      [studentId]: { ...currentRecord, count },
     },
   };
 }
@@ -183,28 +182,33 @@ export function getRecitationSessionRoster(
     : [];
 }
 
-// Counts Check, X, and real null values for the selected complete roster.
-export function countRecitationMarks(
+// Keeps known totals distinct from historical participation with an unknown count.
+export function summarizeRecitations(
   sessionDraft: RecitationSessionDraft | undefined,
-): RecitationMarkCounts {
-  const counts: RecitationMarkCounts = {
-    CHECK: 0,
-    X: 0,
-    unmarked: 0,
+): RecitationSummary {
+  const counts: RecitationSummary = {
+    recited: 0,
+    blank: 0,
+    total: 0,
+    unknown: 0,
   };
 
   for (const record of Object.values(sessionDraft?.records ?? {})) {
-    if (record.mark === null) {
-      counts.unmarked += 1;
+    if (record.count === null) {
+      counts.recited += 1;
+      counts.unknown += 1;
+    } else if (record.count === 0) {
+      counts.blank += 1;
     } else {
-      counts[record.mark] += 1;
+      counts.recited += 1;
+      counts.total += record.count;
     }
   }
 
   return counts;
 }
 
-// Reports whether working marks differ from the last validated server response.
+// Reports whether working counts differ from the last validated server response.
 export function isRecitationSessionDirty(
   sessionDraft: RecitationSessionDraft | undefined,
 ) {
@@ -252,7 +256,7 @@ export function formatRecitationDateShort(date: string, dateFormat?: DateFormatP
   return formatDateOnly(date, dateFormat, 'short');
 }
 
-// Returns the human-readable label for a persisted or local Recitation mark.
-export function getRecitationMarkLabel(mark: RecitationMarkCode | null) {
-  return mark === 'CHECK' ? 'Check' : mark === 'X' ? 'X' : 'Unmarked';
+// Describes blank values and unknown historical counts without implying exact totals.
+export function getRecitationCountLabel(count: RecitationCount) {
+  return count === null ? 'Recited; count unknown' : count === 0 ? 'No recitation' : `${count} ${count === 1 ? 'recitation' : 'recitations'}`;
 }

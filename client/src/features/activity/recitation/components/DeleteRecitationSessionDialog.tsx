@@ -60,7 +60,7 @@ export function DeleteRecitationSessionDialog({
       isOpen
       onClose={onClose}
       title="Delete Recitation date"
-      description="This permanently removes the date, its saved roster marks, and local unsaved edits."
+      description="This permanently removes the date, its saved roster counts, and local unsaved edits."
       isDismissDisabled={isDeleting}
       footer={
         <>
@@ -98,13 +98,13 @@ export function DeleteRecitationSessionDialog({
         <strong className="font-semibold text-ink">
           {formatRecitationDateLong(session.sessionDate, dateFormat)}
         </strong>
-        ? Every saved Check, X, and Unmarked roster record for this date will
+        ? Every saved recitation roster record for this date will
         also be deleted. This action cannot be undone.
       </p>
 
       {hasUnsavedChanges ? (
         <Notice variant="warning" title="Unsaved edits will be discarded" className="mt-5">
-          The marks changed during this edit will be permanently discarded with the date.
+          The counts changed during this edit will be permanently discarded with the date.
         </Notice>
       ) : null}
     </Dialog>

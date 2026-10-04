@@ -1,5 +1,6 @@
 // Defines validated Recitation API records and separate local working snapshots.
-export type RecitationMarkCode = 'CHECK' | 'X';
+// Null means a historical Check with an unknown count; zero displays as blank.
+export type RecitationCount = number | null;
 
 export interface RecitationStudentRecord {
   id: string;
@@ -11,7 +12,7 @@ export interface RecitationStudentRecord {
 export interface RecitationRecord {
   id: string | null;
   student: RecitationStudentRecord;
-  mark: RecitationMarkCode | null;
+  count: RecitationCount;
 }
 
 export interface RecitationSessionRecord {
@@ -24,13 +25,13 @@ export interface RecitationSessionRecord {
 
 export interface SaveRecitationRecordInput {
   studentId: string;
-  mark: RecitationMarkCode | null;
+  count: RecitationCount;
 }
 
 export interface WorkingRecitationRecord {
   id: string | null;
   student: RecitationStudentRecord;
-  mark: RecitationMarkCode | null;
+  count: RecitationCount;
 }
 
 export type WorkingRecitationRecordsByStudentId = Record<

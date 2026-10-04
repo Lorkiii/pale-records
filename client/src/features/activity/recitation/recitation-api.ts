@@ -1,11 +1,11 @@
 // Owns credentialed Recitation requests and exact runtime response validation.
 import type {
-  RecitationMarkCode,
   RecitationRecord,
   RecitationSessionRecord,
   RecitationStudentRecord,
   SaveRecitationRecordInput,
 } from './recitation-types';
+import { isValidRecitationCount } from './recitation-draft';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -60,17 +60,12 @@ function isDateOnly(value: unknown): value is string {
   return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
 }
 
-// Narrows the only two non-null public Recitation marks.
-function isRecitationMarkCode(value: unknown): value is RecitationMarkCode {
-  return value === 'CHECK' || value === 'X';
-}
-
 // Validates one complete-roster request row before constructing JSON.
 function isSaveRecitationRecordInput(
   value: SaveRecitationRecordInput,
 ) {
   return UUID_PATTERN.test(value.studentId) &&
-    (value.mark === null || isRecitationMarkCode(value.mark));
+    (value.count === null || isValidRecitationCount(value.count));
 }
 
 // Validates the exact safe student identity embedded in a roster record.
@@ -86,10 +81,10 @@ function isRecitationStudentRecord(value: unknown): value is RecitationStudentRe
 // Validates one saved or response-only draft roster record.
 function isRecitationRecord(value: unknown): value is RecitationRecord {
   return isRecord(value) &&
-    hasExactKeys(value, ['id', 'student', 'mark']) &&
+    hasExactKeys(value, ['id', 'student', 'count']) &&
     (value.id === null || typeof value.id === 'string' && UUID_PATTERN.test(value.id)) &&
     isRecitationStudentRecord(value.student) &&
-    (value.mark === null || isRecitationMarkCode(value.mark));
+    (value.count === null || isValidRecitationCount(value.count));
 }
 
 // Validates one complete session and its initialized-versus-draft invariant.
@@ -120,7 +115,7 @@ function isRecitationSessionRecord(value: unknown): value is RecitationSessionRe
   return new Set(studentIds).size === studentIds.length &&
     value.records.every((record) => value.isRosterInitialized
       ? record.id !== null
-      : record.id === null && record.mark === null);
+      : record.id === null && record.count === 0);
 }
 
 // Keeps only string-array field errors from the shared validation envelope.

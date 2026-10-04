@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import {
   recitationDateSchema,
-  recitationMarkSchema,
+  recitationCountSchema,
 } from "./recitation.schema.js";
 
 export const recitationStudentRecordSchema = z.strictObject({
@@ -16,7 +16,7 @@ export const recitationStudentRecordSchema = z.strictObject({
 export const recitationRecordSchema = z.strictObject({
   id: z.string().uuid().nullable(),
   student: recitationStudentRecordSchema,
-  mark: recitationMarkSchema.nullable(),
+  count: recitationCountSchema,
 });
 
 const recitationRecordsSchema = z
@@ -55,12 +55,12 @@ export const recitationSessionRecordSchema = z
         });
       } else if (
         !session.isRosterInitialized &&
-        (record.id !== null || record.mark !== null)
+        (record.id !== null || record.count !== 0)
       ) {
         context.addIssue({
           code: "custom",
           path: ["records", index],
-          message: "Draft roster records must remain unpersisted and unmarked",
+          message: "Draft roster records must remain unpersisted with blank counts",
         });
       }
     });
@@ -128,4 +128,8 @@ export const recitationRosterMismatchResponseSchema = recitationErrorResponseSch
 export const recitationStudentDuplicateResponseSchema = recitationErrorResponseSchema(
   "RECITATION_STUDENT_DUPLICATE",
   "Submit each student exactly once.",
+);
+export const recitationCountInvalidResponseSchema = recitationErrorResponseSchema(
+  "RECITATION_COUNT_INVALID",
+  "Enter an exact count. Unknown counts can only be kept for existing historical Checks.",
 );

@@ -1,4 +1,4 @@
-// Verifies strict Recitation dates, month queries, marks, rosters, and identifier validation.
+// Verifies strict Recitation dates, month queries, counts, rosters, and identifier validation.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -16,7 +16,7 @@ const firstStudentId = "a8a5bbc6-bbd1-44f8-9c73-1adbc04ff57c";
 function recitationRecord(overrides: Record<string, unknown> = {}) {
   return {
     studentId: firstStudentId,
-    mark: "CHECK",
+    count: 3,
     ...overrides,
   };
 }
@@ -54,10 +54,10 @@ test("Recitation month query normalizes only bounded year and month strings", ()
   }
 });
 
-test("Recitation records accept CHECK, X, null, and a genuine empty roster", () => {
-  for (const mark of ["CHECK", "X", null]) {
+test("Recitation records accept zero, positive counts, and historical unknown counts, and a genuine empty roster", () => {
+  for (const count of [0, 1, 3, null]) {
     assert.equal(saveRecitationRecordsSchema.safeParse({
-      records: [recitationRecord({ mark })],
+      records: [recitationRecord({ count })],
     }).success, true);
   }
 
@@ -66,9 +66,13 @@ test("Recitation records accept CHECK, X, null, and a genuine empty roster", () 
   });
 });
 
-test("Recitation records reject invalid marks and unknown fields", () => {
+test("Recitation records reject invalid counts and unknown fields", () => {
+  for (const count of [-1, 0.5, 2_147_483_648, Number.NaN, Number.POSITIVE_INFINITY, '2', 'CHECK', 'X', undefined]) {
+    assert.equal(saveRecitationRecordsSchema.safeParse({ records: [recitationRecord({ count })] }).success, false);
+  }
+  assert.equal(saveRecitationRecordsSchema.safeParse({ records: [{ studentId: firstStudentId, mark: 'CHECK' }] }).success, false);
   assert.equal(saveRecitationRecordsSchema.safeParse({
-    records: [recitationRecord({ mark: "PRESENT" })],
+    records: [recitationRecord({ count: "PRESENT" })],
   }).success, false);
   assert.equal(saveRecitationRecordsSchema.safeParse({
     records: [recitationRecord({ points: 10 })],
@@ -81,7 +85,7 @@ test("Recitation records reject invalid marks and unknown fields", () => {
 
 test("Recitation roster validation rejects duplicate students and more than 100 records", () => {
   const duplicate = saveRecitationRecordsSchema.safeParse({
-    records: [recitationRecord(), recitationRecord({ mark: "X" })],
+    records: [recitationRecord(), recitationRecord({ count: 0 })],
   });
   const tooMany = Array.from({ length: 101 }, (_, index) => recitationRecord({
     studentId: `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,

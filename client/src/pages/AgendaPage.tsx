@@ -1,4 +1,4 @@
-// Composes category-based Agenda events, completion, dialogs, and legacy import.
+// Composes Agenda events, class color identification, dialogs, and legacy import.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
@@ -11,6 +11,7 @@ import {
 } from '../features/auth/auth-api';
 import type { AgendaEvent } from '../features/agenda/agenda-types';
 import { AgendaCalendarGrid } from '../features/agenda/components/AgendaCalendarGrid';
+import { AgendaClassLegend } from '../features/agenda/components/AgendaClassLegend';
 import { AgendaDayDocket } from '../features/agenda/components/AgendaDayDocket';
 import { AgendaEventDialog } from '../features/agenda/components/AgendaEventDialog';
 import { AgendaLegacyImportDialog } from '../features/agenda/components/AgendaLegacyImportDialog';
@@ -183,10 +184,16 @@ export function AgendaPage({ currentUser, onSessionExpired }: AgendaPageProps) {
                   onToday={agenda.goToToday}
                 />
 
+                <AgendaClassLegend
+                  classes={agenda.classes}
+                  selectedClassId={agenda.selectedClassId}
+                />
+
                 <div className="grid grid-cols-1 lg:grid-cols-12">
                   <div className="border-b border-ink p-4 sm:p-5 lg:col-span-7 lg:border-r lg:border-b-0 xl:col-span-8">
                     <AgendaCalendarGrid
                       cells={agenda.calendarCells}
+                      classes={agenda.classes}
                       dateFormat={preferences?.dateFormat}
                       timeFormat={preferences?.timeFormat}
                       tableDensity={preferences?.tableDensity}

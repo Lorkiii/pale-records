@@ -1,9 +1,9 @@
 // Renders a selected-date mobile roster and the full Recitation history matrix.
+import { RecitationCountControl } from './RecitationCountControl';
 import { Select } from '../../../../components/ui/Select';
 import {
-  cycleRecitationMark,
   formatRecitationDateLong,
-  getRecitationMarkLabel,
+  getRecitationCountLabel,
 } from "../recitation-draft";
 import type {
   RecitationSessionDraft,
@@ -27,28 +27,27 @@ interface RecitationRegisterProps {
   dateFormat?: DateFormatPreference;
   tableDensity?: TableDensityPreference;
   onSelectSession: (sessionId: string) => void;
-  onCycleMark: (studentId: string) => void;
+  onCountChange: (studentId: string, change: number | 'increment' | 'decrement') => void;
+  onCountValidityChange: (studentId: string, isValid: boolean) => void;
+  countControlRevision: number;
 }
 
-// Returns visible mark content that never relies on color alone.
-function getMarkDisplay(record: WorkingRecitationRecord | undefined) {
-  if (!record) {
-    return { symbol: "N/R", label: "Not in roster" };
+// Renders exact counts, blank cells, and historical participation without invented totals.
+function RecitationCountDisplay({ record }: { record: WorkingRecitationRecord | undefined }) {
+  if (!record) return <span className="text-xs text-ink-muted">N/R</span>;
+  if (record.count === null) {
+    return <span className="text-xs font-semibold text-ink-secondary">Count unknown</span>;
   }
+  return record.count === 0 ? <span className="sr-only">No recitation</span>
+    : <span className="text-lg font-bold tabular-nums leading-none">{record.count}</span>;
+}
 
-  if (record.mark === "CHECK") {
-    return { symbol: "✓", label: "Check" };
-  }
-
-  if (record.mark === "X") {
-    return { symbol: "X", label: "X" };
-  }
-
-  return { symbol: "—", label: "Unmarked" };
+function getColumnSize(isSelected: boolean, isEditing: boolean) {
+  return isSelected && isEditing ? 'w-48 min-w-48' : DATE_REGISTER_COLUMN_CLASSES;
 }
 
 // Builds a complete accessible name for selection, editing, and read-only cells.
-function getMarkCellLabel(
+function getCountCellLabel(
   student: RecitationStudentRecord,
   sessionDraft: RecitationSessionDraft,
   record: WorkingRecitationRecord | undefined,
@@ -59,12 +58,12 @@ function getMarkCellLabel(
 ) {
   const studentName = `${student.lastName}, ${student.firstName}`;
   const dateLabel = formatRecitationDateLong(sessionDraft.sessionDate, dateFormat);
-  const currentMark = record
-    ? getRecitationMarkLabel(record.mark)
+  const currentCount = record
+    ? getRecitationCountLabel(record.count)
     : "Not in roster";
   // If the Recitation request is in progress, return the unavailable message.
   if (isBusy) {
-    return `${studentName}, ${dateLabel}, ${currentMark}. Unavailable while a Recitation request is in progress.`;
+    return `${studentName}, ${dateLabel}, ${currentCount}. Unavailable while a Recitation request is in progress.`;
   }
 
   // If the student is not in the roster, return the not in roster message.
@@ -74,38 +73,28 @@ function getMarkCellLabel(
 
   // If the student is selected and is editing, return the editing message.
   if (isSelected && isEditing) {
-    const nextMark = getRecitationMarkLabel(cycleRecitationMark(record.mark));
-    return `${studentName}, ${dateLabel}, ${currentMark}. Activate to change to ${nextMark}.`;
+    return `${studentName}, ${dateLabel}, ${currentCount}. Edit the recitation count.`;
   }
 
   // If the student is not selected, return the select message.
   if (!isSelected) {
-    return `${studentName}, ${dateLabel}, ${currentMark}. Activate to select this Recitation date.`;
+    return `${studentName}, ${dateLabel}, ${currentCount}. Activate to select this Recitation date.`;
   }
 
   // If the student is selected and is not editing, return the read-only message.
-  return `${studentName}, ${dateLabel}, ${currentMark}. Read-only. Choose Edit Recitation to change this mark.`;
+  return `${studentName}, ${dateLabel}, ${currentCount}. Read-only. Choose Edit Recitation to change this count.`;
 }
 
-// Returns semantic signal styling while leaving symbols and text visible.
-function getMarkClassName(record: WorkingRecitationRecord | undefined) {
-  if (!record) {
-    return "border-paper-border bg-paper-muted text-ink-muted";
-  }
-
-  if (record.mark === "CHECK") {
-    return "border-signal-emerald bg-signal-emerald/10 text-signal-emerald";
-  }
-
-  if (record.mark === "X") {
-    return "border-signal-red bg-signal-red/10 text-signal-red";
-  }
-
-  return "border-paper-dark bg-paper-light text-ink-secondary";
+// Keeps blank cells neutral and recorded participation visually distinct.
+function getCountClassName(record: WorkingRecitationRecord | undefined) {
+  if (!record) return 'border-paper-border bg-paper-muted text-ink-muted';
+  return record.count !== 0
+    ? 'border-signal-emerald bg-signal-emerald/10 text-ink'
+    : 'border-paper-dark bg-paper-light text-ink-secondary';
 }
 
 // Presents one session cell as selectable, editable, or deliberately static.
-function RecitationMarkCell({
+function RecitationCountCell({
   student,
   sessionDraft,
   isSelected,
@@ -114,7 +103,9 @@ function RecitationMarkCell({
   dateFormat,
   tableInset,
   onSelectSession,
-  onCycleMark,
+  onCountChange,
+  onCountValidityChange,
+  countControlRevision,
 }: {
   student: RecitationStudentRecord;
   sessionDraft: RecitationSessionDraft;
@@ -124,13 +115,14 @@ function RecitationMarkCell({
   dateFormat?: DateFormatPreference;
   tableInset: string;
   onSelectSession: (sessionId: string) => void;
-  onCycleMark: (studentId: string) => void;
+  onCountChange: (studentId: string, change: number | 'increment' | 'decrement') => void;
+  onCountValidityChange: (studentId: string, isValid: boolean) => void;
+  countControlRevision: number;
 }) {
   const record = sessionDraft.records[student.id];
   const isEditable = Boolean(record && isSelected && isEditing);
-  const markDisplay = getMarkDisplay(record);
   const columnClasses = getDateRegisterColumnClasses(isSelected, isEditing);
-  const label = getMarkCellLabel(
+  const label = getCountCellLabel(
     student,
     sessionDraft,
     record,
@@ -139,32 +131,23 @@ function RecitationMarkCell({
     isBusy,
     dateFormat,
   );
-  // Builds the content for the mark cell.
-  const content = (
-    <>
-      <span className="text-lg font-bold leading-none">
-        {markDisplay.symbol}
-      </span>
-      <span className="mt-1 hidden text-[10px] font-semibold uppercase tracking-[0.04em] sm:inline">
-        {markDisplay.label}
-      </span>
-    </>
-  );
-  const cellClassName = `flex min-h-11 w-full flex-col items-center justify-center border px-1 py-1.5 font-mono ${getMarkClassName(record)}`;
-  // Builds the mark cell.
+  const content = <RecitationCountDisplay record={record} />;
+  const cellClassName = `flex min-h-11 w-full flex-col items-center justify-center border px-1 py-1.5 font-mono ${getCountClassName(record)}`;
+  // Builds the count cell.
   return (
     <td
-      className={`${DATE_REGISTER_COLUMN_CLASSES} border-r border-b border-paper-border align-top ${columnClasses.cell}`}>
-      <div className={tableInset}>
+      className={`${getColumnSize(isSelected, isEditing)} border-r border-b border-paper-border align-top ${columnClasses.cell}`}>
+      <div className={`${tableInset} flex justify-center`}>
         {isEditable ? (
-          <button
-            type="button"
-            aria-label={label}
+          <RecitationCountControl
+            key={countControlRevision}
+            count={record ? record.count : 0}
+            studentName={`${student.lastName}, ${student.firstName}`}
+            dateLabel={formatRecitationDateLong(sessionDraft.sessionDate, dateFormat)}
             disabled={isBusy}
-            onClick={() => onCycleMark(student.id)}
-            className={`${cellClassName} cursor-pointer transition-colors hover:border-ink focus-visible:relative focus-visible:z-10 disabled:cursor-not-allowed`}>
-            {content}
-          </button>
+            onChange={(change) => onCountChange(student.id, change)}
+            onValidityChange={(valid) => onCountValidityChange(student.id, valid)}
+          />
         ) : isSelected ? (
           <div role="group" aria-label={label} className={cellClassName}>
             {content}
@@ -194,7 +177,9 @@ export function RecitationRegister({
   dateFormat,
   tableDensity,
   onSelectSession,
-  onCycleMark,
+  onCountChange,
+  onCountValidityChange,
+  countControlRevision,
 }: RecitationRegisterProps) {
   const density = getTableDensityClasses(tableDensity);
   const selectedDraft = sessionDrafts.find((session) => session.id === selectedSessionId);
@@ -236,8 +221,7 @@ export function RecitationRegister({
           <ul className="divide-y divide-paper-border border border-ink bg-paper-light" aria-label="Selected date Recitation roster">
             {roster.map((student) => {
               const record = selectedDraft.records[student.id];
-              const mark = getMarkDisplay(record);
-              const label = getMarkCellLabel(student, selectedDraft, record, true, isEditing, isBusy, dateFormat);
+              const label = getCountCellLabel(student, selectedDraft, record, true, isEditing, isBusy, dateFormat);
               return (
                 <li key={student.id} className={density.record}>
                   <div className="min-w-0">
@@ -247,18 +231,20 @@ export function RecitationRegister({
                     ) : null}
                   </div>
                   {record && isEditing ? (
-                    <button
-                      type="button"
-                      aria-label={label}
-                      disabled={isBusy}
-                      onClick={() => onCycleMark(student.id)}
-                      className={`mt-3 min-h-11 cursor-pointer border px-3 py-2 font-mono text-xs font-semibold uppercase disabled:cursor-not-allowed ${getMarkClassName(record)}`}
-                    >
-                      {mark.symbol} / {mark.label}
-                    </button>
+                    <div className="mt-3">
+                      <RecitationCountControl
+                        key={countControlRevision}
+                        count={record.count}
+                        studentName={`${student.lastName}, ${student.firstName}`}
+                        dateLabel={formatRecitationDateLong(selectedDraft.sessionDate, dateFormat)}
+                        disabled={isBusy}
+                        onChange={(change) => onCountChange(student.id, change)}
+                        onValidityChange={(valid) => onCountValidityChange(student.id, valid)}
+                      />
+                    </div>
                   ) : (
-                    <p role="group" aria-label={label} className={`mt-3 inline-flex min-h-11 items-center border px-3 py-2 font-mono text-xs font-semibold uppercase ${getMarkClassName(record)}`}>
-                      {mark.symbol} / {mark.label}
+                    <p role="group" aria-label={label} className={`mt-3 inline-flex min-h-11 items-center border px-3 py-2 font-mono text-xs font-semibold uppercase ${getCountClassName(record)}`}>
+                      <RecitationCountDisplay record={record} />
                     </p>
                   )}
                 </li>
@@ -272,8 +258,8 @@ export function RecitationRegister({
         <table className="w-max min-w-full border-separate border-spacing-0 text-left">
           <caption className="sr-only">
             Recitation register with sticky student identities and chronological
-            date columns. Check, X, Unmarked, and Not in roster are shown with
-            text and symbols.
+            date columns. Exact recitation counts, blank cells for no recitation, unknown
+            historical counts, and students not in the roster are distinguished.
           </caption>
           <thead>
             <tr>
@@ -293,7 +279,7 @@ export function RecitationRegister({
                   <th
                     key={sessionDraft.id}
                     scope="col"
-                    className={`sticky top-0 z-20 ${DATE_REGISTER_COLUMN_CLASSES} border-r border-b border-ink p-0 text-center ${columnClasses.header}`}>
+                    className={`sticky top-0 z-20 ${getColumnSize(isSelected, isEditing)} border-r border-b border-ink p-0 text-center ${columnClasses.header}`}>
                     {isSelected ? (
                       <div
                         aria-current="date"
@@ -344,7 +330,7 @@ export function RecitationRegister({
                 </th>
 
                 {sessionDrafts.map((sessionDraft) => (
-                  <RecitationMarkCell
+                  <RecitationCountCell
                     key={sessionDraft.id}
                     student={student}
                     sessionDraft={sessionDraft}
@@ -354,7 +340,9 @@ export function RecitationRegister({
                     dateFormat={dateFormat}
                     tableInset={density.tableInset}
                     onSelectSession={onSelectSession}
-                    onCycleMark={onCycleMark}
+                    onCountChange={onCountChange}
+                    onCountValidityChange={onCountValidityChange}
+                    countControlRevision={countControlRevision}
                   />
                 ))}
               </tr>

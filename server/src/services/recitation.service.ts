@@ -1,11 +1,8 @@
 // Owns Recitation sessions, deletion, response-only drafts, and atomic historical saves.
-import {
-  Prisma,
-  RecitationMark,
-} from "../generated/prisma/client.js";
+import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../lib/db-client.js";
 import type {
-  RecitationMarkCode,
+  RecitationCount,
   RecitationRecordInput,
 } from "../validations/recitation.schema.js";
 import type { RecitationSessionRecord } from "../validations/recitation.response.js";
@@ -20,7 +17,7 @@ type RecitationStudentDatabaseRecord = {
 type RecitationDatabaseRecord = {
   id: string;
   studentId: string;
-  mark: RecitationMark | null;
+  count: RecitationCount;
   student: RecitationStudentDatabaseRecord;
 };
 
@@ -45,13 +42,14 @@ type RecitationClassSessionsDatabaseRecord = {
 
 type SaveRecitationRecordData = {
   studentId: string;
-  mark: RecitationMark | null;
+  count: RecitationCount;
 };
 
 type SaveRecitationRecordsDatabaseResult =
   | { status: "saved"; session: RecitationSessionDatabaseRecord }
   | { status: "session_not_found" }
-  | { status: "roster_mismatch" };
+  | { status: "roster_mismatch" }
+  | { status: "count_invalid" };
 
 export type RecitationServiceDependencies = {
   findClassSnapshot: (classId: string) => Promise<RecitationClassSnapshot | null>;
@@ -88,6 +86,8 @@ class RecitationRosterMismatchError extends Error {
   }
 }
 
+class RecitationCountInvalidError extends Error {}
+
 const recitationStudentSelect = {
   id: true,
   studentNo: true,
@@ -105,7 +105,7 @@ const recitationSessionSelect = {
     select: {
       id: true,
       studentId: true,
-      mark: true,
+      count: true,
       student: { select: recitationStudentSelect },
     },
     orderBy: [
@@ -181,6 +181,17 @@ export function hasExactRecitationStudentSet(
 
   const storedStudentIdSet = new Set(storedStudentIds);
   return submittedStudentIds.every((studentId) => storedStudentIdSet.has(studentId));
+}
+
+// Prevents a new or known count from being replaced with unknown historical participation.
+export function canPreserveUnknownRecitationCounts(
+  records: SaveRecitationRecordData[],
+  storedRecords: Array<{ studentId: string; count: RecitationCount }>,
+) {
+  const unknownStudentIds = new Set(
+    storedRecords.filter((record) => record.count === null).map((record) => record.studentId),
+  );
+  return records.every((record) => record.count !== null || unknownStudentIds.has(record.studentId));
 }
 
 const defaultDependencies: RecitationServiceDependencies = {
@@ -260,6 +271,9 @@ const defaultDependencies: RecitationServiceDependencies = {
 
         const submittedStudentIds = records.map((record) => record.studentId);
         if (isInitializing) {
+          if (!canPreserveUnknownRecitationCounts(records, [])) {
+            throw new RecitationCountInvalidError();
+          }
           const enrollments = await transaction.studentEnrollment.findMany({
             where: {
               classId: session.classId,
@@ -280,7 +294,7 @@ const defaultDependencies: RecitationServiceDependencies = {
               data: records.map((record) => ({
                 sessionId,
                 studentId: record.studentId,
-                mark: record.mark,
+                count: record.count,
               })),
             });
           }
@@ -290,7 +304,7 @@ const defaultDependencies: RecitationServiceDependencies = {
             select: {
               recitationRecords: {
                 take: 101,
-                select: { studentId: true },
+                select: { studentId: true, count: true },
                 orderBy: { studentId: "asc" },
               },
             },
@@ -307,7 +321,13 @@ const defaultDependencies: RecitationServiceDependencies = {
             return { status: "roster_mismatch" };
           }
 
+          if (!canPreserveUnknownRecitationCounts(records, storedSession.recitationRecords)) {
+            return { status: "count_invalid" };
+          }
+
           for (const record of records) {
+            // Preserving unknown participation must not undo a concurrent exact count.
+            if (record.count === null) continue;
             await transaction.recitationRecord.update({
               where: {
                 sessionId_studentId: {
@@ -315,7 +335,7 @@ const defaultDependencies: RecitationServiceDependencies = {
                   studentId: record.studentId,
                 },
               },
-              data: { mark: record.mark },
+              data: { count: record.count },
             });
           }
         }
@@ -333,39 +353,14 @@ const defaultDependencies: RecitationServiceDependencies = {
       if (error instanceof RecitationRosterMismatchError) {
         return { status: "roster_mismatch" };
       }
+      if (error instanceof RecitationCountInvalidError) {
+        return { status: "count_invalid" };
+      }
 
       throw error;
     }
   },
 };
-
-// Maps public Recitation mark values explicitly into the generated database enum.
-export function toDatabaseRecitationMark(
-  mark: RecitationMarkCode | null,
-): RecitationMark | null {
-  switch (mark) {
-    case "CHECK":
-      return RecitationMark.CHECK;
-    case "X":
-      return RecitationMark.X;
-    case null:
-      return null;
-  }
-}
-
-// Maps generated database values to the stable public Recitation mark contract.
-export function toRecitationMarkCode(
-  mark: RecitationMark | null,
-): RecitationMarkCode | null {
-  switch (mark) {
-    case RecitationMark.CHECK:
-      return "CHECK";
-    case RecitationMark.X:
-      return "X";
-    case null:
-      return null;
-  }
-}
 
 // Maps persisted records or current-enrollment drafts to one safe public session.
 function toRecitationSessionRecord(
@@ -381,7 +376,7 @@ function toRecitationSessionRecord(
         firstName: record.student.firstName,
         lastName: record.student.lastName,
       },
-      mark: toRecitationMarkCode(record.mark),
+      count: record.count,
     }))
     : session.class.enrollments.map((enrollment) => ({
       id: null,
@@ -391,7 +386,7 @@ function toRecitationSessionRecord(
         firstName: enrollment.student.firstName,
         lastName: enrollment.student.lastName,
       },
-      mark: null,
+      count: 0,
     }));
 
   records.sort(
@@ -498,7 +493,8 @@ export type SaveRecitationRecordsResult =
   | { status: "saved"; session: RecitationSessionRecord }
   | { status: "session_not_found" }
   | { status: "student_duplicate" }
-  | { status: "roster_mismatch" };
+  | { status: "roster_mismatch" }
+  | { status: "count_invalid" };
 
 // Initializes the current roster on first save or updates only the stored historical roster.
 export async function saveRecitationRecords(
@@ -515,7 +511,7 @@ export async function saveRecitationRecords(
     sessionId,
     records.map((record) => ({
       studentId: record.studentId,
-      mark: toDatabaseRecitationMark(record.mark),
+      count: record.count,
     })),
   );
 

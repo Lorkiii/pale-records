@@ -38,7 +38,7 @@ const publicSession: RecitationSessionRecord = {
       firstName: "Ana",
       lastName: "Reyes",
     },
-    mark: null,
+    count: 0,
   }],
 };
 
@@ -48,7 +48,7 @@ const publicDraftSession: RecitationSessionRecord = {
   records: publicSession.records.map((record) => ({
     ...record,
     id: null,
-    mark: null,
+    count: 0,
   })),
 };
 
@@ -116,7 +116,7 @@ test("Recitation controllers return safe success statuses and envelopes", async 
   const deleteResponse = await request(testApp).delete(`/sessions/${sessionId}`);
   const saveResponse = await request(testApp)
     .put(`/sessions/${sessionId}/records`)
-    .send({ records: [{ studentId, mark: null }] });
+    .send({ records: [{ studentId, count: 0 }] });
 
   assert.equal(createResponse.status, 201);
   assert.equal(createResponse.body.data.session.id, sessionId);
@@ -192,7 +192,7 @@ test("Recitation load, delete, and save controllers return safe expected errors"
     deleteSession: async () => false,
   })).delete(`/sessions/${sessionId}`);
   const saveCases: Array<{
-    serviceStatus: "session_not_found" | "student_duplicate" | "roster_mismatch";
+    serviceStatus: "session_not_found" | "student_duplicate" | "roster_mismatch" | "count_invalid";
     httpStatus: number;
     code: string;
   }> = [
@@ -213,6 +213,8 @@ test("Recitation load, delete, and save controllers return safe expected errors"
     },
   ];
 
+  saveCases.push({ serviceStatus: "count_invalid", httpStatus: 400, code: "RECITATION_COUNT_INVALID" });
+
   assert.equal(missingLoad.status, 404);
   assert.equal(missingLoad.body.error.code, "RECITATION_SESSION_NOT_FOUND");
   assert.equal(missingDelete.status, 404);
@@ -223,7 +225,7 @@ test("Recitation load, delete, and save controllers return safe expected errors"
       saveRecords: async () => ({ status: currentCase.serviceStatus }),
     }))
       .put(`/sessions/${sessionId}/records`)
-      .send({ records: [{ studentId, mark: "CHECK" }] });
+      .send({ records: [{ studentId, count: 3 }] });
     assert.equal(response.status, currentCase.httpStatus);
     assert.equal(response.body.error.code, currentCase.code);
   }
@@ -232,6 +234,7 @@ test("Recitation load, delete, and save controllers return safe expected errors"
 test("invalid Recitation bodies and params are rejected before service access", async () => {
   let createWasCalled = false;
   let deleteWasCalled = false;
+  let saveWasCalled = false;
   const testApp = createTestApp({
     createSession: async () => {
       createWasCalled = true;
@@ -240,6 +243,10 @@ test("invalid Recitation bodies and params are rejected before service access", 
     deleteSession: async () => {
       deleteWasCalled = true;
       return true;
+    },
+    saveRecords: async () => {
+      saveWasCalled = true;
+      return { status: 'saved', session: publicSession };
     },
   });
   const dateResponse = await request(testApp)
@@ -258,6 +265,12 @@ test("invalid Recitation bodies and params are rejected before service access", 
   assert.equal(deleteParamResponse.body.error.code, "VALIDATION_ERROR");
   assert.equal(createWasCalled, false);
   assert.equal(deleteWasCalled, false);
+  for (const count of [-1, 1.5, 'CHECK', 2_147_483_648]) {
+    const response = await request(testApp).put(`/sessions/${sessionId}/records`).send({ records: [{ studentId, count }] });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error.code, 'VALIDATION_ERROR');
+  }
+  assert.equal(saveWasCalled, false);
 });
 
 test("unexpected Recitation errors reach the centralized safe error handler", async (t) => {

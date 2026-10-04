@@ -289,6 +289,8 @@ model RecitationRecord {
   sessionId String
   studentId String
   mark      RecitationMark?
+  // Zero displays as blank; null preserves an old Check whose count was never recorded.
+  count     Int?            @default(0)
 
   recitationSession RecitationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   student           Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
