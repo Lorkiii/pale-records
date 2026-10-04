@@ -1,8 +1,8 @@
 // Verifies manual Recitation drafts, date-bounded lists, and immutable historical roster saves.
 import assert from "node:assert/strict";
 import test from "node:test";
+import prisma from "../lib/db-client.js";
 
-import { RecitationMark } from "../generated/prisma/client.js";
 import {
   createRecitationSession,
   deleteRecitationSession,
@@ -12,8 +12,7 @@ import {
   RecitationSessionConflictError,
   saveRecitationRecords,
   type RecitationServiceDependencies,
-  toDatabaseRecitationMark,
-  toRecitationMarkCode,
+  canPreserveUnknownRecitationCounts,
 } from "./recitation.service.js";
 
 const classId = "2c6e62cc-584d-4faf-90f6-fdb50b27c9d0";
@@ -55,13 +54,13 @@ const storedSession = {
       id: "6fd5133c-0985-49a2-b3dc-10a3b03110de",
       studentId: firstStudentId,
       student: firstStudent,
-      mark: RecitationMark.CHECK,
+      count: 3,
     },
     {
       id: "e7d59d7b-ae0c-49ae-8512-3f9fcdb457ae",
       studentId: secondStudentId,
       student: secondStudent,
-      mark: null,
+      count: 0,
     },
   ],
   class: { enrollments: currentEnrollments },
@@ -154,7 +153,7 @@ test("monthly Recitation listing uses UTC month bounds, caps results, and checks
   assert.deepEqual(missing, { status: "class_not_found" });
 });
 
-test("loading an uninitialized session returns current enrollment as an unpersisted Unmarked draft", async () => {
+test("loading an uninitialized session returns current enrollment as an unpersisted blank draft", async () => {
   const source = { ...draftSession, recitationRecords: [] };
   const loaded = await loadRecitationSession(sessionId, createDependencies({
     findSession: async () => source,
@@ -165,10 +164,10 @@ test("loading an uninitialized session returns current enrollment as an unpersis
   assert.deepEqual(loaded?.records.map((record) => ({
     id: record.id,
     studentId: record.student.id,
-    mark: record.mark,
+    count: record.count,
   })), [
-    { id: null, studentId: secondStudentId, mark: null },
-    { id: null, studentId: firstStudentId, mark: null },
+    { id: null, studentId: secondStudentId, count: 0 },
+    { id: null, studentId: firstStudentId, count: 0 },
   ]);
   assert.equal(source.recitationRecords.length, 0);
 });
@@ -183,15 +182,15 @@ test("Recitation deletion returns the exact persisted-session outcome", async ()
   assert.equal(missing, false);
 });
 
-test("first save writes the complete roster including null marks", async () => {
+test("first save writes the complete roster including blank counts", async () => {
   let receivedRecords:
     | Parameters<RecitationServiceDependencies["saveSessionRecords"]>[1]
     | undefined;
   const result = await saveRecitationRecords(
     sessionId,
     [
-      { studentId: firstStudentId, mark: "CHECK" },
-      { studentId: secondStudentId, mark: null },
+      { studentId: firstStudentId, count: 3 },
+      { studentId: secondStudentId, count: 0 },
     ],
     createDependencies({
       saveSessionRecords: async (_sessionId, records) => {
@@ -202,8 +201,8 @@ test("first save writes the complete roster including null marks", async () => {
   );
 
   assert.deepEqual(receivedRecords, [
-    { studentId: firstStudentId, mark: RecitationMark.CHECK },
-    { studentId: secondStudentId, mark: null },
+    { studentId: firstStudentId, count: 3 },
+    { studentId: secondStudentId, count: 0 },
   ]);
   assert.equal(result.status, "saved");
   if (result.status === "saved") {
@@ -245,8 +244,8 @@ test("later saves update only the stored roster and preserve its student identit
   const result = await saveRecitationRecords(
     sessionId,
     [
-      { studentId: firstStudentId, mark: "X" },
-      { studentId: secondStudentId, mark: "CHECK" },
+      { studentId: firstStudentId, count: 0 },
+      { studentId: secondStudentId, count: 3 },
     ],
     createDependencies({
       saveSessionRecords: async (_sessionId, records) => {
@@ -258,9 +257,9 @@ test("later saves update only the stored roster and preserve its student identit
             class: { enrollments: [...currentEnrollments, { student: extraStudent }] },
             recitationRecords: storedSession.recitationRecords.map((record) => ({
               ...record,
-              mark: record.studentId === firstStudentId
-                ? RecitationMark.X
-                : RecitationMark.CHECK,
+              count: record.studentId === firstStudentId
+                ? 0
+                : 3,
             })),
           },
         };
@@ -281,8 +280,8 @@ test("later saves update only the stored roster and preserve its student identit
 test("duplicate, missing, and extra submitted students are rejected", async () => {
   let duplicateReachedDatabase = false;
   const duplicate = await saveRecitationRecords(sessionId, [
-    { studentId: firstStudentId, mark: "CHECK" },
-    { studentId: firstStudentId, mark: "X" },
+    { studentId: firstStudentId, count: 3 },
+    { studentId: firstStudentId, count: 0 },
   ], createDependencies({
     saveSessionRecords: async () => {
       duplicateReachedDatabase = true;
@@ -302,12 +301,12 @@ test("duplicate, missing, and extra submitted students are rejected", async () =
     },
   });
   const missing = await saveRecitationRecords(sessionId, [
-    { studentId: firstStudentId, mark: null },
+    { studentId: firstStudentId, count: 0 },
   ], mismatchDependencies);
   const extra = await saveRecitationRecords(sessionId, [
-    { studentId: firstStudentId, mark: null },
-    { studentId: secondStudentId, mark: null },
-    { studentId: extraStudentId, mark: null },
+    { studentId: firstStudentId, count: 0 },
+    { studentId: secondStudentId, count: 0 },
+    { studentId: extraStudentId, count: 0 },
   ], mismatchDependencies);
 
   assert.deepEqual(duplicate, { status: "student_duplicate" });
@@ -340,7 +339,7 @@ test("genuine empty rosters initialize and remain saveable", async () => {
 });
 
 test("concurrent first saves create one historical roster and both return safely", async () => {
-  const historicalRecords = new Map<string, RecitationMark | null>();
+  const historicalRecords = new Map<string, number | null>();
   let initializationCount = 0;
   let initialized = false;
   let releasePrevious = Promise.resolve();
@@ -368,7 +367,7 @@ test("concurrent first saves create one historical roster and both return safely
           initializationCount += 1;
         }
         for (const record of records) {
-          historicalRecords.set(record.studentId, record.mark);
+          historicalRecords.set(record.studentId, record.count);
         }
 
         return {
@@ -377,7 +376,7 @@ test("concurrent first saves create one historical roster and both return safely
             ...storedSession,
             recitationRecords: storedSession.recitationRecords.map((record) => ({
               ...record,
-              mark: historicalRecords.get(record.studentId) ?? null,
+              count: historicalRecords.get(record.studentId) ?? 0,
             })),
           },
         };
@@ -389,12 +388,12 @@ test("concurrent first saves create one historical roster and both return safely
 
   const [first, second] = await Promise.all([
     saveRecitationRecords(sessionId, [
-      { studentId: firstStudentId, mark: "CHECK" },
-      { studentId: secondStudentId, mark: null },
+      { studentId: firstStudentId, count: 3 },
+      { studentId: secondStudentId, count: 0 },
     ], concurrentDependencies),
     saveRecitationRecords(sessionId, [
-      { studentId: firstStudentId, mark: "X" },
-      { studentId: secondStudentId, mark: "CHECK" },
+      { studentId: firstStudentId, count: 0 },
+      { studentId: secondStudentId, count: 3 },
     ], concurrentDependencies),
   ]);
 
@@ -404,7 +403,7 @@ test("concurrent first saves create one historical roster and both return safely
   assert.equal(historicalRecords.size, 2);
 });
 
-test("missing sessions and explicit Recitation mark mappings remain safe", async () => {
+test("missing Recitation sessions remain safe", async () => {
   const missingLoad = await loadRecitationSession(sessionId, createDependencies({
     findSession: async () => null,
   }));
@@ -414,12 +413,63 @@ test("missing sessions and explicit Recitation mark mappings remain safe", async
 
   assert.equal(missingLoad, null);
   assert.deepEqual(missingSave, { status: "session_not_found" });
-  for (const [code, databaseMark] of [
-    ["CHECK", RecitationMark.CHECK],
-    ["X", RecitationMark.X],
-    [null, null],
-  ] as const) {
-    assert.equal(toDatabaseRecitationMark(code), databaseMark);
-    assert.equal(toRecitationMarkCode(databaseMark), code);
-  }
+
+});
+
+test("historical Checks remain unknown until an exact count is entered", async () => {
+  const loaded = await loadRecitationSession(sessionId, createDependencies({
+    findSession: async () => ({
+      ...storedSession,
+      recitationRecords: storedSession.recitationRecords.map((record) => ({ ...record, count: null })),
+    }),
+  }));
+  assert.equal(loaded?.records.every((record) => record.count === null), true);
+});
+
+test("unknown counts may be preserved only for their existing historical students", () => {
+  const unknown = [{ studentId: firstStudentId, count: null }];
+  const known = [{ studentId: firstStudentId, count: 3 }];
+  assert.equal(canPreserveUnknownRecitationCounts(unknown, []), false);
+  assert.equal(canPreserveUnknownRecitationCounts(unknown, known), false);
+  assert.equal(canPreserveUnknownRecitationCounts(unknown, unknown), true);
+  assert.equal(canPreserveUnknownRecitationCounts(known, unknown), true);
+  assert.equal(canPreserveUnknownRecitationCounts([{ studentId: secondStudentId, count: null }], unknown), false);
+});
+
+test("transaction saves preserve unknown counts without writing null and reject invented unknowns", async (t) => {
+  let isDraft = false;
+  let countsKnown = false;
+  let recordWrites = 0;
+  const transaction = {
+    recitationSession: {
+      findUnique: async () => isDraft ? draftSession : {
+        ...storedSession,
+        recitationRecords: storedSession.recitationRecords.map((record) => ({ ...record, count: countsKnown ? record.count : null })),
+      },
+      updateMany: async () => ({ count: 1 }),
+    },
+    studentEnrollment: { findMany: async () => [firstStudentId, secondStudentId].map((studentId) => ({ studentId })) },
+    recitationRecord: {
+      createMany: async () => { recordWrites += 1; },
+      update: async () => { recordWrites += 1; },
+    },
+  };
+  // Prisma exposes a callable proxy property whose descriptor has no method value.
+  const originalTransaction = prisma.$transaction;
+  Object.defineProperty(prisma, "$transaction", {
+    configurable: true,
+    value: async (callback: unknown) => {
+      if (typeof callback !== "function") throw new Error("Expected interactive transaction");
+      return callback(transaction);
+    },
+  });
+  t.after(() => Object.defineProperty(prisma, "$transaction", { value: originalTransaction }));
+  const records = [firstStudentId, secondStudentId].map((studentId) => ({ studentId, count: null }));
+  assert.equal((await saveRecitationRecords(sessionId, records)).status, "saved");
+  assert.equal(recordWrites, 0);
+  countsKnown = true;
+  assert.equal((await saveRecitationRecords(sessionId, records)).status, "count_invalid");
+  isDraft = true;
+  assert.equal((await saveRecitationRecords(sessionId, records)).status, "count_invalid");
+  assert.equal(recordWrites, 0);
 });

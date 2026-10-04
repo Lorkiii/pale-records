@@ -8,7 +8,7 @@ import { Select } from '../../../../components/ui/Select';
 import type { ClassRecord } from '../../../classes/class-types';
 import {
   formatRecitationDateLong,
-  type RecitationMarkCounts,
+  type RecitationSummary,
 } from '../recitation-draft';
 import type { RecitationSessionDraft } from '../recitation-types';
 import type { DateFormatPreference } from '../../../settings/preference-display';
@@ -36,9 +36,10 @@ interface RecitationToolbarProps {
   isCreating: boolean;
   isSaving: boolean;
   canUndo: boolean;
+  hasInputErrors: boolean;
   canSelectDates: boolean;
   canAddDates: boolean;
-  markCounts: RecitationMarkCounts;
+  summary: RecitationSummary;
   feedback: RecitationToolbarFeedback | null;
   dateFormat?: DateFormatPreference;
   onClassChange: (classId: string) => void;
@@ -54,30 +55,10 @@ interface RecitationToolbarProps {
   onSave: () => void;
 }
 
-const SUMMARY_ITEMS: Array<{
-  key: keyof RecitationMarkCounts;
-  symbol: string;
-  label: string;
-  markerClassName: string;
-}> = [
-  {
-    key: 'CHECK',
-    symbol: '✓',
-    label: 'Check',
-    markerClassName: 'border-signal-emerald text-signal-emerald',
-  },
-  {
-    key: 'X',
-    symbol: 'X',
-    label: 'X',
-    markerClassName: 'border-signal-red text-signal-red',
-  },
-  {
-    key: 'unmarked',
-    symbol: '—',
-    label: 'Unmarked',
-    markerClassName: 'border-paper-dark text-ink-secondary',
-  },
+const SUMMARY_ITEMS: Array<{ key: 'recited' | 'blank' | 'total'; label: string }> = [
+  { key: 'recited', label: 'Students who recited' },
+  { key: 'blank', label: 'No recitation' },
+  { key: 'total', label: 'Total recitations' },
 ];
 
 // Builds a concise selector label from only public active-class fields.
@@ -104,9 +85,10 @@ export function RecitationToolbar({
   isCreating,
   isSaving,
   canUndo,
+  hasInputErrors,
   canSelectDates,
   canAddDates,
-  markCounts,
+  summary,
   feedback,
   dateFormat,
   onClassChange,
@@ -299,7 +281,7 @@ export function RecitationToolbar({
                     tooltip={isSaving ? 'Saving Recitation' : 'Save Recitation'}
                     isLoading={isSaving}
                     onClick={onSave}
-                    disabled={isBusy}
+                    disabled={isBusy || hasInputErrors}
                   />
                 </div>
               ) : (
@@ -318,8 +300,15 @@ export function RecitationToolbar({
       </div>
 
       <Notice variant="info" title="How Recitation is saved" collapsible>
-        Select Add dates to save your selected dates. Their rosters start as Unmarked drafts. Select Save Recitation to save a date’s roster and marks for the first time. Later enrollment changes do not change that saved roster.
+        Blank means no recitation. Use plus and minus or enter a count, then select Save Recitation. Adding dates saves the dates; their rosters and counts stay local until the first Save. Later enrollment changes do not change the saved roster.
       </Notice>
+
+      {hasInputErrors ? <Notice variant="error" title="Check recitation counts">Correct the invalid count or clear the entry before saving.</Notice> : null}
+      {summary.unknown > 0 ? (
+        <Notice variant="info" title="Historical counts are incomplete">
+          {summary.unknown} {summary.unknown === 1 ? 'student has a previous Check' : 'students have previous Checks'} with no exact count. Enter the exact counts when known. The total includes only known counts.
+        </Notice>
+      ) : null}
 
       {feedback ? (
         <Notice variant={feedback.variant} title={feedback.title} collapsible noticeKey={feedback.noticeKey}>
@@ -330,7 +319,7 @@ export function RecitationToolbar({
       {selectedDate ? (
         <div
           className="grid gap-px border border-ink bg-ink sm:grid-cols-3"
-          aria-label="Selected Recitation mark counts"
+          aria-label="Selected date recitation summary"
         >
           {SUMMARY_ITEMS.map((item) => (
             <div
@@ -338,18 +327,12 @@ export function RecitationToolbar({
               className="flex items-center justify-between gap-3 bg-paper-light px-3 py-2"
             >
               <div className="flex min-w-0 items-center gap-2">
-                <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center border bg-paper-light font-mono text-sm font-bold ${item.markerClassName}`}
-                  aria-hidden="true"
-                >
-                  {item.symbol}
-                </span>
-                <span className="truncate text-sm font-semibold text-ink-secondary">
-                  {item.label}
+                <span className="text-sm font-semibold text-ink-secondary">
+                  {item.key === 'total' && summary.unknown > 0 ? 'Known recitations' : item.label}
                 </span>
               </div>
               <span className="font-mono text-lg font-bold tabular-nums text-ink">
-                {markCounts[item.key]}
+                {summary[item.key]}
               </span>
             </div>
           ))}

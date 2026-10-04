@@ -25,7 +25,7 @@ const draftSession = {
       firstName: "Ana",
       lastName: "Reyes",
     },
-    mark: null,
+    count: 0,
   }],
 };
 
@@ -58,12 +58,17 @@ test("Recitation success response accepts only the documented safe session shape
 });
 
 test("Recitation response distinguishes unpersisted drafts from saved rosters", () => {
+  for (const count of [null, 1]) {
+    assert.equal(recitationSessionResponseSchema.safeParse({
+      success: true, data: { session: { ...draftSession, records: [{ ...draftSession.records[0], count }] } },
+    }).success, false);
+  }
   assert.equal(recitationSessionResponseSchema.safeParse({
     success: true,
     data: {
       session: {
         ...draftSession,
-        records: [{ ...draftSession.records[0], mark: "CHECK" }],
+        records: [{ ...draftSession.records[0], count: 3 }],
       },
     },
   }).success, false);
@@ -85,11 +90,18 @@ test("Recitation response distinguishes unpersisted drafts from saved rosters", 
         records: [{
           ...draftSession.records[0],
           id: "6fd5133c-0985-49a2-b3dc-10a3b03110de",
-          mark: "X",
+          count: 0,
         }],
       },
     },
   }).success, true);
+});
+
+test("saved historical unknown counts remain explicit and original marks stay private", () => {
+  const record = { ...draftSession.records[0], id: '6fd5133c-0985-49a2-b3dc-10a3b03110de', count: null };
+  const session = { ...draftSession, isRosterInitialized: true, records: [record] };
+  assert.equal(recitationSessionResponseSchema.safeParse({ success: true, data: { session } }).success, true);
+  assert.equal(recitationSessionResponseSchema.safeParse({ success: true, data: { session: { ...session, records: [{ ...record, mark: 'CHECK' }] } } }).success, false);
 });
 
 test("Recitation monthly response rejects more than 31 sessions", () => {

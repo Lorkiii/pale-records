@@ -18,6 +18,7 @@ import type {
 import {
   recitationClassArchivedResponseSchema,
   recitationClassNotFoundResponseSchema,
+  recitationCountInvalidResponseSchema,
   recitationRosterMismatchResponseSchema,
   recitationSessionDeleteResponseSchema,
   recitationSessionExistsResponseSchema,
@@ -219,6 +220,16 @@ export function createRecitationControllerHandlers(
           error: {
             code: "RECITATION_ROSTER_MISMATCH",
             message: "The submitted roster does not match this recitation session. Reload and review the roster.",
+          },
+        }));
+      }
+
+      if (result.status === "count_invalid") {
+        return res.status(400).json(recitationCountInvalidResponseSchema.parse({
+          success: false,
+          error: {
+            code: "RECITATION_COUNT_INVALID",
+            message: "Enter an exact count. Unknown counts can only be kept for existing historical Checks.",
           },
         }));
       }

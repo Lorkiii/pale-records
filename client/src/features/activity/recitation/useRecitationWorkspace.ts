@@ -1,5 +1,5 @@
 // Owns Activity Recitation loading, local date selection, deliberate edits, and actions.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ClassApiError, fetchClasses } from "../../classes/classes-api";
 import type { ClassRecord } from "../../classes/class-types";
 import {
@@ -10,18 +10,18 @@ import {
 } from "./recitation-api";
 import {
   cloneRecitationRecords,
-  countRecitationMarks,
+  summarizeRecitations,
   createRecitationSessionDraft,
   createRecitationUndoSnapshot,
-  cycleRecitationMark,
+  isValidRecitationCount,
   formatRecitationDateLong,
-  getRecitationMarkLabel,
+  getRecitationCountLabel,
   getRecitationMonthParts,
   getRecitationSessionRoster,
   isRecitationDateValue,
   isRecitationSessionDirty,
   sortRecitationSessionDrafts,
-  updateRecitationMark,
+  updateRecitationCount,
 } from "./recitation-draft";
 import type {
   RecitationSessionDraft,
@@ -97,6 +97,9 @@ export function useRecitationWorkspace(
   const [undoRecords, setUndoRecords] = useState<RecitationUndoSnapshot | null>(
     null,
   );
+  const workingDraftRef = useRef<RecitationSessionDraft | null>(null);
+  const [invalidStudentIds, setInvalidStudentIds] = useState<string[]>([]);
+  const [countControlRevision, setCountControlRevision] = useState(0);
   const [feedback, setFeedback] = useState<RecitationFeedbackState | null>(
     null,
   );
@@ -198,9 +201,10 @@ export function useRecitationWorkspace(
   const selectedDate = selectedSessionDraft?.sessionDate ?? null;
   const isEditing =
     selectedSessionId !== null && editingSessionId === selectedSessionId;
+  const hasInputErrors = invalidStudentIds.length > 0;
   const hasUnsavedChanges =
-    isEditing && isRecitationSessionDirty(selectedSessionDraft);
-  const markCounts = countRecitationMarks(selectedSessionDraft);
+    isEditing && (hasInputErrors || isRecitationSessionDirty(selectedSessionDraft));
+  const summary = summarizeRecitations(selectedSessionDraft);
   const isBusy = sessionLoadStatus === "loading" || isCreating || isSaving;
   const existingDates = useMemo(
     () => sessionDrafts.map((session) => session.sessionDate),
@@ -238,6 +242,8 @@ export function useRecitationWorkspace(
 
   // Clears selected-date editing state when the current class or month changes.
   const resetSelectedSession = () => {
+    workingDraftRef.current = null;
+    setInvalidStudentIds([]);
     setSessionDrafts([]);
     setSelectedSessionId(null);
     setEditingSessionId(null);
@@ -246,6 +252,7 @@ export function useRecitationWorkspace(
 
   // Replaces only the selected session's working and server snapshots.
   const setSelectedDraft = (sessionDraft: RecitationSessionDraft) => {
+    workingDraftRef.current = sessionDraft;
     setSessionDrafts((currentDrafts) =>
       replaceRecitationSessionDraft(currentDrafts, sessionDraft),
     );
@@ -700,6 +707,8 @@ export function useRecitationWorkspace(
     }
 
     setSelectedSessionId(sessionId);
+    workingDraftRef.current = null;
+    setInvalidStudentIds([]);
     setEditingSessionId(null);
     setUndoRecords(null);
     setFeedback(null);
@@ -719,6 +728,7 @@ export function useRecitationWorkspace(
       records: cloneRecitationRecords(selectedSessionDraft.savedRecords),
     });
     setEditingSessionId(selectedSessionId);
+    setInvalidStudentIds([]);
     setUndoRecords(null);
     setFeedback(null);
     setLiveMessage(
@@ -754,36 +764,51 @@ export function useRecitationWorkspace(
       title: "Recitation date deleted",
       messages: [
         hasUnsavedChanges
-          ? "The complete date and its saved roster marks were deleted. Local unsaved edits were discarded."
-          : "The complete date and its saved roster marks were deleted.",
+          ? "The complete date and its saved roster counts were deleted. Local unsaved edits were discarded."
+          : "The complete date and its saved roster counts were deleted.",
       ],
     });
     setLiveMessage("The selected Recitation date was deleted.");
   };
 
-  // Applies one mark cycle step and captures exactly one Undo snapshot.
-  const handleCycleMark = (studentId: string) => {
+  // Uses the latest local draft so repeated taps cannot overwrite a queued increment.
+  const handleCountChange = (studentId: string, change: number | 'increment' | 'decrement') => {
     if (!selectedSessionDraft || !isEditing || isBusy) {
       return;
     }
 
-    const currentRecord = selectedSessionDraft.records[studentId];
+    const currentDraft = workingDraftRef.current?.id === selectedSessionDraft.id
+      ? workingDraftRef.current : selectedSessionDraft;
+    const currentRecord = currentDraft.records[studentId];
     if (!currentRecord) {
       return;
     }
 
-    const nextMark = cycleRecitationMark(currentRecord.mark);
-    setUndoRecords(createRecitationUndoSnapshot(selectedSessionDraft.records));
+    if (currentRecord.count === null && typeof change !== 'number') {
+      return;
+    }
+    const nextCount = typeof change === 'number' ? change
+      : Math.max(0, (currentRecord.count ?? 0) + (change === 'increment' ? 1 : -1));
+    if (!isValidRecitationCount(nextCount) || nextCount === currentRecord.count) {
+      return;
+    }
+    setUndoRecords(createRecitationUndoSnapshot(currentDraft.records));
     setSelectedDraft(
-      updateRecitationMark(selectedSessionDraft, studentId, nextMark),
+      updateRecitationCount(currentDraft, studentId, nextCount),
     );
     setFeedback(null);
     setLiveMessage(
-      `${currentRecord.student.lastName}, ${currentRecord.student.firstName} changed from ${getRecitationMarkLabel(currentRecord.mark)} to ${getRecitationMarkLabel(nextMark)}.`,
+      `${currentRecord.student.lastName}, ${currentRecord.student.firstName}: ${getRecitationCountLabel(nextCount)}.`,
     );
   };
 
-  // Restores the snapshot immediately before the most recent local mark change.
+  const handleCountValidityChange = (studentId: string, isValid: boolean) => {
+    setInvalidStudentIds((currentIds) => isValid
+      ? currentIds.filter((id) => id !== studentId)
+      : currentIds.includes(studentId) ? currentIds : [...currentIds, studentId]);
+  };
+
+  // Restores the snapshot immediately before the most recent local count change.
   const handleUndo = () => {
     if (!selectedSessionDraft || !undoRecords || !isEditing || isBusy) {
       return;
@@ -795,12 +820,14 @@ export function useRecitationWorkspace(
     });
     setUndoRecords(null);
     setFeedback(null);
+    setInvalidStudentIds([]);
+    setCountControlRevision((revision) => revision + 1);
     setLiveMessage(
-      "The most recent Recitation mark change was undone locally.",
+      "The most recent Recitation count change was undone locally.",
     );
   };
 
-  // Discards the local working marks and restores the last validated server snapshot.
+  // Discards the local working counts and restores the last validated server snapshot.
   const handleCancel = () => {
     if (!selectedSessionDraft || isBusy) {
       return;
@@ -811,6 +838,7 @@ export function useRecitationWorkspace(
       records: cloneRecitationRecords(selectedSessionDraft.savedRecords),
     });
     setEditingSessionId(null);
+    setInvalidStudentIds([]);
     setUndoRecords(null);
     setFeedback({
       variant: "info",
@@ -818,15 +846,15 @@ export function useRecitationWorkspace(
       messages: [
         selectedSessionDraft.isRosterInitialized
           ? "The selected date was restored to its last saved server version."
-          : "The response-only roster draft was restored to Unmarked without creating records.",
+          : "The response-only roster draft was restored to blank counts without creating records.",
       ],
     });
     setLiveMessage("Local Recitation changes canceled.");
   };
 
-  // Saves every selected roster student once, including real null marks.
+  // Saves every selected roster student once, including blank and historical unknown counts.
   const handleSave = async () => {
-    if (!selectedSessionDraft || !isEditing || isBusy) {
+    if (!selectedSessionDraft || !isEditing || isBusy || hasInputErrors) {
       return;
     }
 
@@ -842,7 +870,7 @@ export function useRecitationWorkspace(
           )
           .map((record) => ({
             studentId: record.student.id,
-            mark: record.mark,
+            count: record.count,
           })),
       );
       const savedDraft = createRecitationSessionDraft(savedSession);
@@ -854,8 +882,8 @@ export function useRecitationWorkspace(
         title: "Recitation saved",
         messages: [
           wasRosterInitialized
-            ? "The complete stored historical roster and its marks were updated."
-            : "The complete current enrollment became this date’s historical roster, including Unmarked students.",
+            ? "The complete stored historical roster and its counts were updated."
+            : "The complete current enrollment became this date’s historical roster, including students with no recitation.",
         ],
       });
       setLiveMessage(
@@ -907,7 +935,9 @@ export function useRecitationWorkspace(
     selectedDate,
     isEditing,
     hasUnsavedChanges,
-    markCounts,
+    summary,
+    hasInputErrors,
+    countControlRevision,
     isBusy,
     isCreating,
     isSaving,
@@ -930,7 +960,8 @@ export function useRecitationWorkspace(
     handleOpenDelete,
     handleCloseDelete,
     handleDeletedSession,
-    handleCycleMark,
+    handleCountChange,
+    handleCountValidityChange,
     handleUndo,
     handleCancel,
     handleSave,

@@ -1,10 +1,11 @@
-// Renders the daily docket with category, completion, and Class-session actions.
+// Renders daily events and class sessions with consistent class colors and existing actions.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionIconButton } from '../../../components/ui/ActionIconButton';
 import { Button } from '../../../components/ui/Button';
 import { Notice } from '../../../components/ui/Notice';
 import type { ClassRecord } from '../../classes/class-types';
+import { formatAgendaClassLabel, getAgendaClassColor } from '../agenda-class-colors';
 import {
   AGENDA_CATEGORY_ACCENTS,
   type AgendaEvent,
@@ -125,11 +126,12 @@ export function AgendaDayDocket({
               {events.map((evt) => {
                 const accent = AGENDA_CATEGORY_ACCENTS[evt.category.accentKey];
                 const linkedClass = evt.classId ? classMap.get(evt.classId) : null;
+                const classColor = linkedClass ? getAgendaClassColor(linkedClass.id) : null;
 
                 return (
                   <div
                     key={evt.id}
-                    className={`border border-ink bg-paper transition-all hover:border-black ${density.record} ${
+                    className={`border ${classColor ? classColor.surfaceStyle : 'border-ink bg-paper hover:border-black'} transition-colors ${density.record} ${
                       evt.completedAt ? 'opacity-75' : ''
                     }`}
                   >
@@ -213,12 +215,16 @@ export function AgendaDayDocket({
 
                     {/* Linked Class / Location Metadata */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-ink-secondary">
-                      {linkedClass && (
-                        <span className="inline-flex items-center gap-1 font-semibold text-ink">
-                          <span className="text-ink-muted">Class:</span>
-                          {linkedClass.subjectCode
-                            ? `${linkedClass.subjectCode} (${linkedClass.section ?? 'Main'})`
-                            : linkedClass.subjectName}
+                      {linkedClass && classColor && (
+                        <span className="inline-flex min-w-0 items-start gap-1.5 break-words font-semibold text-ink">
+                          <span
+                            aria-hidden="true"
+                            className={`mt-0.5 h-2.5 w-2.5 shrink-0 border border-ink/60 ${classColor.pipColor}`}
+                          />
+                          <span className="min-w-0">
+                            <span className="text-ink-muted">Class:</span>
+                            {' '}{formatAgendaClassLabel(linkedClass)}
+                          </span>
                         </span>
                       )}
                       {evt.location && (
@@ -259,54 +265,58 @@ export function AgendaDayDocket({
             </div>
           ) : (
             <div className={density.stack}>
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={`border border-paper-border bg-paper-light hover:border-ink transition-colors ${density.record}`}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-ink">
-                          {formatTime(session.startTime, timeFormat)} – {formatTime(session.endTime, timeFormat)}
-                        </span>
-                        {session.section && (
-                          <span className="border border-paper-border bg-paper px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-secondary uppercase">
-                            Sec {session.section}
+              {sessions.map((session) => {
+                const classColor = getAgendaClassColor(session.classId);
+                return (
+                  <div
+                    key={session.id}
+                    className={`border ${classColor.surfaceStyle} ${density.record}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-ink">
+                            {formatTime(session.startTime, timeFormat)} – {formatTime(session.endTime, timeFormat)}
                           </span>
-                        )}
+                          {session.section && (
+                            <span className="border border-paper-border bg-paper px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-secondary uppercase">
+                              Sec {session.section}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="mt-1 font-display text-sm sm:text-base font-bold text-ink">
+                          <span aria-hidden="true" className={`mr-2 inline-block h-2.5 w-2.5 border border-ink/60 ${classColor.pipColor}`} />
+                          {session.subjectName}
+                        </h4>
+                        <p className="font-mono text-xs text-ink-muted">
+                          {session.subjectCode ? `${session.subjectCode} • ` : ''}
+                          {session.room ? `Room ${session.room}` : 'Room unassigned'}
+                        </p>
                       </div>
-                      <h4 className="mt-1 font-display text-sm sm:text-base font-bold text-ink">
-                        {session.subjectName}
-                      </h4>
-                      <p className="font-mono text-xs text-ink-muted">
-                        {session.subjectCode ? `${session.subjectCode} • ` : ''}
-                        {session.room ? `Room ${session.room}` : 'Room unassigned'}
-                      </p>
-                    </div>
 
-                    {/* Quick navigation actions */}
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => navigate('/dashboard/attendance')}
-                        className="text-[11px]"
-                      >
-                        Attendance
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => navigate('/dashboard/activity')}
-                        className="text-[11px]"
-                      >
-                        Recitation
-                      </Button>
+                      {/* Quick navigation actions */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          onClick={() => navigate('/dashboard/attendance')}
+                          className="text-[11px]"
+                        >
+                          Attendance
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          onClick={() => navigate('/dashboard/activity')}
+                          className="text-[11px]"
+                        >
+                          Recitation
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

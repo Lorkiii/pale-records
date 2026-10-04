@@ -62,7 +62,7 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
       <Header
         workspacePath="Workspace"
         workspaceTitle="Activity"
-        workspaceDescription="Record class Recitation marks by date with deliberate roster editing and saving."
+        workspaceDescription="Record class Recitation counts by date with deliberate roster editing and saving."
       />
 
       <p className="sr-only" aria-live="polite" aria-atomic="true">
@@ -119,9 +119,10 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
                 isCreating={recitation.isCreating}
                 isSaving={recitation.isSaving}
                 canUndo={recitation.canUndo}
+                hasInputErrors={recitation.hasInputErrors}
                 canSelectDates={recitation.canSelectDates}
                 canAddDates={recitation.canAddDates}
-                markCounts={recitation.markCounts}
+                summary={recitation.summary}
                 feedback={toolbarFeedback}
                 dateFormat={preferences?.dateFormat}
                 onClassChange={recitation.handleClassChange}
@@ -240,7 +241,9 @@ export function ActivityPage({ onSessionExpired }: ActivityPageProps) {
                   dateFormat={preferences?.dateFormat}
                   tableDensity={preferences?.tableDensity}
                   onSelectSession={recitation.handleSelectSession}
-                  onCycleMark={recitation.handleCycleMark}
+                  onCountChange={recitation.handleCountChange}
+                  onCountValidityChange={recitation.handleCountValidityChange}
+                  countControlRevision={recitation.countControlRevision}
                 />
               ) : null}
             </div>
